@@ -2,23 +2,37 @@ package main
 
 import (
 	"fmt"
-	"strings"
+	"log"
 	"net/http"
 	"net/url"
+	"os"
+	"strings"
+	"time"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 )
 
-
 func main() {
 	dsn := "host=localhost user=postgres password=postgres dbname=postgres port=5432 sslmode=disable"
 
+	gormLogger := logger.New(
+		log.New(os.Stdout, "\r\n", log.LstdFlags), // io writer
+		logger.Config{
+			SlowThreshold:             300 * time.Millisecond, // Slow SQL threshold
+			LogLevel:                  logger.Warn,            // Log level
+			IgnoreRecordNotFoundError: true,                   // Ignore ErrRecordNotFound error for logger
+			Colorful:                  true,                   // Enable color
+		},
+	)
+
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
 		TranslateError: true,
+		Logger:         gormLogger,
 	})
 	if err != nil {
 		panic("failed to connect database")
@@ -29,8 +43,8 @@ func main() {
 		&CommitOwner{},
 		&Record{},
 		&RecordKey{},
+		&RecordRelation{},
 	)
-
 
 	e := echo.New()
 	e.Use(middleware.Logger())
@@ -77,26 +91,37 @@ func main() {
 
 		owner := uri.Host
 		path := uri.Path
+		split := strings.Split(strings.TrimPrefix(path, "/"), "/")
+		key := split[0]
 
-		fmt.Println("Owner:", owner)
-		fmt.Println("Path:", path)
+		if len(split) == 1 {
+			record, err := handleGetRecordByKey(ctx, db, owner, key)
+			if err != nil {
+				record, err = handleGetRecordByID(ctx, db, key)
+			}
+			if err != nil {
+				return c.JSON(http.StatusNotFound, echo.Map{"error": "resource not found"})
+			}
 
-		key := strings.TrimPrefix(path, "/")
-
-		record, err := handleGetRecordByKey(ctx, db, owner, key)
-		if err != nil {
-			record, err = handleGetRecordByID(ctx, db, key)
+			return c.JSON(200, echo.Map{
+				"content": record.Value,
+			})
+		} else {
+			switch split[1] {
+			case "childs":
+				childRecords, err := handleGetChilds(ctx, db, fmt.Sprintf("cc://%s/%s", owner, split[0]))
+				if err != nil {
+					return c.JSON(http.StatusNotFound, echo.Map{"error": "resource not found", "details": err.Error()})
+				}
+				return c.JSON(200, echo.Map{
+					"children": childRecords,
+				})
+			default:
+				return c.JSON(http.StatusBadRequest, echo.Map{"error": "unsupported resource path"})
+			}
 		}
-		if err != nil {
-			return c.JSON(http.StatusNotFound, echo.Map{"error": "resource not found"})
-		}
-
-		return c.JSON(200, echo.Map{
-			"content": record.Value,
-		})
 	})
 
 	e.Logger.Fatal(e.Start(":8000"))
 
 }
-

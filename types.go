@@ -1,22 +1,25 @@
 package main
 
 import (
-	"time"
 	"github.com/lib/pq"
+	"time"
 )
 
 type DocumentType string
 
 const (
-	DocumentTypeCreate DocumentType = "create"
-	DocumentTypeDelete DocumentType = "delete"
+	DocumentTypeCreate     DocumentType = "create"
+	DocumentTypeDelete     DocumentType = "delete"
+	DocumentTypeTimeline   DocumentType = "timeline"
+	DocumentTypeCollection DocumentType = "collection"
 )
 
 type Document struct {
 	Key   string `json:"key,omitempty"`
 	Value string `json:"value"`
 
-	Reference string `json:"reference,omitempty"`
+	Reference  string   `json:"reference,omitempty"`
+	Referenced []string `json:"referenced,omitempty"`
 
 	Signer string `json:"signer"`
 	KeyID  string `json:"keyID,omitempty"`
@@ -65,6 +68,7 @@ type RecordKey struct {
 type Record struct {
 	DocumentID string         `json:"id" gorm:"primaryKey;type:text"`
 	Document   CommitLog      `json:"-" gorm:"foreignKey:DocumentID;references:ID;constraint:OnDelete:CASCADE;"`
+	Type       DocumentType   `json:"type" gorm:"type:text"`
 	Owner      string         `json:"owner" gorm:"type:text"`
 	Signer     string         `json:"signer" gorm:"type:text"`
 	Schema     string         `json:"schema" gorm:"type:text"`
@@ -74,5 +78,11 @@ type Record struct {
 	CDate      time.Time      `json:"cdate" gorm:"->;<-:create;type:timestamp with time zone;not null;default:clock_timestamp()"`
 }
 
-// ----------------
+type RecordRelation struct {
+	ParentID string `json:"parentID" gorm:"primaryKey;type:text"`
+	Parent   Record `json:"-" gorm:"foreignKey:ParentID;references:DocumentID;constraint:OnDelete:CASCADE;"`
+	ChildID  string `json:"childID" gorm:"primaryKey;type:text"`
+	Child    Record `json:"-" gorm:"foreignKey:ChildID;references:DocumentID;constraint:OnDelete:CASCADE;"`
+}
 
+// ----------------

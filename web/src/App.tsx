@@ -6,6 +6,7 @@ interface Document {
     value: string
 
     reference?: string;
+    referenced?: string[];
 
     signer: string;
     keyID?: string
@@ -24,6 +25,7 @@ function App() {
     const [username, setUsername] = useState<string>("user000");
     const [recordURI, setRecordURI] = useState<string>("");
     const [response, setResponse] = useState<string>("");
+    const [parentURI, setParentURI] = useState<string>("");
 
     const commitDocument = (doc: Document) => {
         const commit = {
@@ -60,6 +62,12 @@ function App() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
             />
+            <h3>parentURI (optional):</h3>
+            <input
+                type="text"
+                value={parentURI}
+                onChange={(e) => setParentURI(e.target.value)}
+            />
             <button
                 onClick={() => {
                     commitDocument({
@@ -69,6 +77,8 @@ function App() {
                         signer: username,
                         owner: username,
 
+                        referenced: parentURI ? [parentURI] : undefined,
+
                         type: "create",
                         schema: "https://example.com/schemas/message-v1.json",
 
@@ -76,7 +86,7 @@ function App() {
                     })
                 }}
             >
-                Commit Document
+                Create Record
             </button>
 
             <hr />
