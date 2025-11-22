@@ -15,23 +15,23 @@ const (
 )
 
 type Document struct {
-	Key   string `json:"key,omitempty"`
-	Value string `json:"value"`
+	Key   *string `json:"key,omitempty"`
+	Value string  `json:"value"`
 
-	Reference    string   `json:"reference,omitempty"`
-	Affiliations []string `json:"affiliations,omitempty"`
+	Reference    *string   `json:"reference,omitempty"`
+	Affiliations *[]string `json:"affiliations,omitempty"`
 
-	Signer string `json:"signer"`
-	KeyID  string `json:"keyID,omitempty"`
+	Signer string  `json:"signer"`
+	KeyID  *string `json:"keyID,omitempty"`
 
-	Owner string `json:"owner,omitempty"`
+	Owner *string `json:"owner,omitempty"`
 
 	Type   DocumentType `json:"type"`
-	Schema string       `json:"schema,omitempty"`
+	Schema *string      `json:"schema,omitempty"`
 
-	Policy         string `json:"policy,omitempty"`
-	PolicyParams   string `json:"policyParams,omitempty"`
-	PolicyDefaults string `json:"policyDefaults,omitempty"`
+	Policy         *string `json:"policy,omitempty"`
+	PolicyParams   *string `json:"policyParams,omitempty"`
+	PolicyDefaults *string `json:"policyDefaults,omitempty"`
 
 	SignedAt time.Time `json:"signedAt"`
 }

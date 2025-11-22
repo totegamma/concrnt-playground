@@ -24,9 +24,9 @@ func handleInsert(ctx context.Context, db *gorm.DB, com Commit, doc Document) er
 	record := Record{
 		DocumentID: documentID,
 		Value:      doc.Value,
-		Owner:      doc.Owner,
+		Owner:      *doc.Owner,
 		Signer:     doc.Signer,
-		Schema:     doc.Schema,
+		Schema:     *doc.Schema,
 		CDate:      time.Now(),
 	}
 
@@ -45,10 +45,10 @@ func handleInsert(ctx context.Context, db *gorm.DB, com Commit, doc Document) er
 		}
 
 		var owners []string
-		if doc.Owner != "" {
-			owners = append(owners, doc.Owner)
+		if doc.Owner != nil {
+			owners = append(owners, *doc.Owner)
 		}
-		if doc.Signer != "" && doc.Signer != doc.Owner {
+		if doc.Signer != "" && doc.Signer != *doc.Owner {
 			owners = append(owners, doc.Signer)
 		}
 
@@ -72,7 +72,7 @@ func handleInsert(ctx context.Context, db *gorm.DB, com Commit, doc Document) er
 		}
 
 		// Keyが空文字列の場合はRecordKeyを作らない
-		if doc.Key == "" {
+		if doc.Key == nil {
 			return nil
 		}
 
@@ -89,8 +89,8 @@ func handleInsert(ctx context.Context, db *gorm.DB, com Commit, doc Document) er
 			Columns:   []clause.Column{{Name: "owner"}, {Name: "key"}},
 			DoUpdates: clause.Assignments(map[string]any{"record_id": documentID}),
 		}).Create(&RecordKey{
-			Owner:    doc.Owner,
-			Key:      doc.Key,
+			Owner:    *doc.Owner,
+			Key:      *doc.Key,
 			RecordID: documentID,
 		}).Error
 		if err != nil {
@@ -98,27 +98,29 @@ func handleInsert(ctx context.Context, db *gorm.DB, com Commit, doc Document) er
 		}
 
 		// Relationを作る
-		for _, parentURI := range doc.Affiliations {
-			parentRecord, err := handleGetRecordByURI(ctx, tx, parentURI)
-			if err != nil {
-				return err
-			}
+		if doc.Affiliations != nil {
+			for _, parentURI := range *doc.Affiliations {
+				parentRecord, err := handleGetRecordByURI(ctx, tx, parentURI)
+				if err != nil {
+					return err
+				}
 
-			relation := CollectionMember{
-				CollectionID: parentRecord.DocumentID,
-				ItemID:       documentID,
-			}
+				relation := CollectionMember{
+					CollectionID: parentRecord.DocumentID,
+					ItemID:       documentID,
+				}
 
-			err = tx.Clauses(clause.OnConflict{
-				DoNothing: true,
-			}).Create(&relation).Error
-			if err != nil {
-				return err
+				err = tx.Clauses(clause.OnConflict{
+					DoNothing: true,
+				}).Create(&relation).Error
+				if err != nil {
+					return err
+				}
 			}
 		}
 
-		if doc.Reference != "" {
-			targetRecord, err := handleGetRecordByURI(ctx, tx, doc.Reference)
+		if doc.Reference != nil {
+			targetRecord, err := handleGetRecordByURI(ctx, tx, *doc.Reference)
 			if err != nil {
 				return err
 			}
