@@ -72,7 +72,7 @@ type Record struct {
 	Owner      string         `json:"owner" gorm:"type:text"`
 	Signer     string         `json:"signer" gorm:"type:text"`
 	Schema     string         `json:"schema" gorm:"type:text"`
-	Value      string         `json:"value" gorm:"type:text"`
+	Value      string         `json:"value" gorm:"type:jsonb"`
 	Reference  string         `json:"reference" gorm:"type:text"`
 	Referenced pq.StringArray `json:"referenced" gorm:"type:text[]"`
 	CDate      time.Time      `json:"cdate" gorm:"->;<-:create;type:timestamp with time zone;not null;default:clock_timestamp()"`
