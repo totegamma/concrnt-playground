@@ -18,8 +18,8 @@ type Document struct {
 	Key   string `json:"key,omitempty"`
 	Value string `json:"value"`
 
-	Reference  string   `json:"reference,omitempty"`
-	Referenced []string `json:"referenced,omitempty"`
+	Reference    string   `json:"reference,omitempty"`
+	Affiliations []string `json:"affiliations,omitempty"`
 
 	Signer string `json:"signer"`
 	KeyID  string `json:"keyID,omitempty"`
@@ -78,11 +78,18 @@ type Record struct {
 	CDate      time.Time      `json:"cdate" gorm:"->;<-:create;type:timestamp with time zone;not null;default:clock_timestamp()"`
 }
 
-type RecordRelation struct {
-	ParentID string `json:"parentID" gorm:"primaryKey;type:text"`
-	Parent   Record `json:"-" gorm:"foreignKey:ParentID;references:DocumentID;constraint:OnDelete:CASCADE;"`
-	ChildID  string `json:"childID" gorm:"primaryKey;type:text"`
-	Child    Record `json:"-" gorm:"foreignKey:ChildID;references:DocumentID;constraint:OnDelete:CASCADE;"`
+type CollectionMember struct {
+	CollectionID string `json:"collectionID" gorm:"primaryKey;type:text"`
+	Collection   Record `json:"-" gorm:"foreignKey:CollectionID;references:DocumentID;constraint:OnDelete:CASCADE;"`
+	ItemID       string `json:"itemID" gorm:"primaryKey;type:text"`
+	Item         Record `json:"-" gorm:"foreignKey:ItemID;references:DocumentID;constraint:OnDelete:CASCADE;"`
+}
+
+type Association struct {
+	TargetID string `json:"targetID" gorm:"primaryKey;type:text"`
+	Target   Record `json:"-" gorm:"foreignKey:TargetID;references:DocumentID;constraint:OnDelete:CASCADE;"`
+	ItemID   string `json:"itemID" gorm:"primaryKey;type:text"`
+	Item     Record `json:"-" gorm:"foreignKey:ItemID;references:DocumentID;constraint:OnDelete:CASCADE;"`
 }
 
 // ----------------

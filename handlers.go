@@ -98,20 +98,37 @@ func handleInsert(ctx context.Context, db *gorm.DB, com Commit, doc Document) er
 		}
 
 		// Relationを作る
-		for _, parentURI := range doc.Referenced {
+		for _, parentURI := range doc.Affiliations {
 			parentRecord, err := handleGetRecordByURI(ctx, tx, parentURI)
 			if err != nil {
 				return err
 			}
 
-			relation := RecordRelation{
-				ParentID: parentRecord.DocumentID,
-				ChildID:  documentID,
+			relation := CollectionMember{
+				CollectionID: parentRecord.DocumentID,
+				ItemID:       documentID,
 			}
 
 			err = tx.Clauses(clause.OnConflict{
 				DoNothing: true,
 			}).Create(&relation).Error
+			if err != nil {
+				return err
+			}
+		}
+
+		if doc.Reference != "" {
+			targetRecord, err := handleGetRecordByURI(ctx, tx, doc.Reference)
+			if err != nil {
+				return err
+			}
+			association := Association{
+				TargetID: targetRecord.DocumentID,
+				ItemID:   documentID,
+			}
+			err = tx.Clauses(clause.OnConflict{
+				DoNothing: true,
+			}).Create(&association).Error
 			if err != nil {
 				return err
 			}
@@ -123,15 +140,27 @@ func handleInsert(ctx context.Context, db *gorm.DB, com Commit, doc Document) er
 			oldID := oldRecordKey.RecordID
 			newID := documentID
 
-			if err := tx.Model(&RecordRelation{}).
+			if err := tx.Model(&CollectionMember{}).
 				Where("parent_id = ?", oldID).
 				Update("parent_id", newID).Error; err != nil {
 				return err
 			}
 
-			if err := tx.Model(&RecordRelation{}).
+			if err := tx.Model(&CollectionMember{}).
 				Where("child_id = ?", oldID).
 				Update("child_id", newID).Error; err != nil {
+				return err
+			}
+
+			if err := tx.Model(&Association{}).
+				Where("target_id = ?", oldID).
+				Update("target_id", newID).Error; err != nil {
+				return err
+			}
+
+			if err := tx.Model(&Association{}).
+				Where("item_id = ?", oldID).
+				Update("item_id", newID).Error; err != nil {
 				return err
 			}
 

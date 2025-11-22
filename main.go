@@ -43,7 +43,8 @@ func main() {
 		&CommitOwner{},
 		&Record{},
 		&RecordKey{},
-		&RecordRelation{},
+		&CollectionMember{},
+		&Association{},
 	)
 
 	e := echo.New()
