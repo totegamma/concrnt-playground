@@ -24,8 +24,8 @@ func handleInsert(ctx context.Context, db *gorm.DB, sd SignedDocument) error {
 	hash := core.GetHash([]byte(sd.Document))
 	hash10 := [10]byte{}
 	copy(hash10[:], hash[:10])
-	signedAt := doc.SignedAt
-	documentID := cdid.New(hash10, signedAt).String()
+	createAt := doc.CreateAt
+	documentID := cdid.New(hash10, createAt).String()
 
 	valueString, err := json.Marshal(doc.Value)
 	if err != nil {
