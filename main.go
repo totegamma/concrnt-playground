@@ -55,13 +55,13 @@ func main() {
 	e.POST("/commit", func(c echo.Context) error {
 		ctx := c.Request().Context()
 
-		var request Commit
-		err := c.Bind(&request)
+		var sd SignedDocument
+		err := c.Bind(&sd)
 		if err != nil {
 			return c.JSON(http.StatusBadRequest, echo.Map{"error": err.Error()})
 		}
 
-		err = HandleCommit(ctx, db, request)
+		err = HandleCommit(ctx, db, sd)
 		if err != nil {
 			return c.JSON(http.StatusBadRequest, echo.Map{"error": err.Error()})
 		}

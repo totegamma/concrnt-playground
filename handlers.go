@@ -13,29 +13,44 @@ import (
 	"github.com/concrnt/concrnt/core"
 )
 
-func handleInsert(ctx context.Context, db *gorm.DB, com Commit, doc Document) error {
+func handleInsert(ctx context.Context, db *gorm.DB, sd SignedDocument) error {
 
-	hash := core.GetHash([]byte(com.Document))
+	var doc Document[any]
+	err := json.Unmarshal([]byte(sd.Document), &doc)
+	if err != nil {
+		return err
+	}
+
+	hash := core.GetHash([]byte(sd.Document))
 	hash10 := [10]byte{}
 	copy(hash10[:], hash[:10])
 	signedAt := doc.SignedAt
 	documentID := cdid.New(hash10, signedAt).String()
 
+	valueString, err := json.Marshal(doc.Value)
+	if err != nil {
+		return err
+	}
+
 	record := Record{
 		DocumentID: documentID,
-		Value:      doc.Value,
-		Owner:      *doc.Owner,
-		Signer:     doc.Signer,
+		Value:      string(valueString),
+		Author:     doc.Author,
 		Schema:     *doc.Schema,
 		CDate:      time.Now(),
 	}
 
 	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 
+		proof, err := json.Marshal(sd.Proof)
+		if err != nil {
+			return err
+		}
+
 		commitLog := CommitLog{
-			ID:        documentID,
-			Document:  com.Document,
-			Signature: com.Signature,
+			ID:       documentID,
+			Document: sd.Document,
+			Proof:    string(proof),
 		}
 
 		if err := tx.Clauses(clause.OnConflict{
@@ -45,11 +60,9 @@ func handleInsert(ctx context.Context, db *gorm.DB, com Commit, doc Document) er
 		}
 
 		var owners []string
-		if doc.Owner != nil {
+		owners = append(owners, doc.Author)
+		if doc.Owner != nil && doc.Author != "" {
 			owners = append(owners, *doc.Owner)
-		}
-		if doc.Signer != "" && doc.Signer != *doc.Owner {
-			owners = append(owners, doc.Signer)
 		}
 
 		for _, owner := range owners {
@@ -77,7 +90,7 @@ func handleInsert(ctx context.Context, db *gorm.DB, com Commit, doc Document) er
 		}
 
 		var oldRecordKey RecordKey
-		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+		err = tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 			Where("owner = ? AND key = ?", doc.Owner, doc.Key).
 			Take(&oldRecordKey).Error
 		if err != nil && err != gorm.ErrRecordNotFound {
@@ -98,8 +111,8 @@ func handleInsert(ctx context.Context, db *gorm.DB, com Commit, doc Document) er
 		}
 
 		// Relationを作る
-		if doc.Affiliations != nil {
-			for _, parentURI := range *doc.Affiliations {
+		if doc.MemberOf != nil {
+			for _, parentURI := range *doc.MemberOf {
 				parentRecord, err := handleGetRecordByURI(ctx, tx, parentURI)
 				if err != nil {
 					return err
@@ -119,14 +132,16 @@ func handleInsert(ctx context.Context, db *gorm.DB, com Commit, doc Document) er
 			}
 		}
 
-		if doc.Reference != nil {
-			targetRecord, err := handleGetRecordByURI(ctx, tx, *doc.Reference)
+		// CIP-6 Association
+		if doc.Associate != nil {
+			targetRecord, err := handleGetRecordByURI(ctx, tx, *doc.Associate)
 			if err != nil {
 				return err
 			}
 			association := Association{
 				TargetID: targetRecord.DocumentID,
 				ItemID:   documentID,
+				Owner:    *doc.Owner,
 			}
 			err = tx.Clauses(clause.OnConflict{
 				DoNothing: true,
@@ -175,10 +190,16 @@ func handleInsert(ctx context.Context, db *gorm.DB, com Commit, doc Document) er
 	})
 }
 
-func handleDelete(ctx context.Context, db *gorm.DB, doc Document) error {
+func handleDelete(ctx context.Context, db *gorm.DB, sd SignedDocument) error {
+
+	var doc Document[SchemaDeleteType]
+	err := json.Unmarshal([]byte(sd.Document), &doc)
+	if err != nil {
+		return err
+	}
 
 	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Delete(&CommitLog{}, "id = ?", doc.Reference).Error; err != nil {
+		if err := tx.Delete(&CommitLog{}, "id = ?", doc.Value).Error; err != nil {
 			return err
 		}
 		return nil
@@ -258,20 +279,18 @@ func handleGetRecordByID(ctx context.Context, db *gorm.DB, documentID string) (*
 	return &record, nil
 }
 
-func HandleCommit(ctx context.Context, db *gorm.DB, commit Commit) error {
+func HandleCommit(ctx context.Context, db *gorm.DB, sd SignedDocument) error {
 
-	var doc Document
-	err := json.Unmarshal([]byte(commit.Document), &doc)
+	var doc Document[any]
+	err := json.Unmarshal([]byte(sd.Document), &doc)
 	if err != nil {
 		return err
 	}
 
-	switch doc.Type {
-	case DocumentTypeCreate, DocumentTypeTimeline, DocumentTypeCollection:
-		return handleInsert(ctx, db, commit, doc)
-	case DocumentTypeDelete:
-		return handleDelete(ctx, db, doc)
-	default:
-		return fmt.Errorf("unknown document type: %s", doc.Type)
+	if doc.Schema != nil && *doc.Schema == "concrnt/schema/delete" {
+		return handleDelete(ctx, db, sd)
+	} else {
+		return handleInsert(ctx, db, sd)
 	}
+
 }
