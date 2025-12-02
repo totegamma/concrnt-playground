@@ -1,4 +1,4 @@
-package main
+package repository
 
 import (
 	"context"
@@ -9,19 +9,28 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	"github.com/concrnt/concrnt/cdid"
-	"github.com/concrnt/concrnt/core"
+	"github.com/totegamma/concrnt-playground"
+	"github.com/totegamma/concrnt-playground/cdid"
+	"github.com/totegamma/concrnt-playground/internal/infrastructure/database/models"
 )
 
-func handleInsert(ctx context.Context, db *gorm.DB, sd SignedDocument) error {
+type RecordRepository struct {
+	db *gorm.DB
+}
 
-	var doc Document[any]
+func NewRecordRepository(db *gorm.DB) *RecordRepository {
+	return &RecordRepository{db: db}
+}
+
+func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument) error {
+
+	var doc concrnt.Document[any]
 	err := json.Unmarshal([]byte(sd.Document), &doc)
 	if err != nil {
 		return err
 	}
 
-	hash := core.GetHash([]byte(sd.Document))
+	hash := concrnt.GetHash([]byte(sd.Document))
 	hash10 := [10]byte{}
 	copy(hash10[:], hash[:10])
 	createAt := doc.CreateAt
@@ -32,7 +41,7 @@ func handleInsert(ctx context.Context, db *gorm.DB, sd SignedDocument) error {
 		return err
 	}
 
-	record := Record{
+	record := models.Record{
 		DocumentID: documentID,
 		Value:      string(valueString),
 		Author:     doc.Author,
@@ -40,14 +49,14 @@ func handleInsert(ctx context.Context, db *gorm.DB, sd SignedDocument) error {
 		CDate:      time.Now(),
 	}
 
-	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 
 		proof, err := json.Marshal(sd.Proof)
 		if err != nil {
 			return err
 		}
 
-		commitLog := CommitLog{
+		commitLog := models.CommitLog{
 			ID:       documentID,
 			Document: sd.Document,
 			Proof:    string(proof),
@@ -69,7 +78,7 @@ func handleInsert(ctx context.Context, db *gorm.DB, sd SignedDocument) error {
 			err := tx.Clauses(clause.OnConflict{
 				Columns:   []clause.Column{{Name: "commit_log_id"}, {Name: "owner"}},
 				DoNothing: true,
-			}).Create(&CommitOwner{
+			}).Create(&models.CommitOwner{
 				CommitLogID: commitLog.ID,
 				Owner:       owner,
 			}).Error
@@ -89,7 +98,7 @@ func handleInsert(ctx context.Context, db *gorm.DB, sd SignedDocument) error {
 			return nil
 		}
 
-		var oldRecordKey RecordKey
+		var oldRecordKey models.RecordKey
 		err = tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 			Where("owner = ? AND key = ?", doc.Owner, doc.Key).
 			Take(&oldRecordKey).Error
@@ -101,7 +110,7 @@ func handleInsert(ctx context.Context, db *gorm.DB, sd SignedDocument) error {
 		err = tx.Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "owner"}, {Name: "key"}},
 			DoUpdates: clause.Assignments(map[string]any{"record_id": documentID}),
-		}).Create(&RecordKey{
+		}).Create(&models.RecordKey{
 			Owner:    *doc.Owner,
 			Key:      *doc.Key,
 			RecordID: documentID,
@@ -118,7 +127,7 @@ func handleInsert(ctx context.Context, db *gorm.DB, sd SignedDocument) error {
 					return err
 				}
 
-				relation := CollectionMember{
+				relation := models.CollectionMember{
 					CollectionID: parentRecord.DocumentID,
 					ItemID:       documentID,
 				}
@@ -138,7 +147,7 @@ func handleInsert(ctx context.Context, db *gorm.DB, sd SignedDocument) error {
 			if err != nil {
 				return err
 			}
-			association := Association{
+			association := models.Association{
 				TargetID: targetRecord.DocumentID,
 				ItemID:   documentID,
 				Owner:    *doc.Owner,
@@ -157,88 +166,77 @@ func handleInsert(ctx context.Context, db *gorm.DB, sd SignedDocument) error {
 			oldID := oldRecordKey.RecordID
 			newID := documentID
 
-			if err := tx.Model(&CollectionMember{}).
+			if err := tx.Model(&models.CollectionMember{}).
 				Where("parent_id = ?", oldID).
 				Update("parent_id", newID).Error; err != nil {
 				return err
 			}
 
-			if err := tx.Model(&CollectionMember{}).
+			if err := tx.Model(&models.CollectionMember{}).
 				Where("child_id = ?", oldID).
 				Update("child_id", newID).Error; err != nil {
 				return err
 			}
 
-			if err := tx.Model(&Association{}).
+			if err := tx.Model(&models.Association{}).
 				Where("target_id = ?", oldID).
 				Update("target_id", newID).Error; err != nil {
 				return err
 			}
 
-			if err := tx.Model(&Association{}).
+			if err := tx.Model(&models.Association{}).
 				Where("item_id = ?", oldID).
 				Update("item_id", newID).Error; err != nil {
 				return err
 			}
 
-			if err := tx.Delete(&CommitLog{}, "id = ?", oldRecordKey.RecordID).Error; err != nil {
+			if err := tx.Delete(&models.CommitLog{}, "id = ?", oldRecordKey.RecordID).Error; err != nil {
 				return err
 			}
 		}
-
 		return nil
 	})
 }
 
-func handleDelete(ctx context.Context, db *gorm.DB, sd SignedDocument) error {
+func (r *RecordRepository) GetValue(ctx context.Context, uri string) (any, error) {
+	record, err := handleGetRecordByURI(ctx, r.db, uri)
+	if err != nil {
+		return nil, err
+	}
 
-	var doc Document[SchemaDeleteType]
-	err := json.Unmarshal([]byte(sd.Document), &doc)
+	var value any
+	err = json.Unmarshal([]byte(record.Value), &value)
+	if err != nil {
+		return nil, err
+	}
+
+	return value, nil
+}
+
+func (r *RecordRepository) Delete(ctx context.Context, uri string) error {
+
+	record, err := handleGetRecordByURI(ctx, r.db, uri)
 	if err != nil {
 		return err
 	}
 
-	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Delete(&CommitLog{}, "id = ?", doc.Value).Error; err != nil {
+	id := record.DocumentID
+
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Delete(&models.CommitLog{}, "id = ?", id).Error; err != nil {
 			return err
 		}
 		return nil
 	})
-
 }
 
-func handleGetChildsByID(ctx context.Context, db *gorm.DB, parentID string) ([]Record, error) {
-	var records []Record
-	err := db.WithContext(ctx).
-		Model(&Record{}).
-		Joins("JOIN record_relations rr ON rr.child_id = records.document_id").
-		Where("rr.parent_id = ?", parentID).
-		Order("records.c_date").
-		Find(&records).Error
-	if err != nil {
-		return nil, err
-	}
-	return records, nil
-}
-
-func handleGetChilds(ctx context.Context, db *gorm.DB, parentURI string) ([]Record, error) {
-	// 1. 親 Record を URI から解決
-	parentRecord, err := handleGetRecordByURI(ctx, db, parentURI)
+func handleGetRecordByURI(ctx context.Context, db *gorm.DB, uri string) (*models.Record, error) {
+	owner, key, err := concrnt.ParseCCURI(uri)
 	if err != nil {
 		return nil, err
 	}
 
-	// 2. 親のDocumentIDから子を取る
-	return handleGetChildsByID(ctx, db, parentRecord.DocumentID)
-}
-
-func handleGetRecordByURI(ctx context.Context, db *gorm.DB, uri string) (*Record, error) {
-	owner, key, err := ParseCCURI(uri)
-	if err != nil {
-		return nil, err
-	}
-
-	var record Record
+	var record models.Record
 	err = db.WithContext(ctx).
 		Where("document_id = ?", key).
 		Take(&record).Error
@@ -246,7 +244,7 @@ func handleGetRecordByURI(ctx context.Context, db *gorm.DB, uri string) (*Record
 		return &record, nil
 	}
 
-	var recordKey RecordKey
+	var recordKey models.RecordKey
 	err = db.WithContext(ctx).Preload("Record").
 		Where("owner = ? AND key = ?", owner, key).
 		Take(&recordKey).Error
@@ -255,42 +253,4 @@ func handleGetRecordByURI(ctx context.Context, db *gorm.DB, uri string) (*Record
 	}
 
 	return nil, fmt.Errorf("record not found")
-}
-
-func handleGetRecordByKey(ctx context.Context, db *gorm.DB, owner string, key string) (*Record, error) {
-	var recordKey RecordKey
-	err := db.WithContext(ctx).Preload("Record").
-		Where("owner = ? AND key = ?", owner, key).
-		Take(&recordKey).Error
-	if err != nil {
-		return nil, err
-	}
-	return &recordKey.Record, nil
-}
-
-func handleGetRecordByID(ctx context.Context, db *gorm.DB, documentID string) (*Record, error) {
-	var record Record
-	err := db.WithContext(ctx).
-		Where("document_id = ?", documentID).
-		Take(&record).Error
-	if err != nil {
-		return nil, err
-	}
-	return &record, nil
-}
-
-func HandleCommit(ctx context.Context, db *gorm.DB, sd SignedDocument) error {
-
-	var doc Document[any]
-	err := json.Unmarshal([]byte(sd.Document), &doc)
-	if err != nil {
-		return err
-	}
-
-	if doc.Schema != nil && *doc.Schema == "concrnt/schema/delete" {
-		return handleDelete(ctx, db, sd)
-	} else {
-		return handleInsert(ctx, db, sd)
-	}
-
 }

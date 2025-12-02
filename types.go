@@ -4,10 +4,6 @@ import (
 	"time"
 )
 
-const (
-	SchemaDelete string = "https://schema.concrnt.net/delete.json"
-)
-
 type Policy struct {
 	URL      string  `json:"url"`
 	Params   *string `json:"params,omitempty"`

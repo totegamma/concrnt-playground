@@ -1,51 +1,34 @@
 package main
 
 import (
-	"fmt"
-	"log"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
-	"time"
-
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+
+	"github.com/totegamma/concrnt-playground"
+	"github.com/totegamma/concrnt-playground/internal/application"
+	"github.com/totegamma/concrnt-playground/internal/infrastructure/database"
+	"github.com/totegamma/concrnt-playground/internal/infrastructure/repository"
 )
 
 func main() {
 	dsn := "host=localhost user=postgres password=postgres dbname=postgres port=5432 sslmode=disable"
 
-	gormLogger := logger.New(
-		log.New(os.Stdout, "\r\n", log.LstdFlags), // io writer
-		logger.Config{
-			SlowThreshold:             300 * time.Millisecond, // Slow SQL threshold
-			LogLevel:                  logger.Warn,            // Log level
-			IgnoreRecordNotFoundError: true,                   // Ignore ErrRecordNotFound error for logger
-			Colorful:                  true,                   // Enable color
-		},
-	)
-
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
-		TranslateError: true,
-		Logger:         gormLogger,
-	})
+	db, err := database.NewPostgres(dsn)
 	if err != nil {
 		panic("failed to connect database")
 	}
 
-	err = db.AutoMigrate(
-		&CommitLog{},
-		&CommitOwner{},
-		&Record{},
-		&RecordKey{},
-		&CollectionMember{},
-		&Association{},
-	)
+	err = database.MigratePostgres(db)
+	if err != nil {
+		panic("failed to migrate database")
+	}
+
+	recordRepo := repository.NewRecordRepository(db)
+	recordApp := application.NewRecordApplication(recordRepo)
 
 	e := echo.New()
 	e.Use(middleware.Logger())
@@ -55,16 +38,13 @@ func main() {
 	e.POST("/commit", func(c echo.Context) error {
 		ctx := c.Request().Context()
 
-		var sd SignedDocument
+		var sd concrnt.SignedDocument
 		err := c.Bind(&sd)
 		if err != nil {
 			return c.JSON(http.StatusBadRequest, echo.Map{"error": err.Error()})
 		}
 
-		err = HandleCommit(ctx, db, sd)
-		if err != nil {
-			return c.JSON(http.StatusBadRequest, echo.Map{"error": err.Error()})
-		}
+		err = recordApp.Commit(ctx, sd)
 
 		return c.JSON(200, echo.Map{"status": "ok"})
 	})
@@ -90,37 +70,15 @@ func main() {
 			return c.JSON(http.StatusBadRequest, echo.Map{"error": "unsupported uri scheme"})
 		}
 
-		owner := uri.Host
-		path := uri.Path
-		split := strings.Split(strings.TrimPrefix(path, "/"), "/")
-		key := split[0]
-
-		if len(split) == 1 {
-			record, err := handleGetRecordByKey(ctx, db, owner, key)
-			if err != nil {
-				record, err = handleGetRecordByID(ctx, db, key)
-			}
-			if err != nil {
+		value, err := recordApp.Get(ctx, uri.String())
+		if err != nil {
+			if strings.Contains(err.Error(), "record not found") {
 				return c.JSON(http.StatusNotFound, echo.Map{"error": "resource not found"})
 			}
-
-			return c.JSON(200, echo.Map{
-				"content": record.Value,
-			})
-		} else {
-			switch split[1] {
-			case "childs":
-				childRecords, err := handleGetChilds(ctx, db, fmt.Sprintf("cc://%s/%s", owner, split[0]))
-				if err != nil {
-					return c.JSON(http.StatusNotFound, echo.Map{"error": "resource not found", "details": err.Error()})
-				}
-				return c.JSON(200, echo.Map{
-					"children": childRecords,
-				})
-			default:
-				return c.JSON(http.StatusBadRequest, echo.Map{"error": "unsupported resource path"})
-			}
+			return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
 		}
+		return c.JSON(200, value)
+
 	})
 
 	e.Logger.Fatal(e.Start(":8000"))

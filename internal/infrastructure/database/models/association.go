@@ -1,4 +1,4 @@
-package repository
+package models
 
 type Association struct {
 	TargetID string `json:"targetID" gorm:"primaryKey;type:text"`

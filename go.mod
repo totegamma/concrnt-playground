@@ -1,4 +1,4 @@
-module concrnt2
+module github.com/totegamma/concrnt-playground
 
 go 1.25.1
 
