@@ -35,6 +35,21 @@ func main() {
 	e.Use(middleware.Recover())
 	e.Use(middleware.CORS())
 
+	e.GET("/.well-known/concrnt", func(c echo.Context) error {
+		wellknown := concrnt.WellKnownConcrnt{
+			Version: "2.0",
+			Domain:  "",
+			CSID:    "",
+			Layer:   "",
+			Endpoints: map[string]string{
+				"net.concrnt.core.entity":   "/entity/{ccid}",
+				"net.concrnt.core.resource": "/resource/{uri}",
+				"net.concrnt.core.commit":   "/commit",
+			},
+		}
+		return c.JSON(http.StatusOK, wellknown)
+	})
+
 	e.POST("/commit", func(c echo.Context) error {
 		ctx := c.Request().Context()
 

@@ -4,6 +4,14 @@ import (
 	"time"
 )
 
+type WellKnownConcrnt struct {
+	Version   string            `json:"version"`
+	Domain    string            `json:"domain"`
+	CSID      string            `json:"csid"`
+	Layer     string            `json:"layer"`
+	Endpoints map[string]string `json:"endpoints"`
+}
+
 type Policy struct {
 	URL      string  `json:"url"`
 	Params   *string `json:"params,omitempty"`
