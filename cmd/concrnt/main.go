@@ -10,14 +10,19 @@ import (
 
 	"github.com/totegamma/concrnt-playground"
 	"github.com/totegamma/concrnt-playground/internal/application"
+	"github.com/totegamma/concrnt-playground/internal/config"
 	"github.com/totegamma/concrnt-playground/internal/infrastructure/database"
 	"github.com/totegamma/concrnt-playground/internal/infrastructure/repository"
 )
 
 func main() {
-	dsn := "host=db user=postgres password=postgres dbname=postgres port=5432 sslmode=disable"
 
-	db, err := database.NewPostgres(dsn)
+	conf, err := config.Load("/etc/concrnt/config/config.yaml")
+	if err != nil {
+		panic("failed to load config: " + err.Error())
+	}
+
+	db, err := database.NewPostgres(conf.Server.PostgresDsn)
 	if err != nil {
 		panic("failed to connect database")
 	}
@@ -38,9 +43,9 @@ func main() {
 	e.GET("/.well-known/concrnt", func(c echo.Context) error {
 		wellknown := concrnt.WellKnownConcrnt{
 			Version: "2.0",
-			Domain:  "",
-			CSID:    "",
-			Layer:   "",
+			Domain:  conf.NodeInfo.FQDN,
+			CSID:    conf.NodeInfo.CSID,
+			Layer:   conf.NodeInfo.Layer,
 			Endpoints: map[string]string{
 				"net.concrnt.core.entity":   "/entity/{ccid}",
 				"net.concrnt.core.resource": "/resource/{uri}",
