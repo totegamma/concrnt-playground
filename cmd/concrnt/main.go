@@ -15,7 +15,7 @@ import (
 )
 
 func main() {
-	dsn := "host=localhost user=postgres password=postgres dbname=postgres port=5432 sslmode=disable"
+	dsn := "host=db user=postgres password=postgres dbname=postgres port=5432 sslmode=disable"
 
 	db, err := database.NewPostgres(dsn)
 	if err != nil {
@@ -45,6 +45,8 @@ func main() {
 				"net.concrnt.core.entity":   "/entity/{ccid}",
 				"net.concrnt.core.resource": "/resource/{uri}",
 				"net.concrnt.core.commit":   "/commit",
+				// "net.concrnt.world.register":        "/api/v1/register",
+				// "net.concrnt.world.chunkline.query": "/api/v1/timeline",
 			},
 		}
 		return c.JSON(http.StatusOK, wellknown)

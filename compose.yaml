@@ -1,0 +1,78 @@
+services:
+  # main components
+  concrnt:
+    build:
+      context: .
+      dockerfile: ./cmd/concrnt/Dockerfile
+    restart: always
+    links:
+      - db
+      - redis
+      - memcached
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      memcached:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./_etc:/etc/concrnt/:ro
+    networks:
+      - external
+      - internal
+    extra_hosts:
+      - "host.docker.internal:172.29.253.172"
+
+  db:
+    restart: always
+    image: postgres:18
+    healthcheck:
+      test: "pg_isready -U postgres"
+      interval: 5s
+      retries: 20
+    volumes:
+      - ./_composeData/db:/var/lib/postgresql
+    ports:
+      - "5432:5432"
+    environment:
+      - "POSTGRES_PASSWORD=postgres"
+      - "POSTGRES_DB=postgres"
+    networks:
+      - internal
+      - external
+
+  redis:
+    restart: always
+    image: redis:8.4
+    volumes:
+      - ./_composeData/redis:/data
+    healthcheck:
+      test: "redis-cli ping"
+      interval: 5s
+      retries: 20
+    ports:
+      - "6379:6379"
+    networks:
+      - internal
+      - external
+
+  memcached:
+    image: memcached:1.6-alpine
+    healthcheck:
+      test: "echo 'version' | nc localhost 11211 | grep VERSION"
+      interval: 5s
+      retries: 20
+    ports:
+      - "11211:11211"
+    networks:
+      - internal
+      - external
+
+networks:
+  external:
+  internal:
+    internal: true
+ 
