@@ -37,3 +37,7 @@ func ParseCCURI(escaped string) (string, string, error) {
 
 	return owner, key, nil
 }
+
+func ComposeCCURI(owner, key string) string {
+	return fmt.Sprintf("cc://%s/%s", owner, key)
+}

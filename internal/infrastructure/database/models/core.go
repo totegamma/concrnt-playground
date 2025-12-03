@@ -1,7 +1,6 @@
 package models
 
 import (
-	"github.com/lib/pq"
 	"time"
 )
 
@@ -22,22 +21,19 @@ type CommitLog struct {
 
 type RecordKey struct {
 	ID       int64  `json:"id" gorm:"primaryKey;autoIncrement"`
-	Owner    string `json:"owner" gorm:"uniqueIndex:idx_owner_key;type:text"`
-	Key      string `json:"key" gorm:"uniqueIndex:idx_owner_key;type:text"`
+	URI      string `json:"uri" gorm:"type:text;uniqueIndex"`
 	RecordID string `json:"recordID" gorm:"type:text"`
 	Record   Record `json:"record" gorm:"foreignKey:RecordID;references:DocumentID;constraint:OnDelete:CASCADE;"`
 }
 
 type Record struct {
-	DocumentID  string         `json:"id" gorm:"primaryKey;type:text"`
-	Document    CommitLog      `json:"-" gorm:"foreignKey:DocumentID;references:ID;constraint:OnDelete:CASCADE;"`
-	ContentType string         `json:"contentType" gorm:"type:text"`
-	Author      string         `json:"author" gorm:"type:text"`
-	Schema      string         `json:"schema" gorm:"type:text"`
-	Value       string         `json:"value" gorm:"type:jsonb"`
-	Reference   string         `json:"reference" gorm:"type:text"`
-	Referenced  pq.StringArray `json:"referenced" gorm:"type:text[]"`
-	CDate       time.Time      `json:"cdate" gorm:"->;<-:create;type:timestamp with time zone;not null;default:clock_timestamp()"`
+	DocumentID  string    `json:"id" gorm:"primaryKey;type:text"`
+	Document    CommitLog `json:"-" gorm:"foreignKey:DocumentID;references:ID;constraint:OnDelete:CASCADE;"`
+	ContentType string    `json:"contentType" gorm:"type:text"`
+	Author      string    `json:"author" gorm:"type:text"`
+	Schema      string    `json:"schema" gorm:"type:text"`
+	Value       string    `json:"value" gorm:"type:jsonb"`
+	CDate       time.Time `json:"cdate" gorm:"->;<-:create;type:timestamp with time zone;not null;default:clock_timestamp()"`
 }
 
 type CollectionMember struct {

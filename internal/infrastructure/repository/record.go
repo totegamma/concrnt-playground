@@ -97,7 +97,7 @@ func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument
 		if doc.Key != nil {
 			var oldRecordKey models.RecordKey
 			err = tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-				Where("owner = ? AND key = ?", doc.Owner, doc.Key).
+				Where("uri = ?", concrnt.ComposeCCURI(doc.Author, *doc.Key)).
 				Take(&oldRecordKey).Error
 			if err != nil && err != gorm.ErrRecordNotFound {
 				return err
@@ -106,13 +106,12 @@ func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument
 			// RecordKeyを作る
 
 			rk := models.RecordKey{
-				Owner:    doc.Author,
-				Key:      *doc.Key,
+				URI:      concrnt.ComposeCCURI(doc.Author, *doc.Key),
 				RecordID: documentID,
 			}
 
 			err = tx.Clauses(clause.OnConflict{
-				Columns:   []clause.Column{{Name: "owner"}, {Name: "key"}},
+				Columns:   []clause.Column{{Name: "uri"}},
 				DoUpdates: clause.Assignments(map[string]any{"record_id": documentID}),
 			}).Create(&rk).Error
 			if err != nil {
@@ -145,8 +144,7 @@ func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument
 
 				if rkid == -1 {
 					newRecordKey := models.RecordKey{
-						Owner:    doc.Author,
-						Key:      documentID,
+						URI:      concrnt.ComposeCCURI(doc.Author, documentID),
 						RecordID: documentID,
 					}
 					err = tx.Save(&newRecordKey).Error
@@ -180,8 +178,7 @@ func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument
 
 			if rkid == -1 {
 				newRecordKey := models.RecordKey{
-					Owner:    doc.Author,
-					Key:      documentID,
+					URI:      concrnt.ComposeCCURI(doc.Author, documentID),
 					RecordID: documentID,
 				}
 				err = tx.Save(&newRecordKey).Error
@@ -241,7 +238,7 @@ func (r *RecordRepository) Delete(ctx context.Context, uri string) error {
 }
 
 func handleGetRecordByURI(ctx context.Context, db *gorm.DB, uri string) (*models.Record, error) {
-	owner, key, err := concrnt.ParseCCURI(uri)
+	_, key, err := concrnt.ParseCCURI(uri)
 	if err != nil {
 		return nil, err
 	}
@@ -256,7 +253,7 @@ func handleGetRecordByURI(ctx context.Context, db *gorm.DB, uri string) (*models
 
 	var recordKey models.RecordKey
 	err = db.WithContext(ctx).Preload("Record").
-		Where("owner = ? AND key = ?", owner, key).
+		Where("uri = ?", uri).
 		Take(&recordKey).Error
 	if err == nil {
 		return &recordKey.Record, nil
@@ -266,7 +263,7 @@ func handleGetRecordByURI(ctx context.Context, db *gorm.DB, uri string) (*models
 }
 
 func handleGetRecordKeyIDByURI(ctx context.Context, db *gorm.DB, uri string) (int64, error) {
-	owner, key, err := concrnt.ParseCCURI(uri)
+	_, key, err := concrnt.ParseCCURI(uri)
 	if err != nil {
 		return 0, err
 	}
@@ -274,7 +271,7 @@ func handleGetRecordKeyIDByURI(ctx context.Context, db *gorm.DB, uri string) (in
 	// すでにあればそれを返す
 	var recordKey models.RecordKey
 	err = db.WithContext(ctx).
-		Where("owner = ? AND key = ?", owner, key).
+		Where("uri = ?", uri).
 		Take(&recordKey).Error
 	if err == nil {
 		return recordKey.ID, nil
@@ -290,8 +287,7 @@ func handleGetRecordKeyIDByURI(ctx context.Context, db *gorm.DB, uri string) (in
 	}
 
 	newRecordKey := models.RecordKey{
-		Owner:    owner,
-		Key:      record.DocumentID,
+		URI:      uri,
 		RecordID: record.DocumentID,
 	}
 
