@@ -41,4 +41,5 @@ type CollectionMember struct {
 	Collection   RecordKey `json:"-" gorm:"foreignKey:CollectionID;references:ID;constraint:OnDelete:CASCADE;"`
 	ItemID       int64     `json:"itemID" gorm:"primaryKey;type:text"`
 	Item         RecordKey `json:"-" gorm:"foreignKey:ItemID;references:ID;constraint:OnDelete:CASCADE;"`
+	CDate        time.Time `json:"cdate" gorm:"->;<-:create;type:timestamp with time zone;not null;default:clock_timestamp()"`
 }

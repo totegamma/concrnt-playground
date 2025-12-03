@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/labstack/echo/v4"
@@ -34,6 +35,9 @@ func main() {
 
 	recordRepo := repository.NewRecordRepository(db)
 	recordApp := application.NewRecordApplication(recordRepo)
+
+	chunklineRepo := repository.NewChunklineRepository(db)
+	chunklineApp := application.NewChunklineApplication(chunklineRepo)
 
 	e := echo.New()
 	e.Use(middleware.Logger())
@@ -101,6 +105,38 @@ func main() {
 		}
 		return c.JSON(200, value)
 
+	})
+
+	e.GET("/chunkline/:owner/:id/:chunk/itr", func(c echo.Context) error {
+		ctx := c.Request().Context()
+		uri := concrnt.ComposeCCURI(c.Param("owner"), c.Param("id"))
+
+		chunkID, err := strconv.ParseInt(c.Param("chunk"), 10, 64)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, echo.Map{"error": "invalid chunk id"})
+		}
+
+		results, err := chunklineApp.LookupLocalItrs(ctx, []string{uri}, chunkID)
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+		}
+
+		return c.String(200, strconv.FormatInt(results[uri], 10))
+	})
+
+	e.GET("/chunkline/:owner/:id/:chunk/body", func(c echo.Context) error {
+		ctx := c.Request().Context()
+		uri := concrnt.ComposeCCURI(c.Param("owner"), c.Param("id"))
+
+		chunkID, err := strconv.ParseInt(c.Param("chunk"), 10, 64)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, echo.Map{"error": "invalid chunk id"})
+		}
+		results, err := chunklineApp.LoadLocalBody(ctx, uri, chunkID)
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+		}
+		return c.JSON(200, results)
 	})
 
 	e.Logger.Fatal(e.Start(":8000"))

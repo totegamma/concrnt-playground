@@ -3,11 +3,11 @@ module github.com/totegamma/concrnt-playground
 go 1.25.1
 
 require (
+	github.com/concrnt/chunkline v0.0.0-20251201153544-6d56c1ab2be3
 	github.com/cosmos/cosmos-sdk v0.50.7
 	github.com/ethereum/go-ethereum v1.14.5
 	github.com/go-yaml/yaml v2.1.0+incompatible
 	github.com/labstack/echo/v4 v4.13.4
-	github.com/lib/pq v1.10.9
 	github.com/pkg/errors v0.9.1
 	gitlab.com/yawning/secp256k1-voi v0.0.0-20230925100816-f2616030848b
 	golang.org/x/crypto v0.38.0
@@ -75,6 +75,7 @@ require (
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/jmhodges/levigo v1.0.0 // indirect
 	github.com/klauspost/compress v1.17.7 // indirect
+	github.com/klauspost/cpuid/v2 v2.0.9 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/labstack/gommon v0.4.2 // indirect
@@ -100,6 +101,7 @@ require (
 	github.com/tendermint/go-amino v0.16.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
+	github.com/zeebo/xxh3 v1.0.2 // indirect
 	gitlab.com/yawning/tuplehash v0.0.0-20230713102510-df83abbf9a02 // indirect
 	go.etcd.io/bbolt v1.3.8 // indirect
 	golang.org/x/exp v0.0.0-20240613232115-7f521ea00fb8 // indirect
