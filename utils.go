@@ -1,10 +1,20 @@
 package concrnt
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"strings"
 )
+
+func JsonPrint(tag string, v any) {
+	b, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		fmt.Printf("%s: error marshaling: %v\n", tag, err)
+		return
+	}
+	fmt.Printf("%s: %s\n", tag, string(b))
+}
 
 func ParseCCURI(escaped string) (string, string, error) {
 	uriString, err := url.QueryUnescape(escaped)

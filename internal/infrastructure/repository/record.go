@@ -93,36 +93,11 @@ func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument
 			return err
 		}
 
-		// Keyが空文字列の場合はRecordKeyを作らない
-		if doc.Key == nil {
-			return nil
-		}
-
-		var oldRecordKey models.RecordKey
-		err = tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-			Where("owner = ? AND key = ?", doc.Owner, doc.Key).
-			Take(&oldRecordKey).Error
-		if err != nil && err != gorm.ErrRecordNotFound {
-			return err
-		}
-
-		// RecordKeyを作る
-		err = tx.Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "owner"}, {Name: "key"}},
-			DoUpdates: clause.Assignments(map[string]any{"record_id": documentID}),
-		}).Create(&models.RecordKey{
-			Owner:    *doc.Owner,
-			Key:      *doc.Key,
-			RecordID: documentID,
-		}).Error
-		if err != nil {
-			return err
-		}
-
 		// Relationを作る
 		if doc.MemberOf != nil {
 			for _, parentURI := range *doc.MemberOf {
 				parentRecord, err := handleGetRecordByURI(ctx, tx, parentURI)
+				fmt.Println("parentRecord:", parentRecord)
 				if err != nil {
 					return err
 				}
@@ -158,6 +133,32 @@ func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument
 			if err != nil {
 				return err
 			}
+		}
+
+		// Keyが空文字列の場合はRecordKeyを作らない
+		if doc.Key == nil {
+			return nil
+		}
+
+		var oldRecordKey models.RecordKey
+		err = tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("owner = ? AND key = ?", doc.Owner, doc.Key).
+			Take(&oldRecordKey).Error
+		if err != nil && err != gorm.ErrRecordNotFound {
+			return err
+		}
+
+		// RecordKeyを作る
+		err = tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "owner"}, {Name: "key"}},
+			DoUpdates: clause.Assignments(map[string]any{"record_id": documentID}),
+		}).Create(&models.RecordKey{
+			Owner:    doc.Author,
+			Key:      *doc.Key,
+			RecordID: documentID,
+		}).Error
+		if err != nil {
+			return err
 		}
 
 		// 古いRecordKeyが指していたRecordを削除する
