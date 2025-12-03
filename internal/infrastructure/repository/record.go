@@ -93,18 +93,68 @@ func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument
 			return err
 		}
 
+		var rkid int64 = -1
+		if doc.Key != nil {
+			var oldRecordKey models.RecordKey
+			err = tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+				Where("owner = ? AND key = ?", doc.Owner, doc.Key).
+				Take(&oldRecordKey).Error
+			if err != nil && err != gorm.ErrRecordNotFound {
+				return err
+			}
+
+			// RecordKeyを作る
+
+			rk := models.RecordKey{
+				Owner:    doc.Author,
+				Key:      *doc.Key,
+				RecordID: documentID,
+			}
+
+			err = tx.Clauses(clause.OnConflict{
+				Columns:   []clause.Column{{Name: "owner"}, {Name: "key"}},
+				DoUpdates: clause.Assignments(map[string]any{"record_id": documentID}),
+			}).Create(&rk).Error
+			if err != nil {
+				return err
+			}
+
+			rkid = rk.ID
+
+			// 古いRecordKeyが指していたRecordを削除する
+			if oldRecordKey.RecordID != "" && oldRecordKey.RecordID != documentID {
+
+				if err := tx.Delete(&models.CommitLog{}, "id = ?", oldRecordKey.RecordID).Error; err != nil {
+					return err
+				}
+			}
+		}
+
 		// Relationを作る
 		if doc.MemberOf != nil {
 			for _, parentURI := range *doc.MemberOf {
-				parentRecord, err := handleGetRecordByURI(ctx, tx, parentURI)
-				fmt.Println("parentRecord:", parentRecord)
+
+				collectionRK, err := handleGetRecordKeyIDByURI(ctx, tx, parentURI)
 				if err != nil {
 					return err
 				}
 
+				if rkid == -1 {
+					newRecordKey := models.RecordKey{
+						Owner:    doc.Author,
+						Key:      documentID,
+						RecordID: documentID,
+					}
+					err = tx.Save(&newRecordKey).Error
+					if err != nil {
+						return err
+					}
+					rkid = newRecordKey.ID
+				}
+
 				relation := models.CollectionMember{
-					CollectionID: parentRecord.DocumentID,
-					ItemID:       documentID,
+					CollectionID: collectionRK,
+					ItemID:       rkid,
 				}
 
 				err = tx.Clauses(clause.OnConflict{
@@ -118,13 +168,28 @@ func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument
 
 		// CIP-6 Association
 		if doc.Associate != nil {
-			targetRecord, err := handleGetRecordByURI(ctx, tx, *doc.Associate)
+
+			targetRK, err := handleGetRecordKeyIDByURI(ctx, tx, *doc.Associate)
 			if err != nil {
 				return err
 			}
+
+			if rkid == -1 {
+				newRecordKey := models.RecordKey{
+					Owner:    doc.Author,
+					Key:      documentID,
+					RecordID: documentID,
+				}
+				err = tx.Save(&newRecordKey).Error
+				if err != nil {
+					return err
+				}
+				rkid = newRecordKey.ID
+			}
+
 			association := models.Association{
-				TargetID: targetRecord.DocumentID,
-				ItemID:   documentID,
+				TargetID: targetRK,
+				ItemID:   rkid,
 				Owner:    *doc.Owner,
 			}
 			err = tx.Clauses(clause.OnConflict{
@@ -135,66 +200,6 @@ func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument
 			}
 		}
 
-		// Keyが空文字列の場合はRecordKeyを作らない
-		if doc.Key == nil {
-			return nil
-		}
-
-		var oldRecordKey models.RecordKey
-		err = tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-			Where("owner = ? AND key = ?", doc.Owner, doc.Key).
-			Take(&oldRecordKey).Error
-		if err != nil && err != gorm.ErrRecordNotFound {
-			return err
-		}
-
-		// RecordKeyを作る
-		err = tx.Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "owner"}, {Name: "key"}},
-			DoUpdates: clause.Assignments(map[string]any{"record_id": documentID}),
-		}).Create(&models.RecordKey{
-			Owner:    doc.Author,
-			Key:      *doc.Key,
-			RecordID: documentID,
-		}).Error
-		if err != nil {
-			return err
-		}
-
-		// 古いRecordKeyが指していたRecordを削除する
-		if oldRecordKey.RecordID != "" && oldRecordKey.RecordID != documentID {
-
-			oldID := oldRecordKey.RecordID
-			newID := documentID
-
-			if err := tx.Model(&models.CollectionMember{}).
-				Where("parent_id = ?", oldID).
-				Update("parent_id", newID).Error; err != nil {
-				return err
-			}
-
-			if err := tx.Model(&models.CollectionMember{}).
-				Where("child_id = ?", oldID).
-				Update("child_id", newID).Error; err != nil {
-				return err
-			}
-
-			if err := tx.Model(&models.Association{}).
-				Where("target_id = ?", oldID).
-				Update("target_id", newID).Error; err != nil {
-				return err
-			}
-
-			if err := tx.Model(&models.Association{}).
-				Where("item_id = ?", oldID).
-				Update("item_id", newID).Error; err != nil {
-				return err
-			}
-
-			if err := tx.Delete(&models.CommitLog{}, "id = ?", oldRecordKey.RecordID).Error; err != nil {
-				return err
-			}
-		}
 		return nil
 	})
 }
@@ -254,4 +259,42 @@ func handleGetRecordByURI(ctx context.Context, db *gorm.DB, uri string) (*models
 	}
 
 	return nil, fmt.Errorf("record not found")
+}
+
+func handleGetRecordKeyIDByURI(ctx context.Context, db *gorm.DB, uri string) (int64, error) {
+	owner, key, err := concrnt.ParseCCURI(uri)
+	if err != nil {
+		return 0, err
+	}
+
+	// すでにあればそれを返す
+	var recordKey models.RecordKey
+	err = db.WithContext(ctx).
+		Where("owner = ? AND key = ?", owner, key).
+		Take(&recordKey).Error
+	if err == nil {
+		return recordKey.ID, nil
+	}
+
+	// 参照がCDIDの場合は、新しくRecordKeyを作って返す
+	var record models.Record
+	err = db.WithContext(ctx).
+		Where("document_id = ?", key).
+		Take(&record).Error
+	if err != nil {
+		return 0, err
+	}
+
+	newRecordKey := models.RecordKey{
+		Owner:    owner,
+		Key:      record.DocumentID,
+		RecordID: record.DocumentID,
+	}
+
+	err = db.WithContext(ctx).Create(&newRecordKey).Error
+	if err != nil {
+		return 0, err
+	}
+
+	return newRecordKey.ID, nil
 }
