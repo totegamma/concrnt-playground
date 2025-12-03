@@ -121,10 +121,14 @@ func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument
 
 			rkid = rk.ID
 
-			// 古いRecordKeyが指していたRecordを削除する
+			// 古いRecordKeyが指していたCommitのGCフラグを立て、Recordは消す
 			if oldRecordKey.RecordID != "" && oldRecordKey.RecordID != documentID {
-
-				if err := tx.Delete(&models.CommitLog{}, "id = ?", oldRecordKey.RecordID).Error; err != nil {
+				if err := tx.Model(&models.CommitLog{}).
+					Where("id = ?", oldRecordKey.RecordID).
+					Update("gc_candidate", true).Error; err != nil {
+					return err
+				}
+				if err := tx.Delete(&models.Record{}, "document_id = ?", oldRecordKey.RecordID).Error; err != nil {
 					return err
 				}
 			}
