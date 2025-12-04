@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -61,9 +62,10 @@ func main() {
 			CSID:    conf.NodeInfo.CSID,
 			Layer:   conf.NodeInfo.Layer,
 			Endpoints: map[string]string{
-				"net.concrnt.core.resource":  "/resource/{uri}",
-				"net.concrnt.core.commit":    "/commit",
-				"net.concrnt.world.register": "/api/v1/register",
+				"net.concrnt.core.resource":         "/resource/{uri}",
+				"net.concrnt.core.commit":           "/commit",
+				"net.concrnt.world.register":        "/api/v1/register",
+				"net.concrnt.world.timeline.recent": "/api/v1/timeline/recent",
 			},
 		}
 		return c.JSON(http.StatusOK, wellknown)
@@ -193,6 +195,28 @@ func main() {
 			return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
 		}
 		return c.JSON(200, echo.Map{"status": "ok"})
+	})
+
+	e.GET("/api/v1/timeline/recent", func(c echo.Context) error {
+		ctx := c.Request().Context()
+		uriString := c.QueryParam("uris")
+		uris := strings.Split(uriString, ",")
+		untilStr := c.QueryParam("until")
+		var until time.Time
+		if untilStr == "" {
+			until = time.Now().UTC()
+		} else {
+			untilInt, err := strconv.ParseInt(untilStr, 10, 64)
+			if err != nil {
+				return c.JSON(http.StatusBadRequest, echo.Map{"error": "invalid until parameter"})
+			}
+			until = time.Unix(untilInt, 0).UTC()
+		}
+		results, err := chunklineApp.GetRecent(ctx, uris, until)
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+		}
+		return c.JSON(200, results)
 	})
 
 	e.Logger.Fatal(e.Start(":8000"))

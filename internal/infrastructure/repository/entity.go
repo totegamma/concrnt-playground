@@ -47,7 +47,7 @@ func (r *EntityRepository) Get(ctx context.Context, ccid string, hint string) (m
 		return entity, nil
 	}
 
-	remote, err := r.client.GetEntityWithResolver(ctx, hint, ccid)
+	remote, err := r.client.GetEntity(ctx, ccid, hint)
 	if err != nil {
 		return models.Entity{}, err
 	}
