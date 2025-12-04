@@ -42,7 +42,7 @@ func main() {
 	recordApp := application.NewRecordApplication(recordRepo)
 
 	chunklineRepo := repository.NewChunklineRepository(db)
-	chunklineApp := application.NewChunklineApplication(chunklineRepo)
+	chunklineApp := application.NewChunklineApplication(chunklineRepo, cl)
 
 	serverRepo := repository.NewServerRepository(db, cl)
 	serverApp := application.NewServerApplication(serverRepo)

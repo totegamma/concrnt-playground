@@ -12,9 +12,16 @@ RUN VERSION=${VERSION:-$(git describe)} \
     GO_VERSION=$(go version) \
     go build -ldflags "-s -w -X main.version=${VERSION} -X \"main.buildMachine=${BUILD_MACHINE}\" -X \"main.buildTime=${BUILD_TIME}\" -X \"main.goVersion=${GO_VERSION}\"" -o concrnt ./cmd/concrnt
 
+# ---------------------------------
+FROM ubuntu:latest AS certificates
+
+RUN apt-get update && apt-get install -y ca-certificates
+
+# ---------------------------------
 FROM ubuntu:latest
 
 COPY --from=builder /work/concrnt /usr/local/bin
+COPY --from=certificates /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
 CMD ["concrnt"]
 

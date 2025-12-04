@@ -14,11 +14,24 @@ import (
 )
 
 type ChunklineApplication struct {
-	repo *repository.ChunklineRepository
+	repo     *repository.ChunklineRepository
+	resolver *chunkline.Client
 }
 
-func NewChunklineApplication(repo *repository.ChunklineRepository) *ChunklineApplication {
-	return &ChunklineApplication{repo: repo}
+func NewChunklineApplication(
+	repo *repository.ChunklineRepository,
+	client *client.Client,
+) *ChunklineApplication {
+
+	resolver := &resolver{
+		client: client,
+	}
+	clc := chunkline.NewClient(resolver)
+
+	return &ChunklineApplication{
+		repo:     repo,
+		resolver: clc,
+	}
 }
 
 func (app *ChunklineApplication) GetChunklineManifest(ctx context.Context, uri string) (*chunkline.Manifest, error) {
@@ -35,10 +48,7 @@ func (app *ChunklineApplication) LoadLocalBody(ctx context.Context, uri string, 
 
 func (app *ChunklineApplication) GetRecent(ctx context.Context, uris []string, until time.Time) ([]chunkline.BodyItem, error) {
 
-	resolver := &resolver{}
-	clc := chunkline.NewClient(resolver)
-
-	items, err := clc.QueryDescending(ctx, uris, until, 100)
+	items, err := app.resolver.QueryDescending(ctx, uris, until, 100)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query descending: %v", err)
 	}
@@ -48,7 +58,7 @@ func (app *ChunklineApplication) GetRecent(ctx context.Context, uris []string, u
 }
 
 type resolver struct {
-	client client.Client
+	client *client.Client
 }
 
 func (r *resolver) ResolveTimelines(ctx context.Context, timelines []string) (map[string]chunkline.Manifest, error) {
