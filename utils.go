@@ -41,3 +41,20 @@ func ParseCCURI(escaped string) (string, string, error) {
 func ComposeCCURI(owner, key string) string {
 	return fmt.Sprintf("cc://%s/%s", owner, key)
 }
+
+func hasChar(s string, c byte) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] == c {
+			return true
+		}
+	}
+	return false
+}
+
+func IsCCID(keyID string) bool {
+	return len(keyID) == 42 && keyID[:3] == "con" && !hasChar(keyID, '.')
+}
+
+func IsCSID(keyID string) bool {
+	return len(keyID) == 42 && keyID[:3] == "ccs" && !hasChar(keyID, '.')
+}

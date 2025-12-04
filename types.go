@@ -53,3 +53,10 @@ type SignedDocument struct {
 	Document string `json:"document"`
 	Proof    Proof  `json:"proof"`
 }
+
+type Entity struct {
+	CCID                 string `json:"ccid"`
+	Domain               string `json:"domain"`
+	AffiliationDocument  string `json:"affiliationDocument"`
+	AffiliationSignature string `json:"affiliationSignature"`
+}

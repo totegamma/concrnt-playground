@@ -38,5 +38,8 @@ func MigratePostgres(db *gorm.DB) error {
 		&models.RecordKey{},
 		&models.CollectionMember{},
 		&models.Association{},
+		&models.Server{},
+		&models.Entity{},
+		&models.EntityMeta{},
 	)
 }
