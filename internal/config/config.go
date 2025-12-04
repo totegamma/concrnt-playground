@@ -26,6 +26,7 @@ type NodeInfo struct {
 
 type Server struct {
 	PostgresDsn     string `yaml:"postgresDsn"`
+	GatewayAddr     string `yaml:"gatewayAddr"`
 	RedisAddr       string `yaml:"redisAddr"`
 	RedisDB         int    `yaml:"redisDB"`
 	MemcachedAddr   string `yaml:"memcachedAddr"`

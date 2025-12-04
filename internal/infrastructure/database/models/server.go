@@ -7,6 +7,7 @@ type Server struct {
 	CSID        string    `json:"csid" gorm:"type:text"`
 	Tag         string    `json:"tag" gorm:"type:text"`
 	Layer       string    `json:"layer" gorm:"type:text"`
+	WellKnown   string    `json:"wellKnown" gorm:"type:jsonb"`
 	CDate       time.Time `json:"cdate" gorm:"->;<-:create;type:timestamp with time zone;not null;default:clock_timestamp()"`
 	MDate       time.Time `json:"mdate" gorm:"autoUpdateTime"`
 	LastScraped time.Time `json:"lastScraped" gorm:"type:timestamp with time zone"`

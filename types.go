@@ -60,3 +60,10 @@ type Entity struct {
 	AffiliationDocument  string `json:"affiliationDocument"`
 	AffiliationSignature string `json:"affiliationSignature"`
 }
+
+type RegisterRequest[T any] struct {
+	AffiliationDocument  string  `json:"affiliationDocument"`
+	AffiliationSignature string  `json:"affiliationSignature"`
+	Meta                 T       `json:"meta,omitempty"`
+	InviteToken          *string `json:"inviteToken,omitempty"`
+}
