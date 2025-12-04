@@ -15,6 +15,10 @@ func NewChunklineApplication(repo *repository.ChunklineRepository) *ChunklineApp
 	return &ChunklineApplication{repo: repo}
 }
 
+func (app *ChunklineApplication) GetChunklineManifest(ctx context.Context, uri string) (*chunkline.Manifest, error) {
+	return app.repo.GetChunklineManifest(ctx, uri)
+}
+
 func (app *ChunklineApplication) LookupLocalItrs(ctx context.Context, uris []string, chunkID int64) (map[string]int64, error) {
 	return app.repo.LookupLocalItrs(ctx, uris, chunkID)
 }

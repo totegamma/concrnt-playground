@@ -96,15 +96,27 @@ func main() {
 			return c.JSON(http.StatusBadRequest, echo.Map{"error": "unsupported uri scheme"})
 		}
 
-		value, err := recordApp.Get(ctx, uri.String())
-		if err != nil {
-			if strings.Contains(err.Error(), "record not found") {
-				return c.JSON(http.StatusNotFound, echo.Map{"error": "resource not found"})
-			}
-			return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
-		}
-		return c.JSON(200, value)
+		accept := c.Request().Header.Get("Accept")
 
+		if accept == "application/chunkline+json" {
+			value, err := chunklineApp.GetChunklineManifest(ctx, uriString)
+			if err != nil {
+				if strings.Contains(err.Error(), "record not found") {
+					return c.JSON(http.StatusNotFound, echo.Map{"error": "resource not found"})
+				}
+				return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+			}
+			return c.JSON(200, value)
+		} else {
+			value, err := recordApp.Get(ctx, uri.String())
+			if err != nil {
+				if strings.Contains(err.Error(), "record not found") {
+					return c.JSON(http.StatusNotFound, echo.Map{"error": "resource not found"})
+				}
+				return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+			}
+			return c.JSON(200, value)
+		}
 	})
 
 	e.GET("/chunkline/:owner/:id/:chunk/itr", func(c echo.Context) error {

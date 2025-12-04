@@ -7,6 +7,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/concrnt/chunkline"
+	"github.com/totegamma/concrnt-playground"
 	"github.com/totegamma/concrnt-playground/internal/infrastructure/database/models"
 )
 
@@ -22,6 +23,42 @@ func NewChunklineRepository(db *gorm.DB) *ChunklineRepository {
 	return &ChunklineRepository{db: db}
 }
 
+func (r *ChunklineRepository) GetChunklineManifest(ctx context.Context, uri string) (*chunkline.Manifest, error) {
+
+	record, err := handleGetRecordByURI(ctx, r.db, uri)
+	if err != nil {
+		return nil, err
+	}
+
+	ccid, key, err := concrnt.ParseCCURI(uri)
+	if err != nil {
+		return nil, err
+	}
+
+	firstCollectionMember := models.CollectionMember{}
+	err = r.db.WithContext(ctx).
+		Joins("JOIN record_keys ON record_keys.id = collection_members.collection_id").
+		Where("record_keys.uri = ?", uri).
+		Order("collection_members.c_date ASC").
+		Limit(1).
+		Take(&firstCollectionMember).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &chunkline.Manifest{
+		Version:    "1.0",
+		ChunkSize:  600,
+		FirstChunk: firstCollectionMember.CDate.Unix()/600 + 1,
+		Descending: &chunkline.Endpoint{
+			Iterator: "/chunkline/" + ccid + "/" + key + "/{chunk}/itr",
+			Body:     "/chunkline/" + ccid + "/" + key + "/{chunk}/body",
+		},
+		Metadata: record.Value,
+	}, nil
+}
+
 func (r *ChunklineRepository) LookupLocalItrs(ctx context.Context, uris []string, chunkID int64) (map[string]int64, error) {
 
 	type TimelineRow struct {
@@ -31,7 +68,7 @@ func (r *ChunklineRepository) LookupLocalItrs(ctx context.Context, uris []string
 
 	var res []TimelineRow
 
-	cutoff := time.Unix((chunkID+1)*300, 0) // descending order
+	cutoff := time.Unix((chunkID+1)*600, 0) // descending order
 
 	err := r.db.WithContext(ctx).
 		Model(&models.CollectionMember{}).
@@ -47,15 +84,15 @@ func (r *ChunklineRepository) LookupLocalItrs(ctx context.Context, uris []string
 
 	lookup := make(map[string]int64)
 	for _, row := range res {
-		lookup[row.URI] = row.MaxCDate.Unix() / 300
+		lookup[row.URI] = row.MaxCDate.Unix() / 600
 	}
 	return lookup, nil
 }
 
 func (r *ChunklineRepository) LoadLocalBody(ctx context.Context, uri string, chunkID int64) ([]chunkline.BodyItem, error) {
 
-	chunkDate := time.Unix((chunkID+1)*300, 0)
-	prevChunkDate := time.Unix((chunkID-1)*300, 0)
+	chunkDate := time.Unix((chunkID+1)*600, 0)
+	prevChunkDate := time.Unix((chunkID-1)*600, 0)
 
 	collectionID := int64(0)
 	err := r.db.WithContext(ctx).

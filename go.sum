@@ -78,6 +78,8 @@ github.com/cometbft/cometbft-db v0.9.1 h1:MIhVX5ja5bXNHF8EYrThkG9F7r9kSfv8BX4LWa
 github.com/cometbft/cometbft-db v0.9.1/go.mod h1:iliyWaoV0mRwBJoizElCwwRA9Tf7jZJOURcRZF9m60U=
 github.com/concrnt/chunkline v0.0.0-20251201153544-6d56c1ab2be3 h1:2VkDPQj4cn0NvLM9hqTl7O2TMCIlTWB1V5pgdLddCYU=
 github.com/concrnt/chunkline v0.0.0-20251201153544-6d56c1ab2be3/go.mod h1:mcGhhwjuWjXKyvWtUnkiDc92EwpTR4OGEPfkaxNap4g=
+github.com/concrnt/chunkline v0.0.0-20251203232039-8352e56f50b3 h1:NHfqaN3p8mau8rMZHgPvdrrZdb1mP7gpsrkf/JtTBGY=
+github.com/concrnt/chunkline v0.0.0-20251203232039-8352e56f50b3/go.mod h1:mcGhhwjuWjXKyvWtUnkiDc92EwpTR4OGEPfkaxNap4g=
 github.com/coreos/etcd v3.3.10+incompatible/go.mod h1:uF7uidLiAD3TWHmW31ZFd/JWoc32PjwdhPthX9715RE=
 github.com/coreos/go-etcd v2.0.0+incompatible/go.mod h1:Jez6KQU2B/sWsbdaef3ED8NzMklzPG4d5KIOhIy30Tk=
 github.com/coreos/go-semver v0.2.0/go.mod h1:nnelYz7RCh+5ahJtPPxZlU+153eP4D4r3EedlOD2RNk=
