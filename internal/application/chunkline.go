@@ -80,6 +80,7 @@ func (r *resolver) ResolveTimelines(ctx context.Context, timelines []string) (ma
 	}
 
 	for _, tl := range remaining {
+		fmt.Println("Resolving timeline manifest for ", tl)
 		var manifest chunkline.Manifest
 		err := r.client.GetResource(ctx, tl, "application/chunkline+json", client.Options{}, &manifest)
 		if err != nil {

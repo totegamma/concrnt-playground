@@ -21,7 +21,7 @@ func NewServerRepository(db *gorm.DB, cl *client.Client) *ServerRepository {
 	return &ServerRepository{db: db, client: cl}
 }
 
-func (r *ServerRepository) Get(ctx context.Context, identifier string) (concrnt.WellKnownConcrnt, error) {
+func (r *ServerRepository) Get(ctx context.Context, identifier, hint string) (concrnt.WellKnownConcrnt, error) {
 
 	var server models.Server
 	err := r.db.WithContext(ctx).
@@ -34,7 +34,7 @@ func (r *ServerRepository) Get(ctx context.Context, identifier string) (concrnt.
 		}
 	}
 
-	wkc, err := r.client.GetServer(ctx, identifier)
+	wkc, err := r.client.GetServer(ctx, identifier, hint)
 	if err != nil {
 		return concrnt.WellKnownConcrnt{}, err
 	}

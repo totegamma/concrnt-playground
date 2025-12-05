@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bradfitz/gomemcache/memcache"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 
@@ -35,6 +36,9 @@ func main() {
 	if err != nil {
 		panic("failed to migrate database")
 	}
+
+	mc := memcache.New(conf.Server.MemcachedAddr)
+	defer mc.Close()
 
 	cl := client.New(conf.Server.GatewayAddr)
 
@@ -106,22 +110,23 @@ func main() {
 			return c.JSON(http.StatusBadRequest, echo.Map{"error": "unsupported uri scheme"})
 		}
 
+		hint := c.QueryParam("hint")
+
 		owner, key, err := concrnt.ParseCCURI(uriString)
 		if err != nil {
 			return c.JSON(http.StatusBadRequest, echo.Map{"error": "invalid uri"})
 		}
 
 		if key == "" {
-			resolver := c.QueryParam("resolver")
 			if concrnt.IsCCID(owner) {
-				entity, err := entityApp.Get(ctx, owner, resolver)
+				entity, err := entityApp.Get(ctx, owner, hint)
 				if err != nil {
 					return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
 				}
 				return c.JSON(http.StatusOK, entity)
 			}
 
-			wkc, err := serverApp.Resolve(ctx, owner)
+			wkc, err := serverApp.Resolve(ctx, owner, hint)
 			if err != nil {
 				return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
 			}

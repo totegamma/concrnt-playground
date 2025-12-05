@@ -15,6 +15,6 @@ func NewServerApplication(repo *repository.ServerRepository) *ServerApplication 
 	return &ServerApplication{repo: repo}
 }
 
-func (app *ServerApplication) Resolve(ctx context.Context, identifier string) (concrnt.WellKnownConcrnt, error) {
-	return app.repo.Get(ctx, identifier)
+func (app *ServerApplication) Resolve(ctx context.Context, identifier, hint string) (concrnt.WellKnownConcrnt, error) {
+	return app.repo.Get(ctx, identifier, hint)
 }

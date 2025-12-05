@@ -51,6 +51,7 @@ func (c *Client) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 func (c *Client) resolveResolver(ctx context.Context, resolver string) (string, error) {
+	fmt.Println("Resolving resolver:", resolver)
 
 	if resolver == "" {
 		return c.defaultResolver, nil
@@ -65,7 +66,7 @@ func (c *Client) resolveResolver(ctx context.Context, resolver string) (string, 
 	}
 
 	if concrnt.IsCSID(resolver) {
-		wkc, err := c.GetServer(ctx, resolver)
+		wkc, err := c.GetServer(ctx, resolver, "")
 		if err != nil {
 			return "", fmt.Errorf("failed to get server for csid %s: %v", resolver, err)
 		}
@@ -128,6 +129,7 @@ func (c *Client) HttpRequestText(ctx context.Context, method, resolver, path str
 	}
 
 	url := "https://" + domain + path
+	fmt.Printf("Making request to URL: %s\n", url)
 	req, err := http.NewRequestWithContext(ctx, method, url, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %v", err)
@@ -178,7 +180,7 @@ func (c *Client) GetEntity(ctx context.Context, address string, hint string) (co
 	return entity, nil
 }
 
-func (c *Client) GetServer(ctx context.Context, domainOrCSID string) (concrnt.WellKnownConcrnt, error) {
+func (c *Client) GetServer(ctx context.Context, domainOrCSID, hint string) (concrnt.WellKnownConcrnt, error) {
 	fmt.Printf("Getting server for domain or CSID: %s\n", domainOrCSID)
 
 	cacheKey := "server:" + domainOrCSID
@@ -198,7 +200,13 @@ func (c *Client) GetServer(ctx context.Context, domainOrCSID string) (concrnt.We
 		c.cache.Set(cacheKey, wkc, cache.DefaultExpiration)
 		return wkc, nil
 	} else {
-		url := "https://" + domainOrCSID + "/.well-known/concrnt"
+
+		domain := domainOrCSID
+		if hint != "" {
+			domain = hint
+		}
+
+		url := "https://" + domain + "/.well-known/concrnt"
 		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 		if err != nil {
 			return concrnt.WellKnownConcrnt{}, fmt.Errorf("failed to create request: %v", err)
@@ -229,6 +237,8 @@ func (c *Client) GetResource(ctx context.Context, uri string, accept string, opt
 		return fmt.Errorf("failed to parse cc uri: %v", err)
 	}
 
+	fmt.Printf("Parsed URI - Owner: %s, Key: %s\n", owner, key)
+
 	info := concrnt.WellKnownConcrnt{
 		Domain: c.defaultResolver,
 		Endpoints: map[string]string{
@@ -236,16 +246,31 @@ func (c *Client) GetResource(ctx context.Context, uri string, accept string, opt
 		},
 	}
 
-	if opts.Resolver != c.defaultResolver {
-		domain, err := c.resolveResolver(ctx, opts.Resolver)
+	if concrnt.IsCSID(opts.Resolver) {
+		fmt.Printf("Resolver %s is a CSID, fetching server info...\n", opts.Resolver)
+		wkc, err := c.GetServer(ctx, opts.Resolver, "")
 		if err != nil {
-			return fmt.Errorf("failed to resolve resolver: %v", err)
+			return fmt.Errorf("failed to get server for csid %s: %v", opts.Resolver, err)
+		}
+		info = wkc
+	} else {
+		resolver := owner
+
+		if concrnt.IsCCID(resolver) {
+			fmt.Printf("Resolver %s is a CCID, fetching entity info...\n", opts.Resolver)
+			entity, err := c.GetEntity(ctx, opts.Resolver, "")
+			if err != nil {
+				return fmt.Errorf("failed to get entity for ccid %s: %v", opts.Resolver, err)
+			}
+			resolver = entity.Domain
 		}
 
-		info, err = c.GetServer(ctx, domain)
+		fmt.Printf("Fetching server info for resolver: %s\n", resolver)
+		wkc, err := c.GetServer(ctx, resolver, "")
 		if err != nil {
-			return fmt.Errorf("failed to get server info: %v", err)
+			return fmt.Errorf("failed to get server for resolver %s: %v", resolver, err)
 		}
+		info = wkc
 	}
 
 	endpoint, ok := info.Endpoints["net.concrnt.core.resource"]
