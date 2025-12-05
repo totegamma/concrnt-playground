@@ -217,7 +217,20 @@ func main() {
 			}
 			until = time.Unix(untilInt, 0).UTC()
 		}
-		results, err := chunklineApp.GetRecent(ctx, uris, until)
+		limit := 16
+		limitStr := c.QueryParam("limit")
+		if limitStr != "" {
+			limitInt, err := strconv.Atoi(limitStr)
+			if err != nil {
+				return c.JSON(http.StatusBadRequest, echo.Map{"error": "invalid limit parameter"})
+			}
+			limit = limitInt
+		}
+		if limit > 64 {
+			limit = 64
+		}
+
+		results, err := chunklineApp.GetRecent(ctx, uris, until, limit)
 		if err != nil {
 			return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
 		}

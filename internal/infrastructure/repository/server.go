@@ -34,6 +34,10 @@ func (r *ServerRepository) Get(ctx context.Context, identifier, hint string) (co
 		}
 	}
 
+	if hint == "" {
+		hint = identifier
+	}
+
 	wkc, err := r.client.GetServer(ctx, identifier, hint)
 	if err != nil {
 		return concrnt.WellKnownConcrnt{}, err

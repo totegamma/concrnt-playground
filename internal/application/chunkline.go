@@ -49,9 +49,9 @@ func (app *ChunklineApplication) LoadLocalBody(ctx context.Context, uri string, 
 	return app.repo.LoadLocalBody(ctx, uri, chunkID)
 }
 
-func (app *ChunklineApplication) GetRecent(ctx context.Context, uris []string, until time.Time) ([]chunkline.BodyItem, error) {
+func (app *ChunklineApplication) GetRecent(ctx context.Context, uris []string, until time.Time, limit int) ([]chunkline.BodyItem, error) {
 
-	items, err := app.resolver.QueryDescending(ctx, uris, until, 100)
+	items, err := app.resolver.QueryDescending(ctx, uris, until, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query descending: %v", err)
 	}

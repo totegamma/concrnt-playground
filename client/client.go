@@ -239,38 +239,21 @@ func (c *Client) GetResource(ctx context.Context, uri string, accept string, opt
 
 	fmt.Printf("Parsed URI - Owner: %s, Key: %s\n", owner, key)
 
-	info := concrnt.WellKnownConcrnt{
-		Domain: c.defaultResolver,
-		Endpoints: map[string]string{
-			"net.concrnt.core.resource": "/resource/{uri}",
-		},
-	}
-
-	if concrnt.IsCSID(opts.Resolver) {
-		fmt.Printf("Resolver %s is a CSID, fetching server info...\n", opts.Resolver)
-		wkc, err := c.GetServer(ctx, opts.Resolver, "")
+	var info concrnt.WellKnownConcrnt
+	if opts.Resolver != "" {
+		info, err = c.GetServer(ctx, opts.Resolver, "")
 		if err != nil {
-			return fmt.Errorf("failed to get server for csid %s: %v", opts.Resolver, err)
+			return fmt.Errorf("failed to get server for resolver %s: %v", opts.Resolver, err)
 		}
-		info = wkc
 	} else {
-		resolver := owner
-
-		if concrnt.IsCCID(resolver) {
-			fmt.Printf("Resolver %s is a CCID, fetching entity info...\n", opts.Resolver)
-			entity, err := c.GetEntity(ctx, opts.Resolver, "")
-			if err != nil {
-				return fmt.Errorf("failed to get entity for ccid %s: %v", opts.Resolver, err)
-			}
-			resolver = entity.Domain
-		}
-
-		fmt.Printf("Fetching server info for resolver: %s\n", resolver)
-		wkc, err := c.GetServer(ctx, resolver, "")
+		domain, err := c.resolveResolver(ctx, owner)
 		if err != nil {
-			return fmt.Errorf("failed to get server for resolver %s: %v", resolver, err)
+			return fmt.Errorf("failed to resolve default resolver: %v", err)
 		}
-		info = wkc
+		info, err = c.GetServer(ctx, domain, "")
+		if err != nil {
+			return fmt.Errorf("failed to get server for default resolver %s: %v", domain, err)
+		}
 	}
 
 	endpoint, ok := info.Endpoints["net.concrnt.core.resource"]
