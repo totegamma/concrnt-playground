@@ -149,14 +149,16 @@ func (c *Client) HttpRequestText(ctx context.Context, method, resolver, path str
 
 }
 
-func (c *Client) GetEntity(ctx context.Context, address string, resolver string) (concrnt.Entity, error) {
+func (c *Client) GetEntity(ctx context.Context, address string, hint string) (concrnt.Entity, error) {
+	fmt.Printf("Getting entity for address: %s with hint: %s\n", address, hint)
 
-	if resolver == "" {
-		resolver = c.defaultResolver
+	opts := Options{Resolver: c.defaultResolver}
+	if hint != "" {
+		opts.Resolver = hint
 	}
 
 	var entity concrnt.Entity
-	err := c.HttpRequest(ctx, "GET", resolver, "/resource"+address, &entity)
+	err := c.GetResource(ctx, "cc://"+address, "application/json", opts, &entity)
 	if err != nil {
 		return concrnt.Entity{}, fmt.Errorf("failed to get entity: %v", err)
 	}
@@ -165,26 +167,62 @@ func (c *Client) GetEntity(ctx context.Context, address string, resolver string)
 }
 
 func (c *Client) GetServer(ctx context.Context, domainOrCSID string) (concrnt.WellKnownConcrnt, error) {
+	fmt.Printf("Getting server for domain or CSID: %s\n", domainOrCSID)
 
 	var wkc concrnt.WellKnownConcrnt
-	err := c.HttpRequest(ctx, "GET", domainOrCSID, "/.well-known/concrnt", &wkc)
-	if err != nil {
-		return concrnt.WellKnownConcrnt{}, fmt.Errorf("failed to get well-known concrnt: %v", err)
+	if concrnt.IsCSID(domainOrCSID) {
+		err := c.GetResource(ctx, "cc://"+domainOrCSID, "application/json", Options{Resolver: c.defaultResolver}, &wkc)
+		if err != nil {
+			return concrnt.WellKnownConcrnt{}, fmt.Errorf("failed to get well-known concrnt: %v", err)
+		}
+	} else {
+		url := "https://" + domainOrCSID + "/.well-known/concrnt"
+		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		if err != nil {
+			return concrnt.WellKnownConcrnt{}, fmt.Errorf("failed to create request: %v", err)
+		}
+		resp, err := c.client.Do(req)
+		if err != nil {
+			return concrnt.WellKnownConcrnt{}, fmt.Errorf("failed to perform request: %v", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return concrnt.WellKnownConcrnt{}, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		}
+		err = json.NewDecoder(resp.Body).Decode(&wkc)
+		if err != nil {
+			return concrnt.WellKnownConcrnt{}, fmt.Errorf("failed to decode well-known concrnt: %v", err)
+		}
 	}
 
 	return wkc, nil
 }
 
-func (c *Client) GetResource(ctx context.Context, uri string, accept string, result any) error {
+func (c *Client) GetResource(ctx context.Context, uri string, accept string, opts Options, result any) error {
+	fmt.Printf("Getting resource for URI: %s\n", uri)
 
 	owner, key, err := concrnt.ParseCCURI(uri)
 	if err != nil {
 		return fmt.Errorf("failed to parse cc uri: %v", err)
 	}
 
-	info, err := c.GetServer(ctx, owner)
-	if err != nil {
-		return fmt.Errorf("failed to get server info: %v", err)
+	info := concrnt.WellKnownConcrnt{
+		Domain: c.defaultResolver,
+		Endpoints: map[string]string{
+			"net.concrnt.core.resource": "/resource/{uri}",
+		},
+	}
+
+	if opts.Resolver != c.defaultResolver {
+		domain, err := c.resolveResolver(ctx, opts.Resolver)
+		if err != nil {
+			return fmt.Errorf("failed to resolve resolver: %v", err)
+		}
+
+		info, err = c.GetServer(ctx, domain)
+		if err != nil {
+			return fmt.Errorf("failed to get server info: %v", err)
+		}
 	}
 
 	endpoint, ok := info.Endpoints["net.concrnt.core.resource"]

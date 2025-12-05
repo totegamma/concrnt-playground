@@ -25,7 +25,7 @@ func (r *ServerRepository) Get(ctx context.Context, identifier string) (concrnt.
 
 	var server models.Server
 	err := r.db.WithContext(ctx).
-		Where("id = ? OR csid = ?", identifier, identifier).
+		Where("id = ? OR cs_id = ?", identifier, identifier).
 		Take(&server).Error
 	if err == nil && server.WellKnown != "" {
 		var wkc concrnt.WellKnownConcrnt
@@ -54,7 +54,7 @@ func (r *ServerRepository) Get(ctx context.Context, identifier string) (concrnt.
 
 	err = r.db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "id"}},
-		DoUpdates: clause.AssignmentColumns([]string{"csid", "layer", "tag", "well_known"}),
+		DoUpdates: clause.AssignmentColumns([]string{"cs_id", "layer", "tag", "well_known"}),
 	}).Create(&newServer).Error
 	if err != nil {
 		return concrnt.WellKnownConcrnt{}, err
