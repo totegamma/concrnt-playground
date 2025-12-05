@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/patrickmn/go-cache"
 	"github.com/totegamma/concrnt-playground"
 )
 
@@ -20,6 +21,7 @@ const (
 
 type Client struct {
 	client          *http.Client
+	cache           *cache.Cache
 	userAgent       string
 	defaultResolver string
 }
@@ -32,6 +34,7 @@ func New(defaultResolver string) *Client {
 	fmt.Println("Initialize Client with default resolver:", defaultResolver)
 	c := &Client{
 		client:          &httpClient,
+		cache:           cache.New(10*time.Minute, 15*time.Minute),
 		defaultResolver: defaultResolver,
 	}
 	httpClient.Transport = c
@@ -152,6 +155,13 @@ func (c *Client) HttpRequestText(ctx context.Context, method, resolver, path str
 func (c *Client) GetEntity(ctx context.Context, address string, hint string) (concrnt.Entity, error) {
 	fmt.Printf("Getting entity for address: %s with hint: %s\n", address, hint)
 
+	cacheKey := "entity:" + address
+	x, found := c.cache.Get(cacheKey)
+	if found {
+		fmt.Println("Cache hit for entity:", address)
+		return x.(concrnt.Entity), nil
+	}
+
 	opts := Options{Resolver: c.defaultResolver}
 	if hint != "" {
 		opts.Resolver = hint
@@ -163,18 +173,30 @@ func (c *Client) GetEntity(ctx context.Context, address string, hint string) (co
 		return concrnt.Entity{}, fmt.Errorf("failed to get entity: %v", err)
 	}
 
+	c.cache.Set(cacheKey, entity, cache.DefaultExpiration)
+
 	return entity, nil
 }
 
 func (c *Client) GetServer(ctx context.Context, domainOrCSID string) (concrnt.WellKnownConcrnt, error) {
 	fmt.Printf("Getting server for domain or CSID: %s\n", domainOrCSID)
 
-	var wkc concrnt.WellKnownConcrnt
+	cacheKey := "server:" + domainOrCSID
+
+	x, found := c.cache.Get(cacheKey)
+	if found {
+		fmt.Println("Cache hit for well-known concrnt:", domainOrCSID)
+		return x.(concrnt.WellKnownConcrnt), nil
+	}
+
 	if concrnt.IsCSID(domainOrCSID) {
+		var wkc concrnt.WellKnownConcrnt
 		err := c.GetResource(ctx, "cc://"+domainOrCSID, "application/json", Options{Resolver: c.defaultResolver}, &wkc)
 		if err != nil {
 			return concrnt.WellKnownConcrnt{}, fmt.Errorf("failed to get well-known concrnt: %v", err)
 		}
+		c.cache.Set(cacheKey, wkc, cache.DefaultExpiration)
+		return wkc, nil
 	} else {
 		url := "https://" + domainOrCSID + "/.well-known/concrnt"
 		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
@@ -189,13 +211,14 @@ func (c *Client) GetServer(ctx context.Context, domainOrCSID string) (concrnt.We
 		if resp.StatusCode != http.StatusOK {
 			return concrnt.WellKnownConcrnt{}, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 		}
+		var wkc concrnt.WellKnownConcrnt
 		err = json.NewDecoder(resp.Body).Decode(&wkc)
 		if err != nil {
 			return concrnt.WellKnownConcrnt{}, fmt.Errorf("failed to decode well-known concrnt: %v", err)
 		}
+		c.cache.Set(cacheKey, wkc, cache.DefaultExpiration)
+		return wkc, nil
 	}
-
-	return wkc, nil
 }
 
 func (c *Client) GetResource(ctx context.Context, uri string, accept string, opts Options, result any) error {

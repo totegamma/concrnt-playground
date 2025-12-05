@@ -8,6 +8,7 @@ require (
 	github.com/ethereum/go-ethereum v1.14.5
 	github.com/go-yaml/yaml v2.1.0+incompatible
 	github.com/labstack/echo/v4 v4.13.4
+	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pkg/errors v0.9.1
 	gitlab.com/yawning/secp256k1-voi v0.0.0-20230925100816-f2616030848b
 	golang.org/x/crypto v0.38.0

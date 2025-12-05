@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/concrnt/chunkline"
+	"github.com/patrickmn/go-cache"
+
 	"github.com/totegamma/concrnt-playground"
 	"github.com/totegamma/concrnt-playground/client"
 	"github.com/totegamma/concrnt-playground/internal/infrastructure/repository"
@@ -25,6 +27,7 @@ func NewChunklineApplication(
 
 	resolver := &resolver{
 		client: client,
+		cache:  cache.New(10*time.Minute, 15*time.Minute),
 	}
 	clc := chunkline.NewClient(resolver)
 
@@ -59,18 +62,31 @@ func (app *ChunklineApplication) GetRecent(ctx context.Context, uris []string, u
 
 type resolver struct {
 	client *client.Client
+	cache  *cache.Cache
 }
 
 func (r *resolver) ResolveTimelines(ctx context.Context, timelines []string) (map[string]chunkline.Manifest, error) {
 
 	result := make(map[string]chunkline.Manifest)
+	remaining := []string{}
+
+	// Check cache first
 	for _, tl := range timelines {
+		if cached, found := r.cache.Get(tl); found {
+			result[tl] = cached.(chunkline.Manifest)
+		} else {
+			remaining = append(remaining, tl)
+		}
+	}
+
+	for _, tl := range remaining {
 		var manifest chunkline.Manifest
 		err := r.client.GetResource(ctx, tl, "application/chunkline+json", client.Options{}, &manifest)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve timeline %s: %v", tl, err)
 		}
 		result[tl] = manifest
+		r.cache.Set(tl, manifest, cache.DefaultExpiration)
 	}
 	return result, nil
 
