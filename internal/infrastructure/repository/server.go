@@ -9,6 +9,7 @@ import (
 
 	"github.com/totegamma/concrnt-playground"
 	"github.com/totegamma/concrnt-playground/client"
+	"github.com/totegamma/concrnt-playground/internal/domain"
 	"github.com/totegamma/concrnt-playground/internal/infrastructure/database/models"
 )
 
@@ -21,7 +22,7 @@ func NewServerRepository(db *gorm.DB, cl *client.Client) *ServerRepository {
 	return &ServerRepository{db: db, client: cl}
 }
 
-func (r *ServerRepository) Get(ctx context.Context, identifier, hint string) (concrnt.WellKnownConcrnt, error) {
+func (r *ServerRepository) Resolve(ctx context.Context, identifier, hint string) (domain.Server, error) {
 
 	var server models.Server
 	err := r.db.WithContext(ctx).
@@ -30,7 +31,13 @@ func (r *ServerRepository) Get(ctx context.Context, identifier, hint string) (co
 	if err == nil && server.WellKnown != "" {
 		var wkc concrnt.WellKnownConcrnt
 		if err := json.Unmarshal([]byte(server.WellKnown), &wkc); err == nil {
-			return wkc, nil
+			return domain.Server{
+				Domain:    server.ID,
+				CSID:      server.CSID,
+				Layer:     server.Layer,
+				Version:   server.Tag,
+				WellKnown: wkc,
+			}, nil
 		}
 	}
 
@@ -40,12 +47,12 @@ func (r *ServerRepository) Get(ctx context.Context, identifier, hint string) (co
 
 	wkc, err := r.client.GetServer(ctx, identifier, hint)
 	if err != nil {
-		return concrnt.WellKnownConcrnt{}, err
+		return domain.Server{}, err
 	}
 
 	serialized, err := json.Marshal(wkc)
 	if err != nil {
-		return concrnt.WellKnownConcrnt{}, err
+		return domain.Server{}, err
 	}
 
 	newServer := models.Server{
@@ -61,8 +68,14 @@ func (r *ServerRepository) Get(ctx context.Context, identifier, hint string) (co
 		DoUpdates: clause.AssignmentColumns([]string{"cs_id", "layer", "tag", "well_known"}),
 	}).Create(&newServer).Error
 	if err != nil {
-		return concrnt.WellKnownConcrnt{}, err
+		return domain.Server{}, err
 	}
 
-	return wkc, nil
+	return domain.Server{
+		Domain:    newServer.ID,
+		CSID:      newServer.CSID,
+		Layer:     newServer.Layer,
+		Version:   newServer.Tag,
+		WellKnown: wkc,
+	}, nil
 }
