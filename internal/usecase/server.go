@@ -6,6 +6,11 @@ import (
 	"github.com/totegamma/concrnt-playground/internal/domain"
 )
 
+// ServerRepository defines persistence/lookup for remote servers.
+type ServerRepository interface {
+	Resolve(ctx context.Context, identifier, hint string) (domain.Server, error)
+}
+
 type ServerUsecase struct {
 	repo ServerRepository
 }

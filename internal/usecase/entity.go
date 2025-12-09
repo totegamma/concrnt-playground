@@ -15,6 +15,12 @@ type EntityRegisterInput struct {
 	Meta      domain.EntityMeta
 }
 
+// EntityRepository defines persistence/lookup for entities.
+type EntityRepository interface {
+	Register(ctx context.Context, entity domain.Entity, meta domain.EntityMeta) error
+	Get(ctx context.Context, ccid string, resolver string) (domain.Entity, error)
+}
+
 type EntityUsecase struct {
 	repo EntityRepository
 }

@@ -13,6 +13,13 @@ type CommitInput struct {
 	Delete   *string
 }
 
+// RecordRepository defines storage operations for records/commits.
+type RecordRepository interface {
+	Create(ctx context.Context, sd concrnt.SignedDocument) error
+	GetValue(ctx context.Context, uri string) (any, error)
+	Delete(ctx context.Context, uri string) error
+}
+
 type RecordUsecase struct {
 	repo RecordRepository
 }

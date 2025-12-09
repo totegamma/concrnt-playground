@@ -13,6 +13,18 @@ type ChunklineUsecase struct {
 	gateway ChunklineGateway
 }
 
+// ChunklineRepository defines storage operations for chunkline timelines.
+type ChunklineRepository interface {
+	GetChunklineManifest(ctx context.Context, uri string) (*chunkline.Manifest, error)
+	LookupLocalItrs(ctx context.Context, uris []string, chunkID int64) (map[string]int64, error)
+	LoadLocalBody(ctx context.Context, uri string, chunkID int64) ([]chunkline.BodyItem, error)
+}
+
+// ChunklineGateway encapsulates external timeline resolution.
+type ChunklineGateway interface {
+	QueryDescending(ctx context.Context, uris []string, until time.Time, limit int) ([]chunkline.BodyItem, error)
+}
+
 func NewChunklineUsecase(repo ChunklineRepository, gateway ChunklineGateway) *ChunklineUsecase {
 	return &ChunklineUsecase{
 		repo:    repo,
