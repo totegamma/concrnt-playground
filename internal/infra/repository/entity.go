@@ -14,10 +14,11 @@ import (
 type EntityRepository struct {
 	db     *gorm.DB
 	client *client.Client
+	config domain.Config
 }
 
-func NewEntityRepository(db *gorm.DB, cl *client.Client) *EntityRepository {
-	return &EntityRepository{db: db, client: cl}
+func NewEntityRepository(db *gorm.DB, cl *client.Client, config domain.Config) *EntityRepository {
+	return &EntityRepository{db: db, client: cl, config: config}
 }
 
 func (r *EntityRepository) Register(ctx context.Context, entity domain.Entity, meta domain.EntityMeta) error {
@@ -68,6 +69,10 @@ func (r *EntityRepository) Get(ctx context.Context, ccid string, hint string) (d
 			AffiliationDocument:  entity.AffiliationDocument,
 			AffiliationSignature: entity.AffiliationSignature,
 		}, nil
+	}
+
+	if hint == "" || hint == r.config.FQDN {
+		return domain.Entity{}, err
 	}
 
 	remote, err := r.client.GetEntity(ctx, ccid, hint)

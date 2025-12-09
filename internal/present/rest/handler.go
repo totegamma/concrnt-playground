@@ -12,33 +12,32 @@ import (
 
 	"github.com/totegamma/concrnt-playground"
 	"github.com/totegamma/concrnt-playground/internal/domain"
-	"github.com/totegamma/concrnt-playground/internal/infra/config"
 	"github.com/totegamma/concrnt-playground/internal/present/rest/presenter"
 	"github.com/totegamma/concrnt-playground/internal/usecase"
 	"github.com/totegamma/concrnt-playground/schemas"
 )
 
 type Handler struct {
+	config    domain.Config
 	record    *usecase.RecordUsecase
 	chunkline *usecase.ChunklineUsecase
 	server    *usecase.ServerUsecase
 	entity    *usecase.EntityUsecase
-	nodeInfo  config.NodeInfo
 }
 
 func NewHandler(
-	nodeInfo config.NodeInfo,
+	config domain.Config,
 	record *usecase.RecordUsecase,
 	chunkline *usecase.ChunklineUsecase,
 	server *usecase.ServerUsecase,
 	entity *usecase.EntityUsecase,
 ) *Handler {
 	return &Handler{
+		config:    config,
 		record:    record,
 		chunkline: chunkline,
 		server:    server,
 		entity:    entity,
-		nodeInfo:  nodeInfo,
 	}
 }
 
@@ -55,9 +54,9 @@ func (h *Handler) RegisterRoutes(e *echo.Echo) {
 func (h *Handler) handleWellKnown(c echo.Context) error {
 	wellknown := concrnt.WellKnownConcrnt{
 		Version: "2.0",
-		Domain:  h.nodeInfo.FQDN,
-		CSID:    h.nodeInfo.CSID,
-		Layer:   h.nodeInfo.Layer,
+		Domain:  h.config.FQDN,
+		CSID:    h.config.CSID,
+		Layer:   h.config.Layer,
 		Endpoints: map[string]string{
 			"net.concrnt.core.resource":         "/resource/{uri}",
 			"net.concrnt.core.commit":           "/commit",

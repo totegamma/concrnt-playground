@@ -6,6 +6,7 @@ import (
 	"github.com/go-yaml/yaml"
 
 	"github.com/totegamma/concrnt-playground"
+	"github.com/totegamma/concrnt-playground/internal/domain"
 )
 
 type Config struct {
@@ -19,9 +20,6 @@ type NodeInfo struct {
 	Registration string `yaml:"registration"` // open, invite, close
 	SiteKey      string `yaml:"sitekey"`
 	Layer        string `yaml:"layer"`
-
-	// ---
-	CSID string
 }
 
 type Server struct {
@@ -52,12 +50,22 @@ func Load(path string) (Config, error) {
 		return Config{}, err
 	}
 
-	csid, err := concrnt.PrivKeyToAddr(config.NodeInfo.PrivateKey, "ccs")
+	return config, nil
+}
+
+func (c Config) GlobalConfig() domain.Config {
+
+	csid, err := concrnt.PrivKeyToAddr(c.NodeInfo.PrivateKey, "ccs")
 	if err != nil {
 		panic(err)
 	}
 
-	config.NodeInfo.CSID = csid
-
-	return config, nil
+	return domain.Config{
+		FQDN:         c.NodeInfo.FQDN,
+		PrivateKey:   c.NodeInfo.PrivateKey,
+		Registration: c.NodeInfo.Registration,
+		SiteKey:      c.NodeInfo.SiteKey,
+		Layer:        c.NodeInfo.Layer,
+		CSID:         csid,
+	}
 }

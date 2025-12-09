@@ -22,6 +22,8 @@ func main() {
 		panic("failed to load config: " + err.Error())
 	}
 
+	globalConfig := conf.GlobalConfig()
+
 	db, err := database.NewPostgres(conf.Server.PostgresDsn)
 	if err != nil {
 		panic("failed to connect database")
@@ -47,7 +49,7 @@ func main() {
 	serverRepo := repository.NewServerRepository(db, cl)
 	serverUC := usecase.NewServerUsecase(serverRepo)
 
-	entityRepo := repository.NewEntityRepository(db, cl)
+	entityRepo := repository.NewEntityRepository(db, cl, globalConfig)
 	entityUC := usecase.NewEntityUsecase(entityRepo)
 
 	e := echo.New()
@@ -55,7 +57,7 @@ func main() {
 	e.Use(middleware.Recover())
 	e.Use(middleware.CORS())
 
-	handler := rest.NewHandler(conf.NodeInfo, recordUC, chunklineUC, serverUC, entityUC)
+	handler := rest.NewHandler(globalConfig, recordUC, chunklineUC, serverUC, entityUC)
 	handler.RegisterRoutes(e)
 
 	e.Logger.Fatal(e.Start(":8000"))
