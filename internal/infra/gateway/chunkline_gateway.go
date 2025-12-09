@@ -1,4 +1,4 @@
-package application
+package gateway
 
 import (
 	"context"
@@ -12,54 +12,32 @@ import (
 
 	"github.com/totegamma/concrnt-playground"
 	"github.com/totegamma/concrnt-playground/client"
-	"github.com/totegamma/concrnt-playground/internal/infrastructure/repository"
+	"github.com/totegamma/concrnt-playground/internal/usecase"
 )
 
-type ChunklineApplication struct {
-	repo     *repository.ChunklineRepository
+type ChunklineGateway struct {
+	client   *client.Client
+	cache    *cache.Cache
 	resolver *chunkline.Client
 }
 
-func NewChunklineApplication(
-	repo *repository.ChunklineRepository,
-	client *client.Client,
-) *ChunklineApplication {
-
-	resolver := &resolver{
-		client: client,
+func NewChunklineGateway(cl *client.Client) *ChunklineGateway {
+	r := &resolver{
+		client: cl,
 		cache:  cache.New(10*time.Minute, 15*time.Minute),
 	}
-	clc := chunkline.NewClient(resolver)
-
-	return &ChunklineApplication{
-		repo:     repo,
-		resolver: clc,
+	return &ChunklineGateway{
+		client:   cl,
+		cache:    r.cache,
+		resolver: chunkline.NewClient(r),
 	}
 }
 
-func (app *ChunklineApplication) GetChunklineManifest(ctx context.Context, uri string) (*chunkline.Manifest, error) {
-	return app.repo.GetChunklineManifest(ctx, uri)
+func (g *ChunklineGateway) QueryDescending(ctx context.Context, uris []string, until time.Time, limit int) ([]chunkline.BodyItem, error) {
+	return g.resolver.QueryDescending(ctx, uris, until, limit)
 }
 
-func (app *ChunklineApplication) LookupLocalItrs(ctx context.Context, uris []string, chunkID int64) (map[string]int64, error) {
-	return app.repo.LookupLocalItrs(ctx, uris, chunkID)
-}
-
-func (app *ChunklineApplication) LoadLocalBody(ctx context.Context, uri string, chunkID int64) ([]chunkline.BodyItem, error) {
-	return app.repo.LoadLocalBody(ctx, uri, chunkID)
-}
-
-func (app *ChunklineApplication) GetRecent(ctx context.Context, uris []string, until time.Time, limit int) ([]chunkline.BodyItem, error) {
-
-	items, err := app.resolver.QueryDescending(ctx, uris, until, limit)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query descending: %v", err)
-	}
-
-	return items, nil
-
-}
-
+// resolver implements chunkline resolver callbacks.
 type resolver struct {
 	client *client.Client
 	cache  *cache.Cache
@@ -70,7 +48,6 @@ func (r *resolver) ResolveTimelines(ctx context.Context, timelines []string) (ma
 	result := make(map[string]chunkline.Manifest)
 	remaining := []string{}
 
-	// Check cache first
 	for _, tl := range timelines {
 		if cached, found := r.cache.Get(tl); found {
 			result[tl] = cached.(chunkline.Manifest)
@@ -80,7 +57,6 @@ func (r *resolver) ResolveTimelines(ctx context.Context, timelines []string) (ma
 	}
 
 	for _, tl := range remaining {
-		fmt.Println("Resolving timeline manifest for ", tl)
 		var manifest chunkline.Manifest
 		err := r.client.GetResource(ctx, tl, "application/chunkline+json", client.Options{}, &manifest)
 		if err != nil {
@@ -102,7 +78,6 @@ func (r *resolver) GetRemovedItems(ctx context.Context, timelines []string) (map
 }
 
 func (r *resolver) LookupChunkItrs(ctx context.Context, timelines []string, until time.Time) (map[string]string, error) {
-	fmt.Println("Looking up chunk iterators...")
 
 	manifests, err := r.ResolveTimelines(ctx, timelines)
 	if err != nil {
@@ -129,6 +104,9 @@ func (r *resolver) LookupChunkItrs(ctx context.Context, timelines []string, unti
 			owner,
 			strings.ReplaceAll(manifest.Descending.Iterator, "{chunk}", fmt.Sprintf("%d", manifest.Time2Chunk(until))),
 		)
+		if err != nil {
+			return nil, err
+		}
 
 		results[tl] = result
 	}
@@ -136,7 +114,6 @@ func (r *resolver) LookupChunkItrs(ctx context.Context, timelines []string, unti
 }
 
 func (r *resolver) LoadChunkBodies(ctx context.Context, query map[string]string) (map[string]chunkline.BodyChunk, error) {
-	fmt.Println("Loading chunk bodies...")
 
 	uris := []string{}
 	for itr := range query {
@@ -166,6 +143,9 @@ func (r *resolver) LoadChunkBodies(ctx context.Context, query map[string]string)
 			strings.ReplaceAll(manifest.Descending.Body, "{chunk}", itr),
 			&items,
 		)
+		if err != nil {
+			return nil, err
+		}
 
 		chunkID, err := strconv.ParseInt(itr, 10, 64)
 		if err != nil {
@@ -182,3 +162,5 @@ func (r *resolver) LoadChunkBodies(ctx context.Context, query map[string]string)
 	return result, nil
 
 }
+
+var _ usecase.ChunklineGateway = (*ChunklineGateway)(nil)

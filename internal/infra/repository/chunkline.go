@@ -8,7 +8,7 @@ import (
 
 	"github.com/concrnt/chunkline"
 	"github.com/totegamma/concrnt-playground"
-	"github.com/totegamma/concrnt-playground/internal/infrastructure/database/models"
+	"github.com/totegamma/concrnt-playground/internal/infra/database/models"
 )
 
 const (

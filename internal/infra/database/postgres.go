@@ -9,7 +9,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
-	"github.com/totegamma/concrnt-playground/internal/infrastructure/database/models"
+	"github.com/totegamma/concrnt-playground/internal/infra/database/models"
 )
 
 func NewPostgres(dsn string) (*gorm.DB, error) {
