@@ -11,9 +11,9 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/totegamma/concrnt-playground"
-	"github.com/totegamma/concrnt-playground/internal/config"
 	"github.com/totegamma/concrnt-playground/internal/domain"
-	"github.com/totegamma/concrnt-playground/internal/interface/rest/presenter"
+	"github.com/totegamma/concrnt-playground/internal/infra/config"
+	"github.com/totegamma/concrnt-playground/internal/present/rest/presenter"
 	"github.com/totegamma/concrnt-playground/internal/usecase"
 	"github.com/totegamma/concrnt-playground/schemas"
 )

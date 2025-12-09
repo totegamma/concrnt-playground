@@ -11,7 +11,7 @@ import (
 
 	"github.com/totegamma/concrnt-playground"
 	"github.com/totegamma/concrnt-playground/cdid"
-	"github.com/totegamma/concrnt-playground/internal/infrastructure/database/models"
+	"github.com/totegamma/concrnt-playground/internal/infra/database/models"
 )
 
 type RecordRepository struct {

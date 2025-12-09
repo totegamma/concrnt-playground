@@ -5,9 +5,9 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/totegamma/concrnt-playground/client"
-	"github.com/totegamma/concrnt-playground/internal/config"
-	"github.com/totegamma/concrnt-playground/internal/infrastructure/database"
-	"github.com/totegamma/concrnt-playground/internal/infrastructure/gateway"
+	"github.com/totegamma/concrnt-playground/internal/infra/config"
+	"github.com/totegamma/concrnt-playground/internal/infra/database"
+	"github.com/totegamma/concrnt-playground/internal/infra/gateway"
 )
 
 // NewDatabase opens a Postgres connection using the configured DSN.

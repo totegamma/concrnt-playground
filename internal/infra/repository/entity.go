@@ -8,7 +8,7 @@ import (
 
 	"github.com/totegamma/concrnt-playground/client"
 	"github.com/totegamma/concrnt-playground/internal/domain"
-	"github.com/totegamma/concrnt-playground/internal/infrastructure/database/models"
+	"github.com/totegamma/concrnt-playground/internal/infra/database/models"
 )
 
 type EntityRepository struct {

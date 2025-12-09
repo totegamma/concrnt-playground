@@ -4,10 +4,10 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 
-	"github.com/totegamma/concrnt-playground/internal/config"
-	"github.com/totegamma/concrnt-playground/internal/infrastructure/providers"
-	"github.com/totegamma/concrnt-playground/internal/infrastructure/repository"
-	"github.com/totegamma/concrnt-playground/internal/interface/rest"
+	"github.com/totegamma/concrnt-playground/internal/infra/config"
+	"github.com/totegamma/concrnt-playground/internal/infra/providers"
+	"github.com/totegamma/concrnt-playground/internal/infra/repository"
+	"github.com/totegamma/concrnt-playground/internal/present/rest"
 	"github.com/totegamma/concrnt-playground/internal/usecase"
 )
 
