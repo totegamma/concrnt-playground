@@ -17,6 +17,7 @@ type CommitInput struct {
 type RecordRepository interface {
 	Create(ctx context.Context, sd concrnt.SignedDocument) error
 	GetValue(ctx context.Context, uri string) (any, error)
+	GetDocument(ctx context.Context, uri string) (*concrnt.Document[any], error)
 	Delete(ctx context.Context, uri string) error
 }
 
@@ -35,6 +36,6 @@ func (uc *RecordUsecase) Commit(ctx context.Context, input CommitInput) error {
 	return uc.repo.Create(ctx, input.Raw)
 }
 
-func (uc *RecordUsecase) Get(ctx context.Context, uri string) (any, error) {
-	return uc.repo.GetValue(ctx, uri)
+func (uc *RecordUsecase) Get(ctx context.Context, uri string) (*concrnt.Document[any], error) {
+	return uc.repo.GetDocument(ctx, uri)
 }

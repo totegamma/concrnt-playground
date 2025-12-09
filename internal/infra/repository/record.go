@@ -205,6 +205,21 @@ func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument
 	})
 }
 
+func (r *RecordRepository) GetDocument(ctx context.Context, uri string) (*concrnt.Document[any], error) {
+	commit, err := getCommitByURI(ctx, r.db, uri)
+	if err != nil {
+		return nil, err
+	}
+
+	var doc concrnt.Document[any]
+	err = json.Unmarshal([]byte(commit.Document), &doc)
+	if err != nil {
+		return nil, err
+	}
+
+	return &doc, nil
+}
+
 func (r *RecordRepository) GetValue(ctx context.Context, uri string) (any, error) {
 	record, err := handleGetRecordByURI(ctx, r.db, uri)
 	if err != nil {
@@ -235,6 +250,33 @@ func (r *RecordRepository) Delete(ctx context.Context, uri string) error {
 		}
 		return nil
 	})
+}
+
+func getCommitByURI(ctx context.Context, db *gorm.DB, uri string) (*models.CommitLog, error) {
+
+	_, key, err := concrnt.ParseCCURI(uri)
+	if err != nil {
+		return nil, err
+	}
+
+	var commit models.CommitLog
+	err = db.WithContext(ctx).
+		Where("id = ?", key).
+		Take(&commit).Error
+	if err == nil {
+		return &commit, nil
+	}
+
+	var recordKey models.RecordKey
+	err = db.WithContext(ctx).Preload("Record.Document").
+		Where("uri = ?", uri).
+		Take(&recordKey).Error
+	if err == nil {
+		return &recordKey.Record.Document, nil
+	}
+
+	return nil, fmt.Errorf("commit not found")
+
 }
 
 func handleGetRecordByURI(ctx context.Context, db *gorm.DB, uri string) (*models.Record, error) {
