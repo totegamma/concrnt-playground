@@ -4,8 +4,12 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 
+	"github.com/bradfitz/gomemcache/memcache"
+
+	"github.com/totegamma/concrnt-playground/client"
 	"github.com/totegamma/concrnt-playground/internal/infra/config"
-	"github.com/totegamma/concrnt-playground/internal/infra/providers"
+	"github.com/totegamma/concrnt-playground/internal/infra/database"
+	"github.com/totegamma/concrnt-playground/internal/infra/gateway"
 	"github.com/totegamma/concrnt-playground/internal/infra/repository"
 	"github.com/totegamma/concrnt-playground/internal/present/rest"
 	"github.com/totegamma/concrnt-playground/internal/usecase"
@@ -18,26 +22,26 @@ func main() {
 		panic("failed to load config: " + err.Error())
 	}
 
-	db, err := providers.NewDatabase(conf.Server)
+	db, err := database.NewPostgres(conf.Server.PostgresDsn)
 	if err != nil {
 		panic("failed to connect database")
 	}
 
-	err = providers.MigrateDatabase(db)
+	err = database.MigratePostgres(db)
 	if err != nil {
 		panic("failed to migrate database")
 	}
 
-	mc := providers.NewMemcache(conf.Server.MemcachedAddr)
+	mc := memcache.New(conf.Server.MemcachedAddr)
 	defer mc.Close()
 
-	cl := providers.NewClient(conf.Server.GatewayAddr)
+	cl := client.New(conf.Server.GatewayAddr)
 
 	recordRepo := repository.NewRecordRepository(db)
 	recordUC := usecase.NewRecordUsecase(recordRepo)
 
 	chunklineRepo := repository.NewChunklineRepository(db)
-	chunklineGateway := providers.NewChunklineGateway(cl)
+	chunklineGateway := gateway.NewChunklineGateway(cl)
 	chunklineUC := usecase.NewChunklineUsecase(chunklineRepo, chunklineGateway)
 
 	serverRepo := repository.NewServerRepository(db, cl)
