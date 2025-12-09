@@ -2,11 +2,16 @@ package usecase
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/totegamma/concrnt-playground"
-	"github.com/totegamma/concrnt-playground/schemas"
 )
+
+// CommitInput is the validated input for committing a record.
+type CommitInput struct {
+	Document concrnt.Document[any]
+	Raw      concrnt.SignedDocument
+	Delete   *string
+}
 
 type RecordUsecase struct {
 	repo RecordRepository
@@ -16,23 +21,11 @@ func NewRecordUsecase(repo RecordRepository) *RecordUsecase {
 	return &RecordUsecase{repo: repo}
 }
 
-func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) error {
-	var doc concrnt.Document[any]
-	err := json.Unmarshal([]byte(sd.Document), &doc)
-	if err != nil {
-		return err
+func (uc *RecordUsecase) Commit(ctx context.Context, input CommitInput) error {
+	if input.Delete != nil {
+		return uc.repo.Delete(ctx, *input.Delete)
 	}
-
-	if doc.Schema != nil && *doc.Schema == schemas.DeleteURL {
-		var doc concrnt.Document[schemas.Delete]
-		err := json.Unmarshal([]byte(sd.Document), &doc)
-		if err != nil {
-			return err
-		}
-		return uc.repo.Delete(ctx, string(doc.Value))
-	}
-
-	return uc.repo.Create(ctx, sd)
+	return uc.repo.Create(ctx, input.Raw)
 }
 
 func (uc *RecordUsecase) Get(ctx context.Context, uri string) (any, error) {

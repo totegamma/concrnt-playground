@@ -2,12 +2,18 @@ package usecase
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/totegamma/concrnt-playground"
 	"github.com/totegamma/concrnt-playground/internal/domain"
 	"github.com/totegamma/concrnt-playground/schemas"
 )
+
+type EntityRegisterInput struct {
+	Document  concrnt.Document[schemas.Affiliation]
+	Raw       string
+	Signature string
+	Meta      domain.EntityMeta
+}
 
 type EntityUsecase struct {
 	repo EntityRepository
@@ -17,22 +23,15 @@ func NewEntityUsecase(repo EntityRepository) *EntityUsecase {
 	return &EntityUsecase{repo: repo}
 }
 
-func (uc *EntityUsecase) Register(ctx context.Context, document, signature string, meta domain.EntityMeta) error {
-
-	var doc concrnt.Document[schemas.Affiliation]
-	err := json.Unmarshal([]byte(document), &doc)
-	if err != nil {
-		return err
-	}
-
+func (uc *EntityUsecase) Register(ctx context.Context, input EntityRegisterInput) error {
 	entity := domain.Entity{
-		ID:                   doc.Author,
-		Domain:               doc.Value.Domain,
-		AffiliationDocument:  document,
-		AffiliationSignature: signature,
+		ID:                   input.Document.Author,
+		Domain:               input.Document.Value.Domain,
+		AffiliationDocument:  input.Raw,
+		AffiliationSignature: input.Signature,
 	}
 
-	return uc.repo.Register(ctx, entity, meta)
+	return uc.repo.Register(ctx, entity, input.Meta)
 }
 
 func (uc *EntityUsecase) Get(ctx context.Context, ccid string, resolver string) (domain.Entity, error) {

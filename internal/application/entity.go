@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/totegamma/concrnt-playground"
-	"github.com/totegamma/concrnt-playground/internal/infrastructure/database/models"
+	"github.com/totegamma/concrnt-playground/internal/domain"
 	"github.com/totegamma/concrnt-playground/internal/infrastructure/repository"
 	"github.com/totegamma/concrnt-playground/schemas"
 )
@@ -18,15 +18,15 @@ func NewEntityApplication(repo *repository.EntityRepository) *EntityApplication 
 	return &EntityApplication{repo: repo}
 }
 
-func (app *EntityApplication) Register(ctx context.Context, document, signature string, meta models.EntityMeta) error {
+func (app *EntityApplication) Register(ctx context.Context, document, signature string, meta domain.EntityMeta) error {
 
 	var doc concrnt.Document[schemas.Affiliation]
-	err := json.Unmarshal([]byte(document), &document)
+	err := json.Unmarshal([]byte(document), &doc)
 	if err != nil {
 		return err
 	}
 
-	entity := models.Entity{
+	entity := domain.Entity{
 		ID:                   doc.Author,
 		Domain:               doc.Value.Domain,
 		AffiliationDocument:  document,
@@ -36,6 +36,6 @@ func (app *EntityApplication) Register(ctx context.Context, document, signature 
 	return app.repo.Register(ctx, entity, meta)
 }
 
-func (app *EntityApplication) Get(ctx context.Context, ccid string, resolver string) (models.Entity, error) {
+func (app *EntityApplication) Get(ctx context.Context, ccid string, resolver string) (domain.Entity, error) {
 	return app.repo.Get(ctx, ccid, resolver)
 }

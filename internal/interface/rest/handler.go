@@ -1,6 +1,7 @@
 package rest
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -12,7 +13,9 @@ import (
 	"github.com/totegamma/concrnt-playground"
 	"github.com/totegamma/concrnt-playground/internal/config"
 	"github.com/totegamma/concrnt-playground/internal/domain"
+	"github.com/totegamma/concrnt-playground/internal/interface/rest/presenter"
 	"github.com/totegamma/concrnt-playground/internal/usecase"
+	"github.com/totegamma/concrnt-playground/schemas"
 )
 
 type Handler struct {
@@ -71,15 +74,34 @@ func (h *Handler) handleCommit(c echo.Context) error {
 	var sd concrnt.SignedDocument
 	err := c.Bind(&sd)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{"error": err.Error()})
+		return presenter.BadRequest(c, err)
 	}
 
-	err = h.record.Commit(ctx, sd)
+	var doc concrnt.Document[any]
+	if err := json.Unmarshal([]byte(sd.Document), &doc); err != nil {
+		return presenter.BadRequest(c, err)
+	}
+
+	var deleteURI *string
+	if doc.Schema != nil && *doc.Schema == schemas.DeleteURL {
+		var deleteDoc concrnt.Document[schemas.Delete]
+		if err := json.Unmarshal([]byte(sd.Document), &deleteDoc); err != nil {
+			return presenter.BadRequest(c, err)
+		}
+		uri := string(deleteDoc.Value)
+		deleteURI = &uri
+	}
+
+	err = h.record.Commit(ctx, usecase.CommitInput{
+		Document: doc,
+		Raw:      sd,
+		Delete:   deleteURI,
+	})
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+		return presenter.InternalError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, echo.Map{"status": "ok"})
+	return presenter.OK(c, echo.Map{"status": "ok"})
 }
 
 func (h *Handler) handleResource(c echo.Context) error {
@@ -88,11 +110,11 @@ func (h *Handler) handleResource(c echo.Context) error {
 	escaped := c.Param("uri")
 	uriString, err := url.QueryUnescape(escaped)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{"error": "invalid uri"})
+		return presenter.BadRequestMessage(c, "invalid uri")
 	}
 	uri, err := url.Parse(uriString)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{"error": "invalid uri"})
+		return presenter.BadRequestMessage(c, "invalid uri")
 	}
 
 	if uri.Scheme == "http" || uri.Scheme == "https" {
@@ -100,30 +122,30 @@ func (h *Handler) handleResource(c echo.Context) error {
 	}
 
 	if uri.Scheme != "cc" {
-		return c.JSON(http.StatusBadRequest, echo.Map{"error": "unsupported uri scheme"})
+		return presenter.BadRequestMessage(c, "unsupported uri scheme")
 	}
 
 	hint := c.QueryParam("hint")
 
 	owner, key, err := concrnt.ParseCCURI(uriString)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{"error": "invalid uri"})
+		return presenter.BadRequestMessage(c, "invalid uri")
 	}
 
 	if key == "" {
 		if concrnt.IsCCID(owner) {
 			entity, err := h.entity.Get(ctx, owner, hint)
 			if err != nil {
-				return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+				return presenter.InternalError(c, err)
 			}
-			return c.JSON(http.StatusOK, entity)
+			return presenter.OK(c, entity)
 		}
 
 		wkc, err := h.server.Resolve(ctx, owner, hint)
 		if err != nil {
-			return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+			return presenter.InternalError(c, err)
 		}
-		return c.JSON(http.StatusOK, wkc.WellKnown)
+		return presenter.OK(c, wkc.WellKnown)
 	}
 
 	accept := c.Request().Header.Get("Accept")
@@ -132,21 +154,21 @@ func (h *Handler) handleResource(c echo.Context) error {
 		value, err := h.chunkline.GetChunklineManifest(ctx, uriString)
 		if err != nil {
 			if strings.Contains(err.Error(), "record not found") {
-				return c.JSON(http.StatusNotFound, echo.Map{"error": "resource not found"})
+				return presenter.NotFound(c, "resource not found")
 			}
-			return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+			return presenter.InternalError(c, err)
 		}
-		return c.JSON(http.StatusOK, value)
+		return presenter.OK(c, value)
 	}
 
 	value, err := h.record.Get(ctx, uri.String())
 	if err != nil {
 		if strings.Contains(err.Error(), "record not found") {
-			return c.JSON(http.StatusNotFound, echo.Map{"error": "resource not found"})
+			return presenter.NotFound(c, "resource not found")
 		}
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+		return presenter.InternalError(c, err)
 	}
-	return c.JSON(http.StatusOK, value)
+	return presenter.OK(c, value)
 }
 
 func (h *Handler) handleChunklineItr(c echo.Context) error {
@@ -155,12 +177,12 @@ func (h *Handler) handleChunklineItr(c echo.Context) error {
 
 	chunkID, err := strconv.ParseInt(c.Param("chunk"), 10, 64)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{"error": "invalid chunk id"})
+		return presenter.BadRequestMessage(c, "invalid chunk id")
 	}
 
 	results, err := h.chunkline.LookupLocalItrs(ctx, []string{uri}, chunkID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+		return presenter.InternalError(c, err)
 	}
 
 	return c.String(http.StatusOK, strconv.FormatInt(results[uri], 10))
@@ -172,13 +194,13 @@ func (h *Handler) handleChunklineBody(c echo.Context) error {
 
 	chunkID, err := strconv.ParseInt(c.Param("chunk"), 10, 64)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{"error": "invalid chunk id"})
+		return presenter.BadRequestMessage(c, "invalid chunk id")
 	}
 	results, err := h.chunkline.LoadLocalBody(ctx, uri, chunkID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+		return presenter.InternalError(c, err)
 	}
-	return c.JSON(http.StatusOK, results)
+	return presenter.OK(c, results)
 }
 
 func (h *Handler) handleRegister(c echo.Context) error {
@@ -186,13 +208,24 @@ func (h *Handler) handleRegister(c echo.Context) error {
 	var req concrnt.RegisterRequest[domain.EntityMeta]
 	err := c.Bind(&req)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{"error": err.Error()})
+		return presenter.BadRequest(c, err)
 	}
-	err = h.entity.Register(ctx, req.AffiliationDocument, req.AffiliationSignature, req.Meta)
+
+	var doc concrnt.Document[schemas.Affiliation]
+	if err := json.Unmarshal([]byte(req.AffiliationDocument), &doc); err != nil {
+		return presenter.BadRequest(c, err)
+	}
+
+	err = h.entity.Register(ctx, usecase.EntityRegisterInput{
+		Document:  doc,
+		Raw:       req.AffiliationDocument,
+		Signature: req.AffiliationSignature,
+		Meta:      req.Meta,
+	})
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+		return presenter.InternalError(c, err)
 	}
-	return c.JSON(http.StatusOK, echo.Map{"status": "ok"})
+	return presenter.OK(c, echo.Map{"status": "ok"})
 }
 
 func (h *Handler) handleTimelineRecent(c echo.Context) error {
@@ -206,7 +239,7 @@ func (h *Handler) handleTimelineRecent(c echo.Context) error {
 	} else {
 		untilInt, err := strconv.ParseInt(untilStr, 10, 64)
 		if err != nil {
-			return c.JSON(http.StatusBadRequest, echo.Map{"error": "invalid until parameter"})
+			return presenter.BadRequestMessage(c, "invalid until parameter")
 		}
 		until = time.Unix(untilInt, 0).UTC()
 	}
@@ -215,7 +248,7 @@ func (h *Handler) handleTimelineRecent(c echo.Context) error {
 	if limitStr != "" {
 		limitInt, err := strconv.Atoi(limitStr)
 		if err != nil {
-			return c.JSON(http.StatusBadRequest, echo.Map{"error": "invalid limit parameter"})
+			return presenter.BadRequestMessage(c, "invalid limit parameter")
 		}
 		limit = limitInt
 	}
@@ -225,7 +258,7 @@ func (h *Handler) handleTimelineRecent(c echo.Context) error {
 
 	results, err := h.chunkline.GetRecent(ctx, uris, until, limit)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+		return presenter.InternalError(c, err)
 	}
-	return c.JSON(http.StatusOK, results)
+	return presenter.OK(c, results)
 }

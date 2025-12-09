@@ -1,0 +1,32 @@
+package presenter
+
+import (
+	"net/http"
+
+	"github.com/labstack/echo/v4"
+)
+
+type errorResponse struct {
+	Error string `json:"error"`
+}
+
+// OK wraps a successful response.
+func OK(c echo.Context, payload any) error {
+	return c.JSON(http.StatusOK, payload)
+}
+
+func BadRequest(c echo.Context, err error) error {
+	return c.JSON(http.StatusBadRequest, errorResponse{Error: err.Error()})
+}
+
+func BadRequestMessage(c echo.Context, msg string) error {
+	return c.JSON(http.StatusBadRequest, errorResponse{Error: msg})
+}
+
+func NotFound(c echo.Context, msg string) error {
+	return c.JSON(http.StatusNotFound, errorResponse{Error: msg})
+}
+
+func InternalError(c echo.Context, err error) error {
+	return c.JSON(http.StatusInternalServerError, errorResponse{Error: err.Error()})
+}

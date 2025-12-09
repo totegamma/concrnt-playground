@@ -16,5 +16,9 @@ func NewServerApplication(repo *repository.ServerRepository) *ServerApplication 
 }
 
 func (app *ServerApplication) Resolve(ctx context.Context, identifier, hint string) (concrnt.WellKnownConcrnt, error) {
-	return app.repo.Get(ctx, identifier, hint)
+	srv, err := app.repo.Resolve(ctx, identifier, hint)
+	if err != nil {
+		return concrnt.WellKnownConcrnt{}, err
+	}
+	return srv.WellKnown, nil
 }
