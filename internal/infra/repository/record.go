@@ -137,7 +137,7 @@ func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument
 		if doc.MemberOf != nil {
 			for _, parentURI := range *doc.MemberOf {
 
-				collectionRK, err := handleGetRecordKeyIDByURI(ctx, tx, parentURI)
+				collectionRK, err := getRecordKeyIDByURI(ctx, tx, parentURI)
 				if err != nil {
 					return err
 				}
@@ -171,7 +171,7 @@ func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument
 		// CIP-6 Association
 		if doc.Associate != nil {
 
-			targetRK, err := handleGetRecordKeyIDByURI(ctx, tx, *doc.Associate)
+			targetRK, err := getRecordKeyIDByURI(ctx, tx, *doc.Associate)
 			if err != nil {
 				return err
 			}
@@ -221,7 +221,7 @@ func (r *RecordRepository) GetDocument(ctx context.Context, uri string) (*concrn
 }
 
 func (r *RecordRepository) GetValue(ctx context.Context, uri string) (any, error) {
-	record, err := handleGetRecordByURI(ctx, r.db, uri)
+	record, err := getRecordByURI(ctx, r.db, uri)
 	if err != nil {
 		return nil, err
 	}
@@ -237,7 +237,7 @@ func (r *RecordRepository) GetValue(ctx context.Context, uri string) (any, error
 
 func (r *RecordRepository) Delete(ctx context.Context, uri string) error {
 
-	record, err := handleGetRecordByURI(ctx, r.db, uri)
+	record, err := getRecordByURI(ctx, r.db, uri)
 	if err != nil {
 		return err
 	}
@@ -279,7 +279,7 @@ func getCommitByURI(ctx context.Context, db *gorm.DB, uri string) (*models.Commi
 
 }
 
-func handleGetRecordByURI(ctx context.Context, db *gorm.DB, uri string) (*models.Record, error) {
+func getRecordByURI(ctx context.Context, db *gorm.DB, uri string) (*models.Record, error) {
 	_, key, err := concrnt.ParseCCURI(uri)
 	if err != nil {
 		return nil, err
@@ -304,7 +304,7 @@ func handleGetRecordByURI(ctx context.Context, db *gorm.DB, uri string) (*models
 	return nil, domain.NotFoundError{Resource: "record"}
 }
 
-func handleGetRecordKeyIDByURI(ctx context.Context, db *gorm.DB, uri string) (int64, error) {
+func getRecordKeyIDByURI(ctx context.Context, db *gorm.DB, uri string) (int64, error) {
 	_, key, err := concrnt.ParseCCURI(uri)
 	if err != nil {
 		return 0, err
