@@ -3,7 +3,6 @@ package repository
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"time"
 
 	"gorm.io/gorm"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/totegamma/concrnt-playground"
 	"github.com/totegamma/concrnt-playground/cdid"
+	"github.com/totegamma/concrnt-playground/internal/domain"
 	"github.com/totegamma/concrnt-playground/internal/infra/database/models"
 )
 
@@ -275,7 +275,7 @@ func getCommitByURI(ctx context.Context, db *gorm.DB, uri string) (*models.Commi
 		return &recordKey.Record.Document, nil
 	}
 
-	return nil, fmt.Errorf("commit not found")
+	return nil, domain.NotFoundError{Resource: "commit"}
 
 }
 
@@ -301,7 +301,7 @@ func handleGetRecordByURI(ctx context.Context, db *gorm.DB, uri string) (*models
 		return &recordKey.Record, nil
 	}
 
-	return nil, fmt.Errorf("record not found")
+	return nil, domain.NotFoundError{Resource: "record"}
 }
 
 func handleGetRecordKeyIDByURI(ctx context.Context, db *gorm.DB, uri string) (int64, error) {

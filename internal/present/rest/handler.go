@@ -2,6 +2,7 @@ package rest
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -152,7 +153,7 @@ func (h *Handler) handleResource(c echo.Context) error {
 	if accept == "application/chunkline+json" {
 		value, err := h.chunkline.GetChunklineManifest(ctx, uriString)
 		if err != nil {
-			if strings.Contains(err.Error(), "not found") {
+			if errors.Is(err, domain.ErrNotFound) {
 				return presenter.NotFound(c, "resource not found")
 			}
 			return presenter.InternalError(c, err)
@@ -162,7 +163,7 @@ func (h *Handler) handleResource(c echo.Context) error {
 
 	value, err := h.record.Get(ctx, uri.String())
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
+		if errors.Is(err, domain.ErrNotFound) {
 			return presenter.NotFound(c, "resource not found")
 		}
 		return presenter.InternalError(c, err)
