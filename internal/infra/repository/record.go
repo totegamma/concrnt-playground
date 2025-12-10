@@ -340,3 +340,48 @@ func getRecordKeyIDByURI(ctx context.Context, db *gorm.DB, uri string) (int64, e
 
 	return newRecordKey.ID, nil
 }
+
+func (r *RecordRepository) GetAssociatedRecords(ctx context.Context, targetURI string) ([]concrnt.Document[any], error) {
+	targetRKID, err := getRecordKeyIDByURI(ctx, r.db, targetURI)
+	if err != nil {
+		return nil, err
+	}
+
+	var associations []models.Association
+	err = r.db.WithContext(ctx).Preload("Item.Record.Document").
+		Where("target_id = ?", targetRKID).
+		Find(&associations).Error
+	if err != nil {
+		return nil, err
+	}
+
+	var documents []concrnt.Document[any]
+	for _, assoc := range associations {
+		var doc concrnt.Document[any]
+		err := json.Unmarshal([]byte(assoc.Item.Record.Document.Document), &doc)
+		if err != nil {
+			return nil, err
+		}
+		documents = append(documents, doc)
+	}
+
+	return documents, nil
+}
+
+func (r *RecordRepository) GetAssociatedRecordCounts(ctx context.Context, targetURI string) (int64, error) {
+	targetRKID, err := getRecordKeyIDByURI(ctx, r.db, targetURI)
+	if err != nil {
+		return 0, err
+	}
+
+	var count int64
+	err = r.db.WithContext(ctx).
+		Model(&models.Association{}).
+		Where("target_id = ?", targetRKID).
+		Count(&count).Error
+	if err != nil {
+		return 0, err
+	}
+
+	return count, nil
+}

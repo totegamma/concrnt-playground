@@ -50,6 +50,8 @@ func (h *Handler) RegisterRoutes(e *echo.Echo) {
 	e.GET("/chunkline/:owner/:id/:chunk/body", h.handleChunklineBody)
 	e.POST("/api/v1/register", h.handleRegister)
 	e.GET("/api/v1/timeline/recent", h.handleTimelineRecent)
+	e.GET("/associations", h.handleAssociations)
+	e.GET("/association-counts", h.handleAssociationCounts)
 }
 
 func (h *Handler) handleWellKnown(c echo.Context) error {
@@ -261,4 +263,28 @@ func (h *Handler) handleTimelineRecent(c echo.Context) error {
 		return presenter.InternalError(c, err)
 	}
 	return presenter.OK(c, results)
+}
+
+func (h *Handler) handleAssociations(c echo.Context) error {
+	uri := c.QueryParam("uri")
+	//schema := c.QueryParam("schema")
+	ctx := c.Request().Context()
+
+	records, err := h.record.GetAssociatedRecords(ctx, uri)
+	if err != nil {
+		return presenter.InternalError(c, err)
+	}
+	return presenter.OK(c, records)
+}
+
+func (h *Handler) handleAssociationCounts(c echo.Context) error {
+	uri := c.QueryParam("uri")
+	//schema := c.QueryParam("schema")
+	ctx := c.Request().Context()
+
+	records, err := h.record.GetAssociatedRecordCounts(ctx, uri)
+	if err != nil {
+		return presenter.InternalError(c, err)
+	}
+	return presenter.OK(c, records)
 }

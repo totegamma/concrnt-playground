@@ -25,7 +25,7 @@ func NewChunklineRepository(db *gorm.DB) *ChunklineRepository {
 
 func (r *ChunklineRepository) GetChunklineManifest(ctx context.Context, uri string) (*chunkline.Manifest, error) {
 
-	record, err := handleGetRecordByURI(ctx, r.db, uri)
+	record, err := getRecordByURI(ctx, r.db, uri)
 	if err != nil {
 		return nil, err
 	}

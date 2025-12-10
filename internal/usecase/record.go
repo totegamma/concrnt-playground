@@ -19,6 +19,8 @@ type RecordRepository interface {
 	GetValue(ctx context.Context, uri string) (any, error)
 	GetDocument(ctx context.Context, uri string) (*concrnt.Document[any], error)
 	Delete(ctx context.Context, uri string) error
+	GetAssociatedRecords(ctx context.Context, targetURI string) ([]concrnt.Document[any], error)
+	GetAssociatedRecordCounts(ctx context.Context, targetURI string) (int64, error)
 }
 
 type RecordUsecase struct {
@@ -38,4 +40,16 @@ func (uc *RecordUsecase) Commit(ctx context.Context, input CommitInput) error {
 
 func (uc *RecordUsecase) Get(ctx context.Context, uri string) (*concrnt.Document[any], error) {
 	return uc.repo.GetDocument(ctx, uri)
+}
+
+func (uc *RecordUsecase) GetValue(ctx context.Context, uri string) (any, error) {
+	return uc.repo.GetValue(ctx, uri)
+}
+
+func (uc *RecordUsecase) GetAssociatedRecords(ctx context.Context, targetURI string) ([]concrnt.Document[any], error) {
+	return uc.repo.GetAssociatedRecords(ctx, targetURI)
+}
+
+func (uc *RecordUsecase) GetAssociatedRecordCounts(ctx context.Context, targetURI string) (int64, error) {
+	return uc.repo.GetAssociatedRecordCounts(ctx, targetURI)
 }
