@@ -47,7 +47,7 @@ func (h *Handler) RegisterRoutes(e *echo.Echo) {
 	e.GET("/resource/:uri", h.handleResource)
 	e.GET("/chunkline/:owner/:id/:chunk/itr", h.handleChunklineItr)
 	e.GET("/chunkline/:owner/:id/:chunk/body", h.handleChunklineBody)
-	e.GET("/api/v1/register", h.handleRegister)
+	e.POST("/api/v1/register", h.handleRegister)
 	e.GET("/api/v1/timeline/recent", h.handleTimelineRecent)
 }
 
@@ -152,7 +152,7 @@ func (h *Handler) handleResource(c echo.Context) error {
 	if accept == "application/chunkline+json" {
 		value, err := h.chunkline.GetChunklineManifest(ctx, uriString)
 		if err != nil {
-			if strings.Contains(err.Error(), "record not found") {
+			if strings.Contains(err.Error(), "not found") {
 				return presenter.NotFound(c, "resource not found")
 			}
 			return presenter.InternalError(c, err)
@@ -162,7 +162,7 @@ func (h *Handler) handleResource(c echo.Context) error {
 
 	value, err := h.record.Get(ctx, uri.String())
 	if err != nil {
-		if strings.Contains(err.Error(), "record not found") {
+		if strings.Contains(err.Error(), "not found") {
 			return presenter.NotFound(c, "resource not found")
 		}
 		return presenter.InternalError(c, err)
