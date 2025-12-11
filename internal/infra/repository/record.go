@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/zeebo/xxh3"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/totegamma/concrnt-playground/cdid"
 	"github.com/totegamma/concrnt-playground/internal/domain"
 	"github.com/totegamma/concrnt-playground/internal/infra/database/models"
+	"github.com/totegamma/concrnt-playground/internal/utils"
 )
 
 type RecordRepository struct {
@@ -188,10 +190,16 @@ func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument
 				rkid = newRecordKey.ID
 			}
 
+			uniqueKey := doc.Author + *doc.Associate
+			if doc.AssociationVariant != nil {
+				uniqueKey += *doc.AssociationVariant
+			}
+			uniqueHash := xxh3.HashString(uniqueKey)
+
 			association := models.Association{
 				TargetID: targetRK,
 				ItemID:   rkid,
-				Owner:    *doc.Owner,
+				Unique:   uniqueHash,
 			}
 			err = tx.Clauses(clause.OnConflict{
 				DoNothing: true,
@@ -341,17 +349,36 @@ func getRecordKeyIDByURI(ctx context.Context, db *gorm.DB, uri string) (int64, e
 	return newRecordKey.ID, nil
 }
 
-func (r *RecordRepository) GetAssociatedRecords(ctx context.Context, targetURI string) ([]concrnt.Document[any], error) {
+func (r *RecordRepository) GetAssociatedRecords(
+	ctx context.Context,
+	targetURI, schema, variant, author string,
+) ([]concrnt.Document[any], error) {
+
 	targetRKID, err := getRecordKeyIDByURI(ctx, r.db, targetURI)
 	if err != nil {
 		return nil, err
 	}
 
 	var associations []models.Association
-	err = r.db.WithContext(ctx).Preload("Item.Record.Document").
-		Where("target_id = ?", targetRKID).
-		Find(&associations).Error
-	if err != nil {
+
+	query := r.db.WithContext(ctx).
+		Model(&models.Association{}).
+		Preload("Item.Record.Document").
+		Joins("JOIN record_keys rk ON rk.id = associations.item_id").
+		Joins("JOIN records rec ON rec.document_id = rk.record_id").
+		Where("associations.target_id = ?", targetRKID)
+
+	if schema != "" {
+		query = query.Where("rec.schema = ?", schema)
+	}
+	if variant != "" {
+		query = query.Where("rec.variant = ?", variant)
+	}
+	if author != "" {
+		query = query.Where("rec.author = ?", author)
+	}
+
+	if err := query.Find(&associations).Error; err != nil {
 		return nil, err
 	}
 
@@ -368,20 +395,73 @@ func (r *RecordRepository) GetAssociatedRecords(ctx context.Context, targetURI s
 	return documents, nil
 }
 
-func (r *RecordRepository) GetAssociatedRecordCounts(ctx context.Context, targetURI string) (int64, error) {
+func (r *RecordRepository) GetAssociatedRecordCountsBySchema(ctx context.Context, targetURI string) (map[string]int64, error) {
+
 	targetRKID, err := getRecordKeyIDByURI(ctx, r.db, targetURI)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
-	var count int64
+	var counts []struct {
+		Schema string
+		Count  int64
+	}
+
 	err = r.db.WithContext(ctx).
 		Model(&models.Association{}).
-		Where("target_id = ?", targetRKID).
-		Count(&count).Error
+		Select("rec.schema AS schema, COUNT(*) AS count").
+		Joins("JOIN record_keys rk ON rk.id = associations.item_id").
+		Joins("JOIN records rec ON rec.document_id = rk.record_id").
+		Where("associations.target_id = ?", targetRKID).
+		Group("rec.schema").
+		Scan(&counts).Error
+
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
-	return count, nil
+	result := make(map[string]int64)
+	for _, c := range counts {
+		result[c.Schema] = c.Count
+	}
+
+	return result, nil
+
+}
+
+func (r *RecordRepository) GetAssociatedRecordCountsByVariant(ctx context.Context, targetURI, schema string) (*utils.OrderedKVMap[int64], error) {
+
+	targetRKID, err := getRecordKeyIDByURI(ctx, r.db, targetURI)
+	if err != nil {
+		return nil, err
+	}
+
+	var counts []struct {
+		Variant  string
+		Count    int64
+		MinCDate time.Time
+	}
+
+	err = r.db.WithContext(ctx).
+		Model(&models.Association{}).
+		Select("rec.variant AS variant, COUNT(*) AS count, MIN(rec.c_date) AS min_c_date").
+		Joins("JOIN record_keys rk ON rk.id = associations.item_id").
+		Joins("JOIN records rec ON rec.document_id = rk.record_id").
+		Where("associations.target_id = ? AND rec.schema = ?", targetRKID, schema).
+		Group("rec.variant").
+		Order("min_c_date ASC").
+		Scan(&counts).Error
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(utils.OrderedKVMap[int64])
+	for _, c := range counts {
+		result[c.Variant] = utils.OrderedKV[int64]{
+			Value: c.Count,
+			Order: c.MinCDate.UnixNano(),
+		}
+	}
+
+	return &result, nil
 }

@@ -11,6 +11,7 @@ require (
 	github.com/labstack/echo/v4 v4.13.4
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pkg/errors v0.9.1
+	github.com/zeebo/xxh3 v1.0.2
 	gitlab.com/yawning/secp256k1-voi v0.0.0-20230925100816-f2616030848b
 	golang.org/x/crypto v0.38.0
 	gorm.io/driver/postgres v1.6.0
@@ -103,7 +104,6 @@ require (
 	github.com/tendermint/go-amino v0.16.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
-	github.com/zeebo/xxh3 v1.0.2 // indirect
 	gitlab.com/yawning/tuplehash v0.0.0-20230713102510-df83abbf9a02 // indirect
 	go.etcd.io/bbolt v1.3.8 // indirect
 	golang.org/x/exp v0.0.0-20240613232115-7f521ea00fb8 // indirect

@@ -266,25 +266,47 @@ func (h *Handler) handleTimelineRecent(c echo.Context) error {
 }
 
 func (h *Handler) handleAssociations(c echo.Context) error {
-	uri := c.QueryParam("uri")
-	//schema := c.QueryParam("schema")
 	ctx := c.Request().Context()
 
-	records, err := h.record.GetAssociatedRecords(ctx, uri)
+	uri := c.QueryParam("uri")
+	schema := c.QueryParam("schema")
+	variant := c.QueryParam("variant")
+	author := c.QueryParam("author")
+
+	if uri == "" {
+		return presenter.BadRequestMessage(c, "uri parameter is required")
+	}
+
+	records, err := h.record.GetAssociatedRecords(ctx, uri, schema, variant, author)
 	if err != nil {
 		return presenter.InternalError(c, err)
 	}
 	return presenter.OK(c, records)
+
 }
 
 func (h *Handler) handleAssociationCounts(c echo.Context) error {
-	uri := c.QueryParam("uri")
-	//schema := c.QueryParam("schema")
 	ctx := c.Request().Context()
 
-	records, err := h.record.GetAssociatedRecordCounts(ctx, uri)
-	if err != nil {
-		return presenter.InternalError(c, err)
+	uri := c.QueryParam("uri")
+	schema := c.QueryParam("schema")
+
+	if uri == "" {
+		return presenter.BadRequestMessage(c, "uri parameter is required")
 	}
-	return presenter.OK(c, records)
+
+	if schema == "" {
+		counts, err := h.record.GetAssociatedRecordCountsBySchema(ctx, uri)
+		if err != nil {
+			return presenter.InternalError(c, err)
+		}
+		return presenter.OK(c, counts)
+	} else {
+		counts, err := h.record.GetAssociatedRecordCountsByVariant(ctx, uri, schema)
+		if err != nil {
+			return presenter.InternalError(c, err)
+		}
+		return presenter.OK(c, counts)
+	}
+
 }

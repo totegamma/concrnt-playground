@@ -34,9 +34,9 @@ type Document[T any] struct {
 	MemberOf *[]string `json:"memberOf,omitempty"`
 
 	// CIP-6
-	Owner          *string `json:"owner,omitempty"`
-	Associate      *string `json:"associate,omitempty"`
-	AssociationKey *string `json:"associationKey,omitempty"`
+	Owner              *string `json:"owner,omitempty"`
+	Associate          *string `json:"associate,omitempty"`
+	AssociationVariant *string `json:"associationVariant,omitempty"`
 
 	// CIP-8
 	Policies *[]Policy `json:"policies,omitempty"`

@@ -5,5 +5,5 @@ type Association struct {
 	Target   RecordKey `json:"-" gorm:"foreignKey:TargetID;references:ID;constraint:OnDelete:CASCADE;"`
 	ItemID   int64     `json:"itemID" gorm:"primaryKey;type:text"`
 	Item     RecordKey `json:"-" gorm:"foreignKey:ItemID;references:ID;constraint:OnDelete:CASCADE;"`
-	Owner    string    `json:"owner" gorm:"primaryKey;type:text"`
+	Unique   uint64    `json:"unique" gorm:"type:bigint;uniqueIndex:uniq_association"`
 }

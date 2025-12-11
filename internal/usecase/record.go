@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/totegamma/concrnt-playground"
+	"github.com/totegamma/concrnt-playground/internal/utils"
 )
 
 // CommitInput is the validated input for committing a record.
@@ -19,8 +20,10 @@ type RecordRepository interface {
 	GetValue(ctx context.Context, uri string) (any, error)
 	GetDocument(ctx context.Context, uri string) (*concrnt.Document[any], error)
 	Delete(ctx context.Context, uri string) error
-	GetAssociatedRecords(ctx context.Context, targetURI string) ([]concrnt.Document[any], error)
-	GetAssociatedRecordCounts(ctx context.Context, targetURI string) (int64, error)
+
+	GetAssociatedRecords(ctx context.Context, targetURI, schema, variant, author string) ([]concrnt.Document[any], error)
+	GetAssociatedRecordCountsBySchema(ctx context.Context, targetURI string) (map[string]int64, error)
+	GetAssociatedRecordCountsByVariant(ctx context.Context, targetURI, schema string) (*utils.OrderedKVMap[int64], error)
 }
 
 type RecordUsecase struct {
@@ -46,10 +49,14 @@ func (uc *RecordUsecase) GetValue(ctx context.Context, uri string) (any, error) 
 	return uc.repo.GetValue(ctx, uri)
 }
 
-func (uc *RecordUsecase) GetAssociatedRecords(ctx context.Context, targetURI string) ([]concrnt.Document[any], error) {
-	return uc.repo.GetAssociatedRecords(ctx, targetURI)
+func (uc *RecordUsecase) GetAssociatedRecords(ctx context.Context, targetURI, schema, variant, author string) ([]concrnt.Document[any], error) {
+	return uc.repo.GetAssociatedRecords(ctx, targetURI, schema, variant, author)
 }
 
-func (uc *RecordUsecase) GetAssociatedRecordCounts(ctx context.Context, targetURI string) (int64, error) {
-	return uc.repo.GetAssociatedRecordCounts(ctx, targetURI)
+func (uc *RecordUsecase) GetAssociatedRecordCountsBySchema(ctx context.Context, targetURI string) (map[string]int64, error) {
+	return uc.repo.GetAssociatedRecordCountsBySchema(ctx, targetURI)
+}
+
+func (uc *RecordUsecase) GetAssociatedRecordCountsByVariant(ctx context.Context, targetURI, schema string) (*utils.OrderedKVMap[int64], error) {
+	return uc.repo.GetAssociatedRecordCountsByVariant(ctx, targetURI, schema)
 }
