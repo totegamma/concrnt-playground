@@ -60,11 +60,34 @@ func (h *Handler) handleWellKnown(c echo.Context) error {
 		Domain:  h.config.FQDN,
 		CSID:    h.config.CSID,
 		Layer:   h.config.Layer,
-		Endpoints: map[string]string{
-			"net.concrnt.core.resource":         "/resource/{uri}",
-			"net.concrnt.core.commit":           "/commit",
-			"net.concrnt.world.register":        "/api/v1/register",
-			"net.concrnt.world.timeline.recent": "/api/v1/timeline/recent",
+		Endpoints: map[string]concrnt.ConcrntEndpoint{
+			"net.concrnt.core.resource": {
+				Template: "/resource/{uri}",
+				Method:   "GET",
+			},
+			"net.concrnt.core.commit": {
+				Template: "/commit",
+				Method:   "POST",
+			},
+			"net.concrnt.world.register": {
+				Template: "/api/v1/register",
+				Method:   "POST",
+			},
+			"net.concrnt.world.timeline.recent": {
+				Template: "/api/v1/timeline/recent",
+				Method:   "GET",
+				Query:    &[]string{"uris", "until", "limit"},
+			},
+			"net.concrnt.core.associations": {
+				Template: "/associations",
+				Method:   "GET",
+				Query:    &[]string{"uri", "schema", "variant", "author"},
+			},
+			"net.concrnt.core.association-counts": {
+				Template: "/association-counts",
+				Method:   "GET",
+				Query:    &[]string{"uri", "schema"},
+			},
 		},
 	}
 	return c.JSON(http.StatusOK, wellknown)

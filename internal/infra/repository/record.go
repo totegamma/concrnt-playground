@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/zeebo/xxh3"
@@ -199,12 +200,9 @@ func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument
 			association := models.Association{
 				TargetID: targetRK,
 				ItemID:   rkid,
-				Unique:   uniqueHash,
+				Unique:   fmt.Sprintf("%x", uniqueHash),
 			}
-			err = tx.Clauses(clause.OnConflict{
-				DoNothing: true,
-			}).Create(&association).Error
-			if err != nil {
+			if err := tx.Create(&association).Error; err != nil {
 				return err
 			}
 		}

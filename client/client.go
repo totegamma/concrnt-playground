@@ -261,14 +261,16 @@ func (c *Client) GetResource(ctx context.Context, uri string, accept string, opt
 		return fmt.Errorf("resource endpoint not found")
 	}
 
-	endpoint = strings.ReplaceAll(endpoint, "{ccid}", owner)
-	endpoint = strings.ReplaceAll(endpoint, "{key}", key)
-	endpoint = strings.ReplaceAll(endpoint, "{uri}", url.QueryEscape(uri))
-	endpoint = "https://" + info.Domain + endpoint
+	template := endpoint.Template
 
-	fmt.Printf("Resolved endpoint: %s\n", endpoint)
+	template = strings.ReplaceAll(template, "{ccid}", owner)
+	template = strings.ReplaceAll(template, "{key}", key)
+	template = strings.ReplaceAll(template, "{uri}", url.QueryEscape(uri))
+	template = "https://" + info.Domain + template
 
-	req, err := http.NewRequest("GET", endpoint, nil)
+	fmt.Printf("Resolved endpoint: %s\n", template)
+
+	req, err := http.NewRequest("GET", template, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %v", err)
 	}

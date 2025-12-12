@@ -4,12 +4,18 @@ import (
 	"time"
 )
 
+type ConcrntEndpoint struct {
+	Template string    `json:"template"`
+	Method   string    `json:"method"`
+	Query    *[]string `json:"query,omitempty"`
+}
+
 type WellKnownConcrnt struct {
-	Version   string            `json:"version"`
-	Domain    string            `json:"domain"`
-	CSID      string            `json:"csid"`
-	Layer     string            `json:"layer"`
-	Endpoints map[string]string `json:"endpoints"`
+	Version   string                     `json:"version"`
+	Domain    string                     `json:"domain"`
+	CSID      string                     `json:"csid"`
+	Layer     string                     `json:"layer"`
+	Endpoints map[string]ConcrntEndpoint `json:"endpoints"`
 }
 
 type Policy struct {
