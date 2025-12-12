@@ -34,7 +34,7 @@ type Document[T any] struct {
 	ContentType *string `json:"contentType,omitempty"`
 	Schema      *string `json:"schema,omitempty"`
 
-	CreateAt time.Time `json:"createAt"`
+	CreatedAt time.Time `json:"createdAt"`
 
 	// CIP-5
 	MemberOf *[]string `json:"memberOf,omitempty"`

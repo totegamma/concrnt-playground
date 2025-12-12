@@ -36,8 +36,8 @@ func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument
 	hash := concrnt.GetHash([]byte(sd.Document))
 	hash10 := [10]byte{}
 	copy(hash10[:], hash[:10])
-	createAt := doc.CreateAt
-	documentID := cdid.New(hash10, createAt).String()
+	createdAt := doc.CreatedAt
+	documentID := cdid.New(hash10, createdAt).String()
 
 	valueString, err := json.Marshal(doc.Value)
 	if err != nil {
