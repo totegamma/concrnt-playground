@@ -31,8 +31,7 @@ type Document[T any] struct {
 
 	Author string `json:"author"`
 
-	ContentType *string `json:"contentType,omitempty"`
-	Schema      *string `json:"schema,omitempty"`
+	Schema string `json:"schema,omitempty"`
 
 	CreatedAt time.Time `json:"createdAt"`
 

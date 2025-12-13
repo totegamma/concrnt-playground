@@ -27,13 +27,12 @@ type RecordKey struct {
 }
 
 type Record struct {
-	DocumentID  string    `json:"id" gorm:"primaryKey;type:text"`
-	Document    CommitLog `json:"-" gorm:"foreignKey:DocumentID;references:ID;constraint:OnDelete:CASCADE;"`
-	ContentType string    `json:"contentType" gorm:"type:text"`
-	Author      string    `json:"author" gorm:"type:text"`
-	Schema      string    `json:"schema" gorm:"type:text"`
-	Value       string    `json:"value" gorm:"type:jsonb"`
-	CDate       time.Time `json:"cdate" gorm:"->;<-:create;type:timestamp with time zone;not null;default:clock_timestamp()"`
+	DocumentID string    `json:"id" gorm:"primaryKey;type:text"`
+	Document   CommitLog `json:"-" gorm:"foreignKey:DocumentID;references:ID;constraint:OnDelete:CASCADE;"`
+	Author     string    `json:"author" gorm:"type:text"`
+	Schema     string    `json:"schema" gorm:"type:text"`
+	Value      string    `json:"value" gorm:"type:jsonb"`
+	CDate      time.Time `json:"cdate" gorm:"->;<-:create;type:timestamp with time zone;not null;default:clock_timestamp()"`
 }
 
 type PrefixGroup struct {

@@ -51,7 +51,7 @@ func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument
 		DocumentID: documentID,
 		Value:      string(valueString),
 		Author:     doc.Author,
-		Schema:     *doc.Schema,
+		Schema:     doc.Schema,
 		CDate:      time.Now(),
 	}
 
@@ -177,15 +177,14 @@ func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument
 				}
 				path := strings.TrimPrefix(parsed.Path, "/")
 
-				schema := schemas.ItemURL
 				href := concrnt.ComposeCCURI(doc.Author, documentID)
-				document := concrnt.Document[schemas.Item]{
+				document := concrnt.Document[schemas.Reference]{
 					Key: &path,
-					Value: schemas.Item{
+					Value: schemas.Reference{
 						Href: href,
 					},
 					Author:    doc.Author,
-					Schema:    &schema,
+					Schema:    schemas.ReferenceURL,
 					CreatedAt: time.Now(),
 				}
 				docBytes, err := json.Marshal(document)

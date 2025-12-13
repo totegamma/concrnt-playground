@@ -108,7 +108,7 @@ func (h *Handler) handleCommit(c echo.Context) error {
 	}
 
 	var deleteURI *string
-	if doc.Schema != nil && *doc.Schema == schemas.DeleteURL {
+	if doc.Schema == schemas.DeleteURL {
 		var deleteDoc concrnt.Document[schemas.Delete]
 		if err := json.Unmarshal([]byte(sd.Document), &deleteDoc); err != nil {
 			return presenter.BadRequest(c, err)

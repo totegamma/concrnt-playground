@@ -143,17 +143,24 @@ func (r *ChunklineRepository) LoadLocalBody(ctx context.Context, uri string, chu
 	for _, member := range members {
 
 		href := concrnt.ComposeCCURI(member.Item.Author, member.Item.DocumentID)
-		if member.Item.Schema == schemas.ItemURL {
-			var itemURLValue schemas.Item
+		contentType := "application/concrnt.document+json"
+		if member.Item.Schema == schemas.ReferenceURL {
+			var itemURLValue schemas.Reference
 			err = json.Unmarshal([]byte(member.Item.Value), &itemURLValue)
-			if err == nil && itemURLValue.Href != "" {
-				href = itemURLValue.Href
+			if err == nil {
+				if itemURLValue.Href != "" {
+					href = itemURLValue.Href
+				}
+				if itemURLValue.ContentType != "" {
+					contentType = itemURLValue.ContentType
+				}
 			}
 		}
 
 		item := chunkline.BodyItem{
-			Timestamp: member.Item.CDate,
-			Href:      href,
+			Timestamp:   member.Item.CDate,
+			Href:        href,
+			ContentType: contentType,
 		}
 		bodyItems = append(bodyItems, item)
 	}
