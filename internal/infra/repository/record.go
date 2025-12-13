@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/zeebo/xxh3"
@@ -15,6 +17,7 @@ import (
 	"github.com/totegamma/concrnt-playground/internal/domain"
 	"github.com/totegamma/concrnt-playground/internal/infra/database/models"
 	"github.com/totegamma/concrnt-playground/internal/utils"
+	"github.com/totegamma/concrnt-playground/schemas"
 )
 
 type RecordRepository struct {
@@ -107,9 +110,9 @@ func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument
 			}
 
 			// RecordKeyを作る
-
+			uri := concrnt.ComposeCCURI(doc.Author, *doc.Key)
 			rk := models.RecordKey{
-				URI:      concrnt.ComposeCCURI(doc.Author, *doc.Key),
+				URI:      uri,
 				RecordID: documentID,
 			}
 
@@ -134,39 +137,72 @@ func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument
 					return err
 				}
 			}
-		}
 
-		// Relationを作る
-		if doc.MemberOf != nil {
-			for _, parentURI := range *doc.MemberOf {
-
-				collectionRK, err := getRecordKeyIDByURI(ctx, tx, parentURI)
+			// parentがあればPrefixGroupを作る
+			parentURI, err := url.JoinPath(uri, "..")
+			if err != nil {
+				return err
+			}
+			parsed, err := url.Parse(parentURI)
+			if err != nil {
+				return err
+			}
+			if parsed.Path != "/" {
+				parentRK, err := getRecordKeyIDByURI(ctx, tx, parentURI)
 				if err != nil {
 					return err
 				}
-
-				if rkid == -1 {
-					newRecordKey := models.RecordKey{
-						URI:      concrnt.ComposeCCURI(doc.Author, documentID),
-						RecordID: documentID,
-					}
-					err = tx.Save(&newRecordKey).Error
-					if err != nil {
-						return err
-					}
-					rkid = newRecordKey.ID
+				prefixGroup := models.PrefixGroup{
+					CollectionID: parentRK,
+					ItemID:       documentID,
 				}
-
-				relation := models.CollectionMember{
-					CollectionID: collectionRK,
-					ItemID:       rkid,
-				}
-
 				err = tx.Clauses(clause.OnConflict{
 					DoNothing: true,
-				}).Create(&relation).Error
+				}).Create(&prefixGroup).Error
 				if err != nil {
 					return err
+				}
+			}
+		}
+
+		if doc.MemberOf != nil {
+			for _, memberOfURI := range *doc.MemberOf {
+				joined, err := url.JoinPath(memberOfURI, documentID)
+				if err != nil {
+					return err
+				}
+				parsed, err := url.Parse(joined)
+				if err != nil {
+					return err
+				}
+				path := strings.TrimPrefix(parsed.Path, "/")
+
+				schema := schemas.ItemURL
+				href := concrnt.ComposeCCURI(doc.Author, documentID)
+				document := concrnt.Document[schemas.Item]{
+					Key: &path,
+					Value: schemas.Item{
+						Href: href,
+					},
+					Author:    doc.Author,
+					Schema:    &schema,
+					CreatedAt: time.Now(),
+				}
+				docBytes, err := json.Marshal(document)
+				if err != nil {
+					return err
+				}
+				sd := concrnt.SignedDocument{
+					Document: string(docBytes),
+					Proof: concrnt.Proof{
+						Type: "document-reference",
+						Href: &href,
+					},
+				}
+				err = r.Create(ctx, sd)
+				if err != nil {
+					fmt.Printf("Error creating memberOf item: %v\n", err)
+					continue
 				}
 			}
 		}

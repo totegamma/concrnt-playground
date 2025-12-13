@@ -51,8 +51,9 @@ type Document[T any] struct {
 type SchemaDeleteType string
 
 type Proof struct {
-	Type      string `json:"type"`
-	Signature string `json:"signature"`
+	Type      string  `json:"type"`
+	Signature *string `json:"signature,omitempty"`
+	Href      *string `json:"href,omitempty"`
 }
 
 type SignedDocument struct {

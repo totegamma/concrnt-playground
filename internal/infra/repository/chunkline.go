@@ -4,11 +4,13 @@ import (
 	"context"
 	"time"
 
+	"encoding/json"
 	"gorm.io/gorm"
 
 	"github.com/concrnt/chunkline"
 	"github.com/totegamma/concrnt-playground"
 	"github.com/totegamma/concrnt-playground/internal/infra/database/models"
+	"github.com/totegamma/concrnt-playground/schemas"
 )
 
 const (
@@ -35,22 +37,26 @@ func (r *ChunklineRepository) GetChunklineManifest(ctx context.Context, uri stri
 		return nil, err
 	}
 
-	firstCollectionMember := models.CollectionMember{}
+	firstChunk := int64(0)
+	firstCollectionMember := models.PrefixGroup{}
 	err = r.db.WithContext(ctx).
-		Joins("JOIN record_keys ON record_keys.id = collection_members.collection_id").
-		Where("record_keys.uri = ?", uri).
-		Order("collection_members.c_date ASC").
+		Model(&models.PrefixGroup{}).
+		Joins("JOIN record_keys rk ON rk.id = prefix_groups.collection_id").
+		Joins("JOIN records r ON r.document_id = prefix_groups.item_id").
+		Where("rk.uri = ?", uri).
+		Order("r.c_date ASC").
 		Limit(1).
+		// PreloadはこのままでもOK（Itemは別クエリで埋まる）
+		Preload("Item").
 		Take(&firstCollectionMember).Error
-
-	if err != nil {
-		return nil, err
+	if err == nil {
+		firstChunk = firstCollectionMember.Item.CDate.Unix() / 600
 	}
 
 	return &chunkline.Manifest{
 		Version:    "1.0",
 		ChunkSize:  600,
-		FirstChunk: firstCollectionMember.CDate.Unix()/600 + 1,
+		FirstChunk: firstChunk,
 		Descending: &chunkline.Endpoint{
 			Iterator: "/chunkline/" + ccid + "/" + key + "/{chunk}/itr",
 			Body:     "/chunkline/" + ccid + "/" + key + "/{chunk}/body",
@@ -71,11 +77,12 @@ func (r *ChunklineRepository) LookupLocalItrs(ctx context.Context, uris []string
 	cutoff := time.Unix((chunkID+1)*600, 0) // descending order
 
 	err := r.db.WithContext(ctx).
-		Model(&models.CollectionMember{}).
-		Joins("JOIN record_keys ON record_keys.id = collection_members.collection_id").
-		Select("record_keys.uri AS uri, MAX(collection_members.c_date) AS max_c_date").
-		Where("record_keys.uri IN (?) AND collection_members.c_date <= ?", uris, cutoff).
-		Group("record_keys.uri").
+		Model(&models.PrefixGroup{}).
+		Joins("JOIN record_keys rk ON rk.id = prefix_groups.collection_id").
+		Joins("JOIN records r ON r.document_id = prefix_groups.item_id").
+		Select("rk.uri AS uri, MAX(r.c_date) AS max_c_date").
+		Where("rk.uri IN ? AND r.c_date <= ?", uris, cutoff).
+		Group("rk.uri").
 		Scan(&res).Error
 
 	if err != nil {
@@ -104,11 +111,12 @@ func (r *ChunklineRepository) LoadLocalBody(ctx context.Context, uri string, chu
 		return nil, err
 	}
 
-	var members []models.CollectionMember
+	var members []models.PrefixGroup
 	err = r.db.WithContext(ctx).
+		Joins("JOIN records r ON r.document_id = prefix_groups.item_id").
 		Where("collection_id = ?", collectionID).
-		Where("c_date <= ?", chunkDate).
-		Order("c_date DESC").
+		Where("r.c_date <= ?", chunkDate).
+		Order("r.c_date DESC").
 		Limit(defaultChunkSize).
 		Preload("Item").
 		Find(&members).Error
@@ -116,12 +124,13 @@ func (r *ChunklineRepository) LoadLocalBody(ctx context.Context, uri string, chu
 		return nil, err
 	}
 
-	if len(members) == 0 || members[len(members)-1].CDate.After(prevChunkDate) {
+	if len(members) == 0 || members[len(members)-1].Item.CDate.After(prevChunkDate) {
 		err = r.db.WithContext(ctx).
+			Joins("JOIN records r ON r.document_id = prefix_groups.item_id").
 			Where("collection_id = ?", collectionID).
-			Where("c_date <= ?", chunkDate).
-			Where("c_date > ?", prevChunkDate).
-			Order("c_date DESC").
+			Where("r.c_date <= ?", chunkDate).
+			Where("r.c_date > ?", prevChunkDate).
+			Order("r.c_date DESC").
 			Preload("Item").
 			Find(&members).Error
 		if err != nil {
@@ -132,9 +141,19 @@ func (r *ChunklineRepository) LoadLocalBody(ctx context.Context, uri string, chu
 	bodyItems := make([]chunkline.BodyItem, 0, len(members))
 
 	for _, member := range members {
+
+		href := concrnt.ComposeCCURI(member.Item.Author, member.Item.DocumentID)
+		if member.Item.Schema == schemas.ItemURL {
+			var itemURLValue schemas.Item
+			err = json.Unmarshal([]byte(member.Item.Value), &itemURLValue)
+			if err == nil && itemURLValue.Href != "" {
+				href = itemURLValue.Href
+			}
+		}
+
 		item := chunkline.BodyItem{
-			Timestamp: member.CDate,
-			Href:      member.Item.URI,
+			Timestamp: member.Item.CDate,
+			Href:      href,
 		}
 		bodyItems = append(bodyItems, item)
 	}

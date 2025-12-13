@@ -36,10 +36,9 @@ type Record struct {
 	CDate       time.Time `json:"cdate" gorm:"->;<-:create;type:timestamp with time zone;not null;default:clock_timestamp()"`
 }
 
-type CollectionMember struct {
+type PrefixGroup struct {
 	CollectionID int64     `json:"collectionID" gorm:"primaryKey;type:text"`
 	Collection   RecordKey `json:"-" gorm:"foreignKey:CollectionID;references:ID;constraint:OnDelete:CASCADE;"`
-	ItemID       int64     `json:"itemID" gorm:"primaryKey;type:text"`
-	Item         RecordKey `json:"-" gorm:"foreignKey:ItemID;references:ID;constraint:OnDelete:CASCADE;"`
-	CDate        time.Time `json:"cdate" gorm:"->;<-:create;type:timestamp with time zone;not null;default:clock_timestamp()"`
+	ItemID       string    `json:"itemID" gorm:"primaryKey;type:text"`
+	Item         Record    `json:"-" gorm:"foreignKey:ItemID;references:DocumentID;constraint:OnDelete:CASCADE;"`
 }
