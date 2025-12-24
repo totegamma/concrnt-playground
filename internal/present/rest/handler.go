@@ -62,18 +62,28 @@ func (h *Handler) handleWellKnown(c echo.Context) error {
 		CSID:    h.config.CSID,
 		Layer:   h.config.Layer,
 		Endpoints: map[string]concrnt.ConcrntEndpoint{
-			"net.concrnt.core.resource": {
+			"net.concrnt.resource": {
 				Template: "/resource/{uri}",
 				Method:   "GET",
 			},
-			"net.concrnt.core.commit": {
+			"net.concrnt.commit": {
 				Template: "/commit",
 				Method:   "POST",
 			},
-			"net.concrnt.core.query": {
+			"net.concrnt.query": {
 				Template: "/query",
 				Method:   "GET",
 				Query:    &[]string{"prefix", "schema", "since", "until", "limit", "order"},
+			},
+			"net.concrnt.associations": {
+				Template: "/associations",
+				Method:   "GET",
+				Query:    &[]string{"uri", "schema", "variant", "author"},
+			},
+			"net.concrnt.association-counts": {
+				Template: "/association-counts",
+				Method:   "GET",
+				Query:    &[]string{"uri", "schema"},
 			},
 			"net.concrnt.world.register": {
 				Template: "/api/v1/register",
@@ -83,16 +93,6 @@ func (h *Handler) handleWellKnown(c echo.Context) error {
 				Template: "/api/v1/timeline/recent",
 				Method:   "GET",
 				Query:    &[]string{"uris", "until", "limit"},
-			},
-			"net.concrnt.core.associations": {
-				Template: "/associations",
-				Method:   "GET",
-				Query:    &[]string{"uri", "schema", "variant", "author"},
-			},
-			"net.concrnt.core.association-counts": {
-				Template: "/association-counts",
-				Method:   "GET",
-				Query:    &[]string{"uri", "schema"},
 			},
 		},
 	}
