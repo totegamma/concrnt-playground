@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"time"
 
 	"github.com/totegamma/concrnt-playground"
 	"github.com/totegamma/concrnt-playground/internal/utils"
@@ -24,6 +25,7 @@ type RecordRepository interface {
 	GetAssociatedRecords(ctx context.Context, targetURI, schema, variant, author string) ([]concrnt.Document[any], error)
 	GetAssociatedRecordCountsBySchema(ctx context.Context, targetURI string) (map[string]int64, error)
 	GetAssociatedRecordCountsByVariant(ctx context.Context, targetURI, schema string) (*utils.OrderedKVMap[int64], error)
+	Query(ctx context.Context, owner, key, schema string, since, until *time.Time, limit int, order string) ([]concrnt.Document[any], error)
 }
 
 type RecordUsecase struct {
@@ -59,4 +61,14 @@ func (uc *RecordUsecase) GetAssociatedRecordCountsBySchema(ctx context.Context, 
 
 func (uc *RecordUsecase) GetAssociatedRecordCountsByVariant(ctx context.Context, targetURI, schema string) (*utils.OrderedKVMap[int64], error) {
 	return uc.repo.GetAssociatedRecordCountsByVariant(ctx, targetURI, schema)
+}
+
+func (uc *RecordUsecase) Query(
+	ctx context.Context,
+	owner, key, schema string,
+	since, until *time.Time,
+	limit int,
+	order string,
+) ([]concrnt.Document[any], error) {
+	return uc.repo.Query(ctx, owner, key, schema, since, until, limit, order)
 }

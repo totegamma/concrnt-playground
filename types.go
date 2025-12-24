@@ -29,7 +29,8 @@ type Document[T any] struct {
 	Key   *string `json:"key,omitempty"`
 	Value T       `json:"value"`
 
-	Author string `json:"author"`
+	Author string  `json:"author"`
+	Owner  *string `json:"owner,omitempty"`
 
 	Schema string `json:"schema,omitempty"`
 
@@ -39,7 +40,6 @@ type Document[T any] struct {
 	MemberOf *[]string `json:"memberOf,omitempty"`
 
 	// CIP-6
-	Owner              *string `json:"owner,omitempty"`
 	Associate          *string `json:"associate,omitempty"`
 	AssociationVariant *string `json:"associationVariant,omitempty"`
 

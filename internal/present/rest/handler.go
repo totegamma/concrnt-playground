@@ -46,6 +46,7 @@ func (h *Handler) RegisterRoutes(e *echo.Echo) {
 	e.GET("/.well-known/concrnt", h.handleWellKnown)
 	e.POST("/commit", h.handleCommit)
 	e.GET("/resource/:uri", h.handleResource)
+	e.GET("/query", h.handleQuery)
 	e.GET("/chunkline/:owner/:id/:chunk/itr", h.handleChunklineItr)
 	e.GET("/chunkline/:owner/:id/:chunk/body", h.handleChunklineBody)
 	e.POST("/api/v1/register", h.handleRegister)
@@ -68,6 +69,11 @@ func (h *Handler) handleWellKnown(c echo.Context) error {
 			"net.concrnt.core.commit": {
 				Template: "/commit",
 				Method:   "POST",
+			},
+			"net.concrnt.core.query": {
+				Template: "/query",
+				Method:   "GET",
+				Query:    &[]string{"prefix", "schema", "since", "until", "limit", "order"},
 			},
 			"net.concrnt.world.register": {
 				Template: "/api/v1/register",
@@ -194,6 +200,67 @@ func (h *Handler) handleResource(c echo.Context) error {
 		return presenter.InternalError(c, err)
 	}
 	return presenter.OK(c, value)
+}
+
+func (h *Handler) handleQuery(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	prefix := c.QueryParam("prefix")
+	if prefix == "" {
+		return presenter.BadRequestMessage(c, "prefix parameter is required")
+	}
+	owner, key, err := concrnt.ParseCCURI(prefix)
+	if err != nil {
+		return presenter.BadRequestMessage(c, "invalid prefix parameter")
+	}
+
+	schema := c.QueryParam("schema")
+
+	var since *time.Time
+	sinceStr := c.QueryParam("since")
+	if sinceStr != "" {
+		parsed, err := time.Parse(time.RFC3339, sinceStr)
+		if err != nil {
+			return presenter.BadRequestMessage(c, "invalid since parameter")
+		}
+		since = &parsed
+	}
+
+	var until *time.Time
+	untilStr := c.QueryParam("until")
+	if untilStr != "" {
+		parsed, err := time.Parse(time.RFC3339, untilStr)
+		if err != nil {
+			return presenter.BadRequestMessage(c, "invalid until parameter")
+		}
+		until = &parsed
+	}
+
+	limit := 10
+	limitStr := c.QueryParam("limit")
+	if limitStr != "" {
+		limitInt, err := strconv.Atoi(limitStr)
+		if err != nil {
+			return presenter.BadRequestMessage(c, "invalid limit parameter")
+		}
+		limit = limitInt
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	order := c.QueryParam("order")
+	if order == "" {
+		order = "asc"
+	} else if order != "asc" && order != "desc" {
+		return presenter.BadRequestMessage(c, "invalid order parameter")
+	}
+
+	results, err := h.record.Query(ctx, owner, key, schema, since, until, limit, order)
+	if err != nil {
+		return presenter.InternalError(c, err)
+	}
+	return presenter.OK(c, results)
 }
 
 func (h *Handler) handleChunklineItr(c echo.Context) error {

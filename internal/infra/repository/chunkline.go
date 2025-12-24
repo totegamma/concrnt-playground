@@ -142,7 +142,7 @@ func (r *ChunklineRepository) LoadLocalBody(ctx context.Context, uri string, chu
 
 	for _, member := range members {
 
-		href := concrnt.ComposeCCURI(member.Item.Author, member.Item.DocumentID)
+		href := concrnt.ComposeCCURI(member.Item.Owner, member.Item.DocumentID)
 		contentType := "application/concrnt.document+json"
 		if member.Item.Schema == schemas.ReferenceURL {
 			var itemURLValue schemas.Reference

@@ -47,10 +47,15 @@ func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument
 		return err
 	}
 
+	owner := doc.Author
+	if doc.Owner != nil {
+		owner = *doc.Owner
+	}
+
 	record := models.Record{
 		DocumentID: documentID,
 		Value:      string(valueString),
-		Author:     doc.Author,
+		Owner:      owner,
 		Schema:     doc.Schema,
 		CDate:      time.Now(),
 	}
@@ -103,14 +108,14 @@ func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument
 		if doc.Key != nil {
 			var oldRecordKey models.RecordKey
 			err = tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-				Where("uri = ?", concrnt.ComposeCCURI(doc.Author, *doc.Key)).
+				Where("uri = ?", concrnt.ComposeCCURI(owner, *doc.Key)).
 				Take(&oldRecordKey).Error
 			if err != nil && err != gorm.ErrRecordNotFound {
 				return err
 			}
 
 			// RecordKeyを作る
-			uri := concrnt.ComposeCCURI(doc.Author, *doc.Key)
+			uri := concrnt.ComposeCCURI(owner, *doc.Key)
 			rk := models.RecordKey{
 				URI:      uri,
 				RecordID: documentID,
@@ -177,13 +182,13 @@ func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument
 				}
 				path := strings.TrimPrefix(parsed.Path, "/")
 
-				href := concrnt.ComposeCCURI(doc.Author, documentID)
+				href := concrnt.ComposeCCURI(owner, documentID)
 				document := concrnt.Document[schemas.Reference]{
 					Key: &path,
 					Value: schemas.Reference{
 						Href: href,
 					},
-					Author:    doc.Author,
+					Author:    owner,
 					Schema:    schemas.ReferenceURL,
 					CreatedAt: time.Now(),
 				}
@@ -216,7 +221,7 @@ func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument
 
 			if rkid == -1 {
 				newRecordKey := models.RecordKey{
-					URI:      concrnt.ComposeCCURI(doc.Author, documentID),
+					URI:      concrnt.ComposeCCURI(owner, documentID),
 					RecordID: documentID,
 				}
 				err = tx.Save(&newRecordKey).Error
@@ -226,7 +231,7 @@ func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument
 				rkid = newRecordKey.ID
 			}
 
-			uniqueKey := doc.Author + *doc.Associate
+			uniqueKey := owner + *doc.Associate
 			if doc.AssociationVariant != nil {
 				uniqueKey += *doc.AssociationVariant
 			}
@@ -497,4 +502,51 @@ func (r *RecordRepository) GetAssociatedRecordCountsByVariant(ctx context.Contex
 	}
 
 	return &result, nil
+}
+
+func (r *RecordRepository) Query(
+	ctx context.Context,
+	owner, prefix, schema string,
+	since, until *time.Time,
+	limit int,
+	order string,
+) ([]concrnt.Document[any], error) {
+	var records []models.Record
+
+	query := r.db.WithContext(ctx).
+		Model(&models.Record{}).
+		Joins("JOIN record_keys rk ON rk.record_id = records.document_id").
+		Where("records.owner = ?", owner).
+		Where("rk.uri LIKE ?", prefix+"%")
+
+	if schema != "" {
+		query = query.Where("records.schema = ?", schema)
+	}
+	if since != nil {
+		query = query.Where("records.c_date >= ?", *since)
+	}
+	if until != nil {
+		query = query.Where("records.c_date <= ?", *until)
+	}
+
+	if order == "desc" {
+		query = query.Order("records.c_date DESC")
+	} else {
+		query = query.Order("records.c_date ASC")
+	}
+
+	if err := query.Limit(limit).Preload("Document").Find(&records).Error; err != nil {
+		return nil, err
+	}
+
+	documents := make([]concrnt.Document[any], 0, len(records))
+	for _, record := range records {
+		var doc concrnt.Document[any]
+		if err := json.Unmarshal([]byte(record.Document.Document), &doc); err != nil {
+			return nil, err
+		}
+		documents = append(documents, doc)
+	}
+
+	return documents, nil
 }
