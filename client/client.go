@@ -256,7 +256,7 @@ func (c *Client) GetResource(ctx context.Context, uri string, accept string, opt
 		}
 	}
 
-	endpoint, ok := info.Endpoints["net.concrnt.core.resource"]
+	endpoint, ok := info.Endpoints["net.concrnt.resource"]
 	if !ok {
 		return fmt.Errorf("resource endpoint not found")
 	}

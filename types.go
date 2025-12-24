@@ -26,8 +26,8 @@ type Policy struct {
 
 type Document[T any] struct {
 	// CIP-1
-	Key   *string `json:"key,omitempty"`
-	Value T       `json:"value"`
+	Key   string `json:"key,omitempty"`
+	Value T      `json:"value"`
 
 	Author string  `json:"author"`
 	Owner  *string `json:"owner,omitempty"`

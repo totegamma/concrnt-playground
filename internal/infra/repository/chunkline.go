@@ -27,7 +27,7 @@ func NewChunklineRepository(db *gorm.DB) *ChunklineRepository {
 
 func (r *ChunklineRepository) GetChunklineManifest(ctx context.Context, uri string) (*chunkline.Manifest, error) {
 
-	record, err := getRecordByURI(ctx, r.db, uri)
+	recordKey, err := GetRecordKeyByURI(ctx, r.db, uri)
 	if err != nil {
 		return nil, err
 	}
@@ -38,19 +38,17 @@ func (r *ChunklineRepository) GetChunklineManifest(ctx context.Context, uri stri
 	}
 
 	firstChunk := int64(0)
-	firstCollectionMember := models.PrefixGroup{}
+	firstCollectionMember := models.RecordKey{}
 	err = r.db.WithContext(ctx).
-		Model(&models.PrefixGroup{}).
-		Joins("JOIN record_keys rk ON rk.id = prefix_groups.collection_id").
-		Joins("JOIN records r ON r.document_id = prefix_groups.item_id").
-		Where("rk.uri = ?", uri).
+		Model(&models.RecordKey{}).
+		Joins("JOIN records r ON r.document_id = record_keys.record_id").
+		Where("record_keys.parent_id = ?", recordKey.ID).
 		Order("r.c_date ASC").
 		Limit(1).
-		// PreloadはこのままでもOK（Itemは別クエリで埋まる）
-		Preload("Item").
+		Preload("Record").
 		Take(&firstCollectionMember).Error
 	if err == nil {
-		firstChunk = firstCollectionMember.Item.CDate.Unix() / 600
+		firstChunk = firstCollectionMember.Record.CDate.Unix() / 600
 	}
 
 	return &chunkline.Manifest{
@@ -61,7 +59,7 @@ func (r *ChunklineRepository) GetChunklineManifest(ctx context.Context, uri stri
 			Iterator: "/chunkline/" + ccid + "/" + key + "/{chunk}/itr",
 			Body:     "/chunkline/" + ccid + "/" + key + "/{chunk}/body",
 		},
-		Metadata: record.Value,
+		Metadata: recordKey.Record.Value,
 	}, nil
 }
 
@@ -77,12 +75,12 @@ func (r *ChunklineRepository) LookupLocalItrs(ctx context.Context, uris []string
 	cutoff := time.Unix((chunkID+1)*600, 0) // descending order
 
 	err := r.db.WithContext(ctx).
-		Model(&models.PrefixGroup{}).
-		Joins("JOIN record_keys rk ON rk.id = prefix_groups.collection_id").
-		Joins("JOIN records r ON r.document_id = prefix_groups.item_id").
-		Select("rk.uri AS uri, MAX(r.c_date) AS max_c_date").
-		Where("rk.uri IN ? AND r.c_date <= ?", uris, cutoff).
-		Group("rk.uri").
+		Table("record_keys AS parent").
+		Joins("JOIN record_keys AS child ON child.parent_id = parent.id").
+		Joins("JOIN records r ON r.document_id = child.record_id").
+		Select("parent.uri AS uri, MAX(r.c_date) AS max_c_date").
+		Where("parent.uri IN ? AND r.c_date <= ?", uris, cutoff).
+		Group("parent.uri").
 		Scan(&res).Error
 
 	if err != nil {
@@ -101,37 +99,32 @@ func (r *ChunklineRepository) LoadLocalBody(ctx context.Context, uri string, chu
 	chunkDate := time.Unix((chunkID+1)*600, 0)
 	prevChunkDate := time.Unix((chunkID-1)*600, 0)
 
-	collectionID := int64(0)
-	err := r.db.WithContext(ctx).
-		Model(&models.RecordKey{}).
-		Where("uri = ?", uri).
-		Select("id").
-		Scan(&collectionID).Error
+	parentRecordKey, err := GetRecordKeyByURI(ctx, r.db, uri)
 	if err != nil {
 		return nil, err
 	}
 
-	var members []models.PrefixGroup
+	var members []models.RecordKey
 	err = r.db.WithContext(ctx).
-		Joins("JOIN records r ON r.document_id = prefix_groups.item_id").
-		Where("collection_id = ?", collectionID).
+		Joins("JOIN records r ON r.document_id = record_keys.record_id").
+		Where("parent_id = ?", parentRecordKey.ID).
 		Where("r.c_date <= ?", chunkDate).
 		Order("r.c_date DESC").
 		Limit(defaultChunkSize).
-		Preload("Item").
+		Preload("Record").
 		Find(&members).Error
 	if err != nil {
 		return nil, err
 	}
 
-	if len(members) == 0 || members[len(members)-1].Item.CDate.After(prevChunkDate) {
+	if len(members) == 0 || members[len(members)-1].Record.CDate.After(prevChunkDate) {
 		err = r.db.WithContext(ctx).
-			Joins("JOIN records r ON r.document_id = prefix_groups.item_id").
-			Where("collection_id = ?", collectionID).
+			Joins("JOIN records r ON r.document_id = record_keys.record_id").
+			Where("parent_id = ?", parentRecordKey.ID).
 			Where("r.c_date <= ?", chunkDate).
 			Where("r.c_date > ?", prevChunkDate).
 			Order("r.c_date DESC").
-			Preload("Item").
+			Preload("Record").
 			Find(&members).Error
 		if err != nil {
 			return nil, err
@@ -142,11 +135,11 @@ func (r *ChunklineRepository) LoadLocalBody(ctx context.Context, uri string, chu
 
 	for _, member := range members {
 
-		href := concrnt.ComposeCCURI(member.Item.Owner, member.Item.DocumentID)
+		href := member.URI
 		contentType := "application/concrnt.document+json"
-		if member.Item.Schema == schemas.ReferenceURL {
+		if member.Record.Schema == schemas.ReferenceURL {
 			var itemURLValue schemas.Reference
-			err = json.Unmarshal([]byte(member.Item.Value), &itemURLValue)
+			err = json.Unmarshal([]byte(member.Record.Value), &itemURLValue)
 			if err == nil {
 				if itemURLValue.Href != "" {
 					href = itemURLValue.Href
@@ -158,7 +151,7 @@ func (r *ChunklineRepository) LoadLocalBody(ctx context.Context, uri string, chu
 		}
 
 		item := chunkline.BodyItem{
-			Timestamp:   member.Item.CDate,
+			Timestamp:   member.Record.CDate,
 			Href:        href,
 			ContentType: contentType,
 		}

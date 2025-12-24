@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -104,69 +105,50 @@ func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument
 			return err
 		}
 
-		var rkid int64 = -1
-		if doc.Key != nil {
-			var oldRecordKey models.RecordKey
-			err = tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-				Where("uri = ?", concrnt.ComposeCCURI(owner, *doc.Key)).
-				Take(&oldRecordKey).Error
-			if err != nil && err != gorm.ErrRecordNotFound {
+		key := doc.Key
+		if strings.Contains(key, "{cdid}") {
+			key = strings.ReplaceAll(key, "{cdid}", documentID)
+		}
+		uri := concrnt.ComposeCCURI(owner, key)
+
+		var oldRecordKey models.RecordKey
+		err = tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("uri = ?", concrnt.ComposeCCURI(owner, key)).
+			Take(&oldRecordKey).Error
+		if err != nil && err != gorm.ErrRecordNotFound {
+			return err
+		}
+
+		// ParentのRecordKeyを探す
+		parentID, err := getOrCreateParentRecordKey(ctx, tx, concrnt.ComposeCCURI(owner, key))
+		if err != nil {
+			return err
+		}
+
+		// RecordKeyを作る
+		rk := models.RecordKey{
+			URI:      uri,
+			ParentID: parentID,
+			RecordID: &documentID,
+		}
+
+		err = tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "uri"}},
+			DoUpdates: clause.Assignments(map[string]any{"record_id": documentID}),
+		}).Create(&rk).Error
+		if err != nil {
+			return err
+		}
+
+		// 古いRecordKeyが指していたCommitのGCフラグを立て、Recordは消す
+		if oldRecordKey.RecordID != nil && *oldRecordKey.RecordID != documentID {
+			if err := tx.Model(&models.CommitLog{}).
+				Where("id = ?", oldRecordKey.RecordID).
+				Update("gc_candidate", true).Error; err != nil {
 				return err
 			}
-
-			// RecordKeyを作る
-			uri := concrnt.ComposeCCURI(owner, *doc.Key)
-			rk := models.RecordKey{
-				URI:      uri,
-				RecordID: documentID,
-			}
-
-			err = tx.Clauses(clause.OnConflict{
-				Columns:   []clause.Column{{Name: "uri"}},
-				DoUpdates: clause.Assignments(map[string]any{"record_id": documentID}),
-			}).Create(&rk).Error
-			if err != nil {
+			if err := tx.Delete(&models.Record{}, "document_id = ?", oldRecordKey.RecordID).Error; err != nil {
 				return err
-			}
-
-			rkid = rk.ID
-
-			// 古いRecordKeyが指していたCommitのGCフラグを立て、Recordは消す
-			if oldRecordKey.RecordID != "" && oldRecordKey.RecordID != documentID {
-				if err := tx.Model(&models.CommitLog{}).
-					Where("id = ?", oldRecordKey.RecordID).
-					Update("gc_candidate", true).Error; err != nil {
-					return err
-				}
-				if err := tx.Delete(&models.Record{}, "document_id = ?", oldRecordKey.RecordID).Error; err != nil {
-					return err
-				}
-			}
-
-			// parentがあればPrefixGroupを作る
-			parentURI, err := url.JoinPath(uri, "..")
-			if err != nil {
-				return err
-			}
-			parsed, err := url.Parse(parentURI)
-			if err != nil {
-				return err
-			}
-			if parsed.Path != "/" {
-				parentRK, err := getRecordKeyIDByURI(ctx, tx, parentURI)
-				if err != nil {
-					return err
-				}
-				prefixGroup := models.PrefixGroup{
-					CollectionID: parentRK,
-					ItemID:       documentID,
-				}
-				err = tx.Clauses(clause.OnConflict{
-					DoNothing: true,
-				}).Create(&prefixGroup).Error
-				if err != nil {
-					return err
-				}
 			}
 		}
 
@@ -182,11 +164,10 @@ func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument
 				}
 				path := strings.TrimPrefix(parsed.Path, "/")
 
-				href := concrnt.ComposeCCURI(owner, documentID)
 				document := concrnt.Document[schemas.Reference]{
-					Key: &path,
+					Key: path,
 					Value: schemas.Reference{
-						Href: href,
+						Href: uri,
 					},
 					Author:    owner,
 					Schema:    schemas.ReferenceURL,
@@ -200,7 +181,7 @@ func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument
 					Document: string(docBytes),
 					Proof: concrnt.Proof{
 						Type: "document-reference",
-						Href: &href,
+						Href: &uri,
 					},
 				}
 				err = r.Create(ctx, sd)
@@ -214,21 +195,9 @@ func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument
 		// CIP-6 Association
 		if doc.Associate != nil {
 
-			targetRK, err := getRecordKeyIDByURI(ctx, tx, *doc.Associate)
+			targetRK, err := GetRecordKeyByURI(ctx, tx, *doc.Associate)
 			if err != nil {
 				return err
-			}
-
-			if rkid == -1 {
-				newRecordKey := models.RecordKey{
-					URI:      concrnt.ComposeCCURI(owner, documentID),
-					RecordID: documentID,
-				}
-				err = tx.Save(&newRecordKey).Error
-				if err != nil {
-					return err
-				}
-				rkid = newRecordKey.ID
 			}
 
 			uniqueKey := owner + *doc.Associate
@@ -238,8 +207,8 @@ func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument
 			uniqueHash := xxh3.HashString(uniqueKey)
 
 			association := models.Association{
-				TargetID: targetRK,
-				ItemID:   rkid,
+				TargetID: targetRK.ID,
+				ItemID:   documentID,
 				Unique:   fmt.Sprintf("%x", uniqueHash),
 			}
 			if err := tx.Create(&association).Error; err != nil {
@@ -325,6 +294,49 @@ func getCommitByURI(ctx context.Context, db *gorm.DB, uri string) (*models.Commi
 
 }
 
+func getOrCreateParentRecordKey(ctx context.Context, db *gorm.DB, uri string) (*int64, error) {
+	parentURI, err := url.JoinPath(uri, "..")
+	if err != nil {
+		return nil, err
+	}
+	parsed, err := url.Parse(parentURI)
+	if err != nil {
+		return nil, err
+	}
+	if parsed.Path == "/" {
+		return nil, nil
+	}
+
+	parentRK, err := GetRecordKeyByURI(ctx, db, parentURI)
+	if err != nil {
+		if errors.Is(err, domain.NotFoundError{}) {
+
+			parentID, err := getOrCreateParentRecordKey(ctx, db, parentURI)
+			if err != nil {
+				return nil, err
+			}
+
+			newRecordKey := models.RecordKey{
+				URI:      parentURI,
+				RecordID: nil,
+				ParentID: parentID,
+			}
+
+			err = db.WithContext(ctx).Create(&newRecordKey).Error
+			if err != nil {
+				return nil, err
+			}
+
+			return &newRecordKey.ID, nil
+
+		} else {
+			return nil, err
+		}
+	}
+
+	return &parentRK.ID, nil
+}
+
 func getRecordByURI(ctx context.Context, db *gorm.DB, uri string) (*models.Record, error) {
 	_, key, err := concrnt.ParseCCURI(uri)
 	if err != nil {
@@ -350,41 +362,17 @@ func getRecordByURI(ctx context.Context, db *gorm.DB, uri string) (*models.Recor
 	return nil, domain.NotFoundError{Resource: "record"}
 }
 
-func getRecordKeyIDByURI(ctx context.Context, db *gorm.DB, uri string) (int64, error) {
-	_, key, err := concrnt.ParseCCURI(uri)
-	if err != nil {
-		return 0, err
-	}
+func GetRecordKeyByURI(ctx context.Context, db *gorm.DB, uri string) (*models.RecordKey, error) {
 
-	// すでにあればそれを返す
 	var recordKey models.RecordKey
-	err = db.WithContext(ctx).
+	err := db.WithContext(ctx).
 		Where("uri = ?", uri).
 		Take(&recordKey).Error
-	if err == nil {
-		return recordKey.ID, nil
-	}
-
-	// 参照がCDIDの場合は、新しくRecordKeyを作って返す
-	var record models.Record
-	err = db.WithContext(ctx).
-		Where("document_id = ?", key).
-		Take(&record).Error
 	if err != nil {
-		return 0, err
+		return nil, domain.NotFoundError{Resource: "record key"}
 	}
 
-	newRecordKey := models.RecordKey{
-		URI:      uri,
-		RecordID: record.DocumentID,
-	}
-
-	err = db.WithContext(ctx).Create(&newRecordKey).Error
-	if err != nil {
-		return 0, err
-	}
-
-	return newRecordKey.ID, nil
+	return &recordKey, nil
 }
 
 func (r *RecordRepository) GetAssociatedRecords(
@@ -392,7 +380,7 @@ func (r *RecordRepository) GetAssociatedRecords(
 	targetURI, schema, variant, author string,
 ) ([]concrnt.Document[any], error) {
 
-	targetRKID, err := getRecordKeyIDByURI(ctx, r.db, targetURI)
+	targetRK, err := GetRecordKeyByURI(ctx, r.db, targetURI)
 	if err != nil {
 		return nil, err
 	}
@@ -404,7 +392,7 @@ func (r *RecordRepository) GetAssociatedRecords(
 		Preload("Item.Record.Document").
 		Joins("JOIN record_keys rk ON rk.id = associations.item_id").
 		Joins("JOIN records rec ON rec.document_id = rk.record_id").
-		Where("associations.target_id = ?", targetRKID)
+		Where("associations.target_id = ?", targetRK.ID)
 
 	if schema != "" {
 		query = query.Where("rec.schema = ?", schema)
@@ -423,7 +411,7 @@ func (r *RecordRepository) GetAssociatedRecords(
 	var documents []concrnt.Document[any]
 	for _, assoc := range associations {
 		var doc concrnt.Document[any]
-		err := json.Unmarshal([]byte(assoc.Item.Record.Document.Document), &doc)
+		err := json.Unmarshal([]byte(assoc.Item.Document.Document), &doc)
 		if err != nil {
 			return nil, err
 		}
@@ -435,7 +423,7 @@ func (r *RecordRepository) GetAssociatedRecords(
 
 func (r *RecordRepository) GetAssociatedRecordCountsBySchema(ctx context.Context, targetURI string) (map[string]int64, error) {
 
-	targetRKID, err := getRecordKeyIDByURI(ctx, r.db, targetURI)
+	targetRK, err := GetRecordKeyByURI(ctx, r.db, targetURI)
 	if err != nil {
 		return nil, err
 	}
@@ -450,7 +438,7 @@ func (r *RecordRepository) GetAssociatedRecordCountsBySchema(ctx context.Context
 		Select("rec.schema AS schema, COUNT(*) AS count").
 		Joins("JOIN record_keys rk ON rk.id = associations.item_id").
 		Joins("JOIN records rec ON rec.document_id = rk.record_id").
-		Where("associations.target_id = ?", targetRKID).
+		Where("associations.target_id = ?", targetRK.ID).
 		Group("rec.schema").
 		Scan(&counts).Error
 
@@ -469,7 +457,7 @@ func (r *RecordRepository) GetAssociatedRecordCountsBySchema(ctx context.Context
 
 func (r *RecordRepository) GetAssociatedRecordCountsByVariant(ctx context.Context, targetURI, schema string) (*utils.OrderedKVMap[int64], error) {
 
-	targetRKID, err := getRecordKeyIDByURI(ctx, r.db, targetURI)
+	targetRK, err := GetRecordKeyByURI(ctx, r.db, targetURI)
 	if err != nil {
 		return nil, err
 	}
@@ -485,7 +473,7 @@ func (r *RecordRepository) GetAssociatedRecordCountsByVariant(ctx context.Contex
 		Select("rec.variant AS variant, COUNT(*) AS count, MIN(rec.c_date) AS min_c_date").
 		Joins("JOIN record_keys rk ON rk.id = associations.item_id").
 		Joins("JOIN records rec ON rec.document_id = rk.record_id").
-		Where("associations.target_id = ? AND rec.schema = ?", targetRKID, schema).
+		Where("associations.target_id = ? AND rec.schema = ?", targetRK.ID, schema).
 		Group("rec.variant").
 		Order("min_c_date ASC").
 		Scan(&counts).Error

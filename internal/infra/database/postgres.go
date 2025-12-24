@@ -36,7 +36,6 @@ func MigratePostgres(db *gorm.DB) error {
 		&models.CommitOwner{},
 		&models.Record{},
 		&models.RecordKey{},
-		&models.PrefixGroup{},
 		&models.Association{},
 		&models.Server{},
 		&models.Entity{},
