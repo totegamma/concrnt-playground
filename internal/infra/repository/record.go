@@ -494,7 +494,7 @@ func (r *RecordRepository) GetAssociatedRecordCountsByVariant(ctx context.Contex
 
 func (r *RecordRepository) Query(
 	ctx context.Context,
-	owner, prefix, schema string,
+	prefix, schema string,
 	since, until *time.Time,
 	limit int,
 	order string,
@@ -504,7 +504,6 @@ func (r *RecordRepository) Query(
 	query := r.db.WithContext(ctx).
 		Model(&models.Record{}).
 		Joins("JOIN record_keys rk ON rk.record_id = records.document_id").
-		Where("records.owner = ?", owner).
 		Where("rk.uri LIKE ?", prefix+"%")
 
 	if schema != "" {

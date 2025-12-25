@@ -209,10 +209,6 @@ func (h *Handler) handleQuery(c echo.Context) error {
 	if prefix == "" {
 		return presenter.BadRequestMessage(c, "prefix parameter is required")
 	}
-	owner, key, err := concrnt.ParseCCURI(prefix)
-	if err != nil {
-		return presenter.BadRequestMessage(c, "invalid prefix parameter")
-	}
 
 	schema := c.QueryParam("schema")
 
@@ -256,7 +252,7 @@ func (h *Handler) handleQuery(c echo.Context) error {
 		return presenter.BadRequestMessage(c, "invalid order parameter")
 	}
 
-	results, err := h.record.Query(ctx, owner, key, schema, since, until, limit, order)
+	results, err := h.record.Query(ctx, prefix, schema, since, until, limit, order)
 	if err != nil {
 		return presenter.InternalError(c, err)
 	}
