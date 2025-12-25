@@ -8,13 +8,6 @@ import (
 	"github.com/totegamma/concrnt-playground/internal/utils"
 )
 
-// CommitInput is the validated input for committing a record.
-type CommitInput struct {
-	Document concrnt.Document[any]
-	Raw      concrnt.SignedDocument
-	Delete   *string
-}
-
 // RecordRepository defines storage operations for records/commits.
 type RecordRepository interface {
 	Create(ctx context.Context, sd concrnt.SignedDocument) error
@@ -36,11 +29,8 @@ func NewRecordUsecase(repo RecordRepository) *RecordUsecase {
 	return &RecordUsecase{repo: repo}
 }
 
-func (uc *RecordUsecase) Commit(ctx context.Context, input CommitInput) error {
-	if input.Delete != nil {
-		return uc.repo.Delete(ctx, *input.Delete)
-	}
-	return uc.repo.Create(ctx, input.Raw)
+func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) error {
+	return uc.repo.Create(ctx, sd)
 }
 
 func (uc *RecordUsecase) Get(ctx context.Context, uri string) (*concrnt.Document[any], error) {

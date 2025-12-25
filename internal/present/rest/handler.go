@@ -108,26 +108,7 @@ func (h *Handler) handleCommit(c echo.Context) error {
 		return presenter.BadRequest(c, err)
 	}
 
-	var doc concrnt.Document[any]
-	if err := json.Unmarshal([]byte(sd.Document), &doc); err != nil {
-		return presenter.BadRequest(c, err)
-	}
-
-	var deleteURI *string
-	if doc.Schema == schemas.DeleteURL {
-		var deleteDoc concrnt.Document[schemas.Delete]
-		if err := json.Unmarshal([]byte(sd.Document), &deleteDoc); err != nil {
-			return presenter.BadRequest(c, err)
-		}
-		uri := string(deleteDoc.Value)
-		deleteURI = &uri
-	}
-
-	err = h.record.Commit(ctx, usecase.CommitInput{
-		Document: doc,
-		Raw:      sd,
-		Delete:   deleteURI,
-	})
+	err = h.record.Commit(ctx, sd)
 	if err != nil {
 		return presenter.InternalError(c, err)
 	}
