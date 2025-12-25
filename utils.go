@@ -39,7 +39,12 @@ func ParseCCURI(escaped string) (string, string, error) {
 }
 
 func ComposeCCURI(owner, key string) string {
-	return fmt.Sprintf("cc://%s/%s", owner, key)
+	u := &url.URL{
+		Scheme: "cc",
+		Host:   owner,
+		Path:   key,
+	}
+	return u.String()
 }
 
 func hasChar(s string, c byte) bool {
