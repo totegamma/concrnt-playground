@@ -219,11 +219,10 @@ func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument
 		}
 
 		// signal
-		err = r.signal.Publish(ctx, parentRK.URI, concrnt.Event{
-			Type:     "created",
-			Source:   parentRK.URI,
-			Resource: uri,
-			SD:       &sd,
+		err = r.signal.Publish(ctx, uri, concrnt.Event{
+			Type: "created",
+			URI:  uri,
+			SD:   &sd,
 		})
 		if err != nil {
 			fmt.Printf("Error publishing signal: %v\n", err)

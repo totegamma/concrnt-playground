@@ -2,17 +2,21 @@ package rest
 
 import (
 	"errors"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
 
 	"github.com/totegamma/concrnt-playground"
 	"github.com/totegamma/concrnt-playground/internal/domain"
 	"github.com/totegamma/concrnt-playground/internal/present/rest/presenter"
+	"github.com/totegamma/concrnt-playground/internal/service"
 	"github.com/totegamma/concrnt-playground/internal/usecase"
 )
 
@@ -22,6 +26,7 @@ type Handler struct {
 	chunkline *usecase.ChunklineUsecase
 	server    *usecase.ServerUsecase
 	entity    *usecase.EntityUsecase
+	signal    *service.SignalService
 }
 
 func NewHandler(
@@ -30,6 +35,7 @@ func NewHandler(
 	chunkline *usecase.ChunklineUsecase,
 	server *usecase.ServerUsecase,
 	entity *usecase.EntityUsecase,
+	signal *service.SignalService,
 ) *Handler {
 	return &Handler{
 		config:    config,
@@ -37,6 +43,7 @@ func NewHandler(
 		chunkline: chunkline,
 		server:    server,
 		entity:    entity,
+		signal:    signal,
 	}
 }
 
@@ -51,6 +58,7 @@ func (h *Handler) RegisterRoutes(e *echo.Echo) {
 	e.GET("/api/v1/timeline/recent", h.handleTimelineRecent)
 	e.GET("/associations", h.handleAssociations)
 	e.GET("/association-counts", h.handleAssociationCounts)
+	e.GET("/realtime", h.handleRealtime)
 }
 
 func (h *Handler) handleWellKnown(c echo.Context) error {
@@ -91,6 +99,10 @@ func (h *Handler) handleWellKnown(c echo.Context) error {
 				Template: "/api/v1/timeline/recent",
 				Method:   "GET",
 				Query:    &[]string{"uris", "until", "limit"},
+			},
+			"net.concrnt.realtime": {
+				Template: "/realtime",
+				Method:   "GET",
 			},
 		},
 	}
@@ -364,4 +376,106 @@ func (h *Handler) handleAssociationCounts(c echo.Context) error {
 		return presenter.OK(c, counts)
 	}
 
+}
+
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
+}
+
+type Request struct {
+	Type     string   `json:"type"`
+	Prefixes []string `json:"prefixes"`
+}
+
+func (h *Handler) handleRealtime(c echo.Context) error {
+	ws, err := upgrader.Upgrade(c.Response(), c.Request(), nil)
+	if err != nil {
+		slog.Error(
+			"Failed to upgrade WebSocket",
+			slog.String("error", err.Error()),
+			slog.String("module", "socket"),
+		)
+		return err
+	}
+	defer func() {
+		ws.Close()
+	}()
+
+	ctx := c.Request().Context()
+
+	input := make(chan []string)
+	defer close(input)
+	output := make(chan concrnt.Event)
+	defer close(output)
+
+	go h.signal.Realtime(ctx, input, output)
+
+	quit := make(chan struct{})
+
+	go func() {
+		for {
+			var req Request
+			err := ws.ReadJSON(&req)
+			if err != nil {
+
+				wsErr, ok := err.(*websocket.CloseError)
+				if ok {
+					if !(wsErr.Code == websocket.CloseNormalClosure || wsErr.Code == websocket.CloseGoingAway) {
+						slog.DebugContext(
+							ctx, "WebSocket closed",
+							slog.String("error", wsErr.Error()),
+							slog.String("module", "socket"),
+						)
+					}
+				} else {
+					slog.ErrorContext(
+						ctx, "Error reading message",
+						slog.String("error", err.Error()),
+						slog.String("module", "socket"),
+					)
+				}
+
+				quit <- struct{}{}
+				break
+			}
+
+			switch req.Type {
+			case "listen":
+				input <- req.Prefixes
+				slog.DebugContext(
+					ctx, fmt.Sprintf("Socket subscribe: %s", req.Prefixes),
+					slog.String("module", "socket"),
+				)
+			case "h": // heartbeat
+				// do nothing
+			default:
+				slog.InfoContext(
+					ctx, "Unknown request type",
+					slog.String("type", req.Type),
+					slog.String("module", "socket"),
+				)
+			}
+		}
+	}()
+
+	for {
+		select {
+		case <-quit:
+			return nil
+		case items := <-output:
+			err := ws.WriteJSON(items)
+			if err != nil {
+				slog.ErrorContext(
+					ctx, "Error writing message",
+					slog.String("error", err.Error()),
+					slog.String("module", "socket"),
+				)
+				return nil
+			}
+		}
+	}
 }

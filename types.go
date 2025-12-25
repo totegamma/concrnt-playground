@@ -75,8 +75,7 @@ type RegisterRequest[T any] struct {
 }
 
 type Event struct {
-	Type     string          `json:"type"`
-	Source   string          `json:"source"`
-	Resource string          `json:"resource"`
-	SD       *SignedDocument `json:"signedDocument"`
+	Type string          `json:"type"`
+	URI  string          `json:"uri"`
+	SD   *SignedDocument `json:"signedDocument"`
 }

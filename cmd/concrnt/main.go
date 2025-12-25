@@ -59,7 +59,7 @@ func main() {
 	e.Use(middleware.Recover())
 	e.Use(middleware.CORS())
 
-	handler := rest.NewHandler(globalConfig, recordUC, chunklineUC, serverUC, entityUC)
+	handler := rest.NewHandler(globalConfig, recordUC, chunklineUC, serverUC, entityUC, signal)
 	handler.RegisterRoutes(e)
 
 	e.Logger.Fatal(e.Start(":8000"))
