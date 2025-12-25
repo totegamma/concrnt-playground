@@ -2,18 +2,12 @@ package usecase
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/totegamma/concrnt-playground"
 	"github.com/totegamma/concrnt-playground/internal/domain"
 	"github.com/totegamma/concrnt-playground/schemas"
 )
-
-type EntityRegisterInput struct {
-	Document  concrnt.Document[schemas.Affiliation]
-	Raw       string
-	Signature string
-	Meta      domain.EntityMeta
-}
 
 // EntityRepository defines persistence/lookup for entities.
 type EntityRepository interface {
@@ -29,15 +23,21 @@ func NewEntityUsecase(repo EntityRepository) *EntityUsecase {
 	return &EntityUsecase{repo: repo}
 }
 
-func (uc *EntityUsecase) Register(ctx context.Context, input EntityRegisterInput) error {
-	entity := domain.Entity{
-		ID:                   input.Document.Author,
-		Domain:               input.Document.Value.Domain,
-		AffiliationDocument:  input.Raw,
-		AffiliationSignature: input.Signature,
+func (uc *EntityUsecase) Register(ctx context.Context, req concrnt.RegisterRequest[domain.EntityMeta]) error {
+
+	var doc concrnt.Document[schemas.Affiliation]
+	if err := json.Unmarshal([]byte(req.AffiliationDocument), &doc); err != nil {
+		return err
 	}
 
-	return uc.repo.Register(ctx, entity, input.Meta)
+	entity := domain.Entity{
+		ID:                   doc.Author,
+		Domain:               doc.Value.Domain,
+		AffiliationDocument:  req.AffiliationDocument,
+		AffiliationSignature: req.AffiliationSignature,
+	}
+
+	return uc.repo.Register(ctx, entity, req.Meta)
 }
 
 func (uc *EntityUsecase) Get(ctx context.Context, ccid string, resolver string) (domain.Entity, error) {

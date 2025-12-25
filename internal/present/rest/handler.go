@@ -1,7 +1,6 @@
 package rest
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"net/url"
@@ -15,7 +14,6 @@ import (
 	"github.com/totegamma/concrnt-playground/internal/domain"
 	"github.com/totegamma/concrnt-playground/internal/present/rest/presenter"
 	"github.com/totegamma/concrnt-playground/internal/usecase"
-	"github.com/totegamma/concrnt-playground/schemas"
 )
 
 type Handler struct {
@@ -280,17 +278,7 @@ func (h *Handler) handleRegister(c echo.Context) error {
 		return presenter.BadRequest(c, err)
 	}
 
-	var doc concrnt.Document[schemas.Affiliation]
-	if err := json.Unmarshal([]byte(req.AffiliationDocument), &doc); err != nil {
-		return presenter.BadRequest(c, err)
-	}
-
-	err = h.entity.Register(ctx, usecase.EntityRegisterInput{
-		Document:  doc,
-		Raw:       req.AffiliationDocument,
-		Signature: req.AffiliationSignature,
-		Meta:      req.Meta,
-	})
+	err = h.entity.Register(ctx, req)
 	if err != nil {
 		return presenter.InternalError(c, err)
 	}
