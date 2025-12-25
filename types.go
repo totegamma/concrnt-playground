@@ -73,3 +73,10 @@ type RegisterRequest[T any] struct {
 	Meta                 T       `json:"meta,omitempty"`
 	InviteToken          *string `json:"inviteToken,omitempty"`
 }
+
+type Event struct {
+	Type     string          `json:"type"`
+	Source   string          `json:"source"`
+	Resource string          `json:"resource"`
+	SD       *SignedDocument `json:"signedDocument"`
+}

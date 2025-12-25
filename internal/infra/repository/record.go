@@ -17,16 +17,18 @@ import (
 	"github.com/totegamma/concrnt-playground/cdid"
 	"github.com/totegamma/concrnt-playground/internal/domain"
 	"github.com/totegamma/concrnt-playground/internal/infra/database/models"
+	"github.com/totegamma/concrnt-playground/internal/service"
 	"github.com/totegamma/concrnt-playground/internal/utils"
 	"github.com/totegamma/concrnt-playground/schemas"
 )
 
 type RecordRepository struct {
-	db *gorm.DB
+	db     *gorm.DB
+	signal *service.SignalService
 }
 
-func NewRecordRepository(db *gorm.DB) *RecordRepository {
-	return &RecordRepository{db: db}
+func NewRecordRepository(db *gorm.DB, signal *service.SignalService) *RecordRepository {
+	return &RecordRepository{db: db, signal: signal}
 }
 
 func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument) error {
@@ -120,7 +122,7 @@ func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument
 		}
 
 		// ParentのRecordKeyを探す
-		parentID, err := getOrCreateParentRecordKey(ctx, tx, concrnt.ComposeCCURI(owner, key))
+		parentRK, err := getOrCreateParentRecordKey(ctx, tx, concrnt.ComposeCCURI(owner, key))
 		if err != nil {
 			return err
 		}
@@ -128,7 +130,7 @@ func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument
 		// RecordKeyを作る
 		rk := models.RecordKey{
 			URI:      uri,
-			ParentID: parentID,
+			ParentID: &parentRK.ID,
 			RecordID: &documentID,
 		}
 
@@ -216,6 +218,18 @@ func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument
 			}
 		}
 
+		// signal
+		err = r.signal.Publish(ctx, parentRK.URI, concrnt.Event{
+			Type:     "created",
+			Source:   parentRK.URI,
+			Resource: uri,
+			SD:       &sd,
+		})
+		if err != nil {
+			fmt.Printf("Error publishing signal: %v\n", err)
+			return err
+		}
+
 		return nil
 	})
 }
@@ -294,7 +308,7 @@ func getCommitByURI(ctx context.Context, db *gorm.DB, uri string) (*models.Commi
 
 }
 
-func getOrCreateParentRecordKey(ctx context.Context, db *gorm.DB, uri string) (*int64, error) {
+func getOrCreateParentRecordKey(ctx context.Context, db *gorm.DB, uri string) (*models.RecordKey, error) {
 	parentURI, err := url.JoinPath(uri, "..")
 	if err != nil {
 		return nil, err
@@ -319,7 +333,7 @@ func getOrCreateParentRecordKey(ctx context.Context, db *gorm.DB, uri string) (*
 			newRecordKey := models.RecordKey{
 				URI:      parentURI,
 				RecordID: nil,
-				ParentID: parentID,
+				ParentID: &parentID.ID,
 			}
 
 			err = db.WithContext(ctx).Create(&newRecordKey).Error
@@ -327,14 +341,14 @@ func getOrCreateParentRecordKey(ctx context.Context, db *gorm.DB, uri string) (*
 				return nil, err
 			}
 
-			return &newRecordKey.ID, nil
+			return &newRecordKey, nil
 
 		} else {
 			return nil, err
 		}
 	}
 
-	return &parentRK.ID, nil
+	return parentRK, nil
 }
 
 func getRecordByURI(ctx context.Context, db *gorm.DB, uri string) (*models.Record, error) {

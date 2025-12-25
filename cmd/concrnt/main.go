@@ -4,14 +4,13 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 
-	"github.com/bradfitz/gomemcache/memcache"
-
 	"github.com/totegamma/concrnt-playground/client"
 	"github.com/totegamma/concrnt-playground/internal/infra/config"
 	"github.com/totegamma/concrnt-playground/internal/infra/database"
 	"github.com/totegamma/concrnt-playground/internal/infra/gateway"
 	"github.com/totegamma/concrnt-playground/internal/infra/repository"
 	"github.com/totegamma/concrnt-playground/internal/present/rest"
+	"github.com/totegamma/concrnt-playground/internal/service"
 	"github.com/totegamma/concrnt-playground/internal/usecase"
 )
 
@@ -34,12 +33,15 @@ func main() {
 		panic("failed to migrate database")
 	}
 
-	mc := memcache.New(conf.Server.MemcachedAddr)
+	mc := database.NewMemcached(conf.Server.MemcachedAddr)
 	defer mc.Close()
 
-	cl := client.New(conf.Server.GatewayAddr)
+	redis := database.NewRedis(conf.Server.RedisAddr, "", conf.Server.RedisDB)
 
-	recordRepo := repository.NewRecordRepository(db)
+	cl := client.New(conf.Server.GatewayAddr)
+	signal := service.NewSignalService(redis)
+
+	recordRepo := repository.NewRecordRepository(db, signal)
 	recordUC := usecase.NewRecordUsecase(recordRepo)
 
 	chunklineRepo := repository.NewChunklineRepository(db)
