@@ -11,8 +11,8 @@ import (
 // RecordRepository defines storage operations for records/commits.
 type RecordRepository interface {
 	Create(ctx context.Context, sd concrnt.SignedDocument) error
-	GetValue(ctx context.Context, uri string) (any, error)
 	GetDocument(ctx context.Context, uri string) (*concrnt.Document[any], error)
+	GetSignedDocument(ctx context.Context, uri string) (*concrnt.SignedDocument, error)
 	Delete(ctx context.Context, uri string) error
 
 	GetAssociatedRecords(ctx context.Context, targetURI, schema, variant, author string) ([]concrnt.Document[any], error)
@@ -37,8 +37,8 @@ func (uc *RecordUsecase) Get(ctx context.Context, uri string) (*concrnt.Document
 	return uc.repo.GetDocument(ctx, uri)
 }
 
-func (uc *RecordUsecase) GetValue(ctx context.Context, uri string) (any, error) {
-	return uc.repo.GetValue(ctx, uri)
+func (uc *RecordUsecase) GetSigned(ctx context.Context, uri string) (*concrnt.SignedDocument, error) {
+	return uc.repo.GetSignedDocument(ctx, uri)
 }
 
 func (uc *RecordUsecase) GetAssociatedRecords(ctx context.Context, targetURI, schema, variant, author string) ([]concrnt.Document[any], error) {

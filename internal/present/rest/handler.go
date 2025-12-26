@@ -172,8 +172,27 @@ func (h *Handler) handleResource(c echo.Context) error {
 
 	accept := c.Request().Header.Get("Accept")
 
-	if accept == "application/chunkline+json" {
+	switch accept {
+	case "application/chunkline+json":
 		value, err := h.chunkline.GetChunklineManifest(ctx, uriString)
+		if err != nil {
+			if errors.Is(err, domain.ErrNotFound) {
+				return presenter.NotFound(c, "resource not found")
+			}
+			return presenter.InternalError(c, err)
+		}
+		return presenter.OK(c, value)
+	case "application/concrnt.signed-document+json":
+		value, err := h.record.GetSigned(ctx, uri.String())
+		if err != nil {
+			if errors.Is(err, domain.ErrNotFound) {
+				return presenter.NotFound(c, "resource not found")
+			}
+			return presenter.InternalError(c, err)
+		}
+		return presenter.OK(c, value)
+	default:
+		value, err := h.record.Get(ctx, uri.String())
 		if err != nil {
 			if errors.Is(err, domain.ErrNotFound) {
 				return presenter.NotFound(c, "resource not found")
@@ -183,14 +202,6 @@ func (h *Handler) handleResource(c echo.Context) error {
 		return presenter.OK(c, value)
 	}
 
-	value, err := h.record.Get(ctx, uri.String())
-	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			return presenter.NotFound(c, "resource not found")
-		}
-		return presenter.InternalError(c, err)
-	}
-	return presenter.OK(c, value)
 }
 
 func (h *Handler) handleQuery(c echo.Context) error {

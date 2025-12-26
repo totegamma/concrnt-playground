@@ -45,11 +45,6 @@ func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument
 	createdAt := doc.CreatedAt
 	documentID := cdid.New(hash10, createdAt).String()
 
-	valueString, err := json.Marshal(doc.Value)
-	if err != nil {
-		return err
-	}
-
 	owner := doc.Author
 	if doc.Owner != nil {
 		owner = *doc.Owner
@@ -57,7 +52,6 @@ func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument
 
 	record := models.Record{
 		DocumentID: documentID,
-		Value:      string(valueString),
 		Owner:      owner,
 		Schema:     doc.Schema,
 		CDate:      time.Now(),
@@ -248,19 +242,24 @@ func (r *RecordRepository) GetDocument(ctx context.Context, uri string) (*concrn
 	return &doc, nil
 }
 
-func (r *RecordRepository) GetValue(ctx context.Context, uri string) (any, error) {
-	record, err := getRecordByURI(ctx, r.db, uri)
+func (r *RecordRepository) GetSignedDocument(ctx context.Context, uri string) (*concrnt.SignedDocument, error) {
+	commit, err := getCommitByURI(ctx, r.db, uri)
 	if err != nil {
 		return nil, err
 	}
 
-	var value any
-	err = json.Unmarshal([]byte(record.Value), &value)
+	var proof concrnt.Proof
+	err = json.Unmarshal([]byte(commit.Proof), &proof)
 	if err != nil {
 		return nil, err
 	}
 
-	return value, nil
+	sd := concrnt.SignedDocument{
+		Document: commit.Document,
+		Proof:    proof,
+	}
+
+	return &sd, nil
 }
 
 func (r *RecordRepository) Delete(ctx context.Context, uri string) error {
