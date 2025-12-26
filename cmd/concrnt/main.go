@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
+	echomiddleware "github.com/labstack/echo/v4/middleware"
 
 	"github.com/totegamma/concrnt-playground/client"
 	"github.com/totegamma/concrnt-playground/internal/infra/config"
@@ -10,6 +10,7 @@ import (
 	"github.com/totegamma/concrnt-playground/internal/infra/gateway"
 	"github.com/totegamma/concrnt-playground/internal/infra/repository"
 	"github.com/totegamma/concrnt-playground/internal/present/rest"
+	"github.com/totegamma/concrnt-playground/internal/present/rest/middleware"
 	"github.com/totegamma/concrnt-playground/internal/service"
 	"github.com/totegamma/concrnt-playground/internal/usecase"
 )
@@ -40,6 +41,7 @@ func main() {
 
 	cl := client.New(conf.Server.GatewayAddr)
 	signal := service.NewSignalService(redis)
+	auth := service.NewAuthService(&globalConfig, cl)
 
 	recordRepo := repository.NewRecordRepository(db, signal)
 	recordUC := usecase.NewRecordUsecase(recordRepo)
@@ -54,10 +56,13 @@ func main() {
 	entityRepo := repository.NewEntityRepository(db, cl, globalConfig)
 	entityUC := usecase.NewEntityUsecase(entityRepo)
 
+	authMiddleware := middleware.NewAuthMiddleware(auth, globalConfig)
+
 	e := echo.New()
 	// e.Use(middleware.Logger())
-	e.Use(middleware.Recover())
-	e.Use(middleware.CORS())
+	e.Use(echomiddleware.Recover())
+	e.Use(echomiddleware.CORS())
+	e.Use(authMiddleware.IdentifyIdentity)
 
 	handler := rest.NewHandler(globalConfig, recordUC, chunklineUC, serverUC, entityUC, signal)
 	handler.RegisterRoutes(e)

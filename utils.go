@@ -63,3 +63,7 @@ func IsCCID(keyID string) bool {
 func IsCSID(keyID string) bool {
 	return len(keyID) == 42 && keyID[:3] == "ccs" && !hasChar(keyID, '.')
 }
+
+func IsCKID(keyID string) bool {
+	return len(keyID) == 42 && keyID[:3] == "cck" && !hasChar(keyID, '.')
+}

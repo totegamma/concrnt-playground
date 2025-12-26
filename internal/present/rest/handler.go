@@ -106,7 +106,7 @@ func (h *Handler) handleWellKnown(c echo.Context) error {
 			},
 		},
 	}
-	return c.JSON(http.StatusOK, wellknown)
+	return presenter.OK(c, wellknown)
 }
 
 func (h *Handler) handleCommit(c echo.Context) error {

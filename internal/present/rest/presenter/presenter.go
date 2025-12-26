@@ -35,3 +35,8 @@ func InternalError(c echo.Context, err error) error {
 	fmt.Println("Internal error:", err)
 	return c.JSON(http.StatusInternalServerError, errorResponse{Error: err.Error()})
 }
+
+func Forbidden(c echo.Context, msg string) error {
+	fmt.Println("Forbidden:", msg)
+	return c.JSON(http.StatusForbidden, errorResponse{Error: msg})
+}
