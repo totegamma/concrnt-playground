@@ -182,17 +182,8 @@ func (h *Handler) handleResource(c echo.Context) error {
 			return presenter.InternalError(c, err)
 		}
 		return presenter.OK(c, value)
-	case "application/concrnt.signed-document+json":
-		value, err := h.record.GetSigned(ctx, uri.String())
-		if err != nil {
-			if errors.Is(err, domain.ErrNotFound) {
-				return presenter.NotFound(c, "resource not found")
-			}
-			return presenter.InternalError(c, err)
-		}
-		return presenter.OK(c, value)
 	default:
-		value, err := h.record.Get(ctx, uri.String())
+		value, err := h.record.GetSigned(ctx, uri.String())
 		if err != nil {
 			if errors.Is(err, domain.ErrNotFound) {
 				return presenter.NotFound(c, "resource not found")
