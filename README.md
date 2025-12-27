@@ -11,8 +11,9 @@
       - lambdaとかで動けるとすごい
 
 ## TODO
-- リソースの検証
-- subkeyの検証
+- commitの署名検証
+- ackの実装 (CIP未定義)
+- subkeyの実装・検証
 - deleteとか
 - association未テスト
 - policyの評価
@@ -31,5 +32,4 @@
   - v0-\>v1と同様に全部export-\>importする手法
     - good: 確実に引き継げる
     - bad: ユーザーの対応が必要
-
 
