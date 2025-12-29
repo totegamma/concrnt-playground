@@ -2,9 +2,12 @@ package usecase
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"net/url"
 	"time"
+
+	"github.com/pkg/errors"
 
 	"github.com/totegamma/concrnt-playground"
 	"github.com/totegamma/concrnt-playground/internal/utils"
@@ -43,6 +46,25 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 		return err
 	}
 
+	// validate
+	switch sd.Proof.Type {
+	case concrnt.ProofTypeEcrecover:
+		if sd.Proof.Signature == nil {
+			return errors.New("[sub] signature is required for ecrecover proof")
+		}
+		signatureBytes, err := hex.DecodeString(*sd.Proof.Signature)
+		if err != nil {
+			return errors.Wrap(err, "[sub] failed to decode signature")
+		}
+		err = concrnt.VerifySignature([]byte(sd.Document), signatureBytes, doc.Author)
+		if err != nil {
+			return errors.Wrap(err, "[sub] failed to verify signature")
+		}
+	default:
+		return errors.New("[sub] unsupported proof type: " + sd.Proof.Type)
+	}
+
+	// accept
 	switch doc.Schema {
 	// 特殊なスキーマの場合の処理
 	case schemas.DeleteURL:

@@ -4,6 +4,10 @@ import (
 	"time"
 )
 
+const (
+	ProofTypeEcrecover = "concrnt-ecrecover-direct"
+)
+
 type ConcrntEndpoint struct {
 	Template string    `json:"template"`
 	Method   string    `json:"method"`
