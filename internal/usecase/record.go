@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"encoding/json"
+	"net/url"
 	"time"
 
 	"github.com/totegamma/concrnt-playground"
@@ -14,6 +15,7 @@ import (
 type RecordRepository interface {
 	CreateRecord(ctx context.Context, sd concrnt.SignedDocument) error
 	CreateAssociation(ctx context.Context, sd concrnt.SignedDocument) error
+	CreateAck(ctx context.Context, sd concrnt.SignedDocument) error
 	Delete(ctx context.Context, sd concrnt.SignedDocument) error
 
 	GetDocument(ctx context.Context, uri string) (*concrnt.Document[any], error)
@@ -42,11 +44,22 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 	}
 
 	switch doc.Schema {
+	// 特殊なスキーマの場合の処理
 	case schemas.DeleteURL:
 		return uc.repo.Delete(ctx, sd)
 	default:
+		// Associateフィールドがあれば通常Recordではない
 		if doc.Associate != nil {
-			return uc.repo.CreateAssociation(ctx, sd)
+			path, err := url.Parse(*doc.Associate)
+			if err != nil {
+				return err
+			}
+			// uriがentityであればAck、そうでなければAssociation
+			if path.Path == "" {
+				return uc.repo.CreateAck(ctx, sd)
+			} else {
+				return uc.repo.CreateAssociation(ctx, sd)
+			}
 		} else {
 			return uc.repo.CreateRecord(ctx, sd)
 		}

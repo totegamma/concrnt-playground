@@ -288,7 +288,7 @@ func (r *RecordRepository) CreateAssociation(ctx context.Context, sd concrnt.Sig
 
 		// signal
 		err = r.signal.Publish(ctx, targetRK.URI, concrnt.Event{
-			Type: "created",
+			Type: "associated",
 			URI:  targetRK.URI,
 			SD:   &sd,
 		})
@@ -299,6 +299,10 @@ func (r *RecordRepository) CreateAssociation(ctx context.Context, sd concrnt.Sig
 
 		return nil
 	})
+}
+
+func (r *RecordRepository) CreateAck(ctx context.Context, sd concrnt.SignedDocument) error {
+	return fmt.Errorf("not implemented")
 }
 
 func (r *RecordRepository) GetDocument(ctx context.Context, uri string) (*concrnt.Document[any], error) {
