@@ -1,9 +1,19 @@
 package models
 
+import (
+	"time"
+)
+
 type Association struct {
-	TargetID int64     `json:"targetID" gorm:"primaryKey;type:text"`
+	TargetID int64     `json:"targetID" gorm:"type:text"`
 	Target   RecordKey `json:"-" gorm:"foreignKey:TargetID;references:ID;constraint:OnDelete:CASCADE;"`
-	ItemID   string    `json:"itemID" gorm:"primaryKey;type:text"`
-	Item     Record    `json:"-" gorm:"foreignKey:ItemID;references:DocumentID;constraint:OnDelete:CASCADE;"`
-	Unique   string    `json:"unique" gorm:"type:text;uniqueIndex:uniq_association"`
+
+	DocumentID string    `json:"id" gorm:"primaryKey;type:text"`
+	Document   CommitLog `json:"-" gorm:"foreignKey:DocumentID;references:ID;constraint:OnDelete:CASCADE;"`
+	Unique     string    `json:"unique" gorm:"type:text;uniqueIndex:uniq_association"`
+
+	Owner  string    `json:"owner" gorm:"type:text"`
+	Schema string    `json:"schema" gorm:"type:text"`
+	Value  string    `json:"value" gorm:"type:jsonb"`
+	CDate  time.Time `json:"cdate" gorm:"->;<-:create;type:timestamp with time zone;not null;default:clock_timestamp()"`
 }

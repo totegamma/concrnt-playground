@@ -2,18 +2,22 @@ package usecase
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/totegamma/concrnt-playground"
 	"github.com/totegamma/concrnt-playground/internal/utils"
+	"github.com/totegamma/concrnt-playground/schemas"
 )
 
 // RecordRepository defines storage operations for records/commits.
 type RecordRepository interface {
-	Create(ctx context.Context, sd concrnt.SignedDocument) error
+	CreateRecord(ctx context.Context, sd concrnt.SignedDocument) error
+	CreateAssociation(ctx context.Context, sd concrnt.SignedDocument) error
+	Delete(ctx context.Context, sd concrnt.SignedDocument) error
+
 	GetDocument(ctx context.Context, uri string) (*concrnt.Document[any], error)
 	GetSignedDocument(ctx context.Context, uri string) (*concrnt.SignedDocument, error)
-	Delete(ctx context.Context, uri string) error
 
 	GetAssociatedRecords(ctx context.Context, targetURI, schema, variant, author string) ([]concrnt.Document[any], error)
 	GetAssociatedRecordCountsBySchema(ctx context.Context, targetURI string) (map[string]int64, error)
@@ -30,7 +34,23 @@ func NewRecordUsecase(repo RecordRepository) *RecordUsecase {
 }
 
 func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) error {
-	return uc.repo.Create(ctx, sd)
+
+	var doc concrnt.Document[any]
+	err := json.Unmarshal([]byte(sd.Document), &doc)
+	if err != nil {
+		return err
+	}
+
+	switch doc.Schema {
+	case schemas.DeleteURL:
+		return uc.repo.Delete(ctx, sd)
+	default:
+		if doc.Associate != nil {
+			return uc.repo.CreateAssociation(ctx, sd)
+		} else {
+			return uc.repo.CreateRecord(ctx, sd)
+		}
+	}
 }
 
 func (uc *RecordUsecase) Get(ctx context.Context, uri string) (*concrnt.Document[any], error) {

@@ -31,7 +31,7 @@ func NewRecordRepository(db *gorm.DB, signal *service.SignalService) *RecordRepo
 	return &RecordRepository{db: db, signal: signal}
 }
 
-func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument) error {
+func (r *RecordRepository) CreateRecord(ctx context.Context, sd concrnt.SignedDocument) error {
 
 	var doc concrnt.Document[any]
 	err := json.Unmarshal([]byte(sd.Document), &doc)
@@ -148,6 +148,7 @@ func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument
 			}
 		}
 
+		// Distribute
 		if doc.MemberOf != nil {
 			for _, memberOfURI := range *doc.MemberOf {
 				joined, err := url.JoinPath(memberOfURI, documentID)
@@ -180,7 +181,7 @@ func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument
 						Href: &uri,
 					},
 				}
-				err = r.Create(ctx, sd)
+				err = r.CreateRecord(ctx, sd)
 				if err != nil {
 					fmt.Printf("Error creating memberOf item: %v\n", err)
 					continue
@@ -188,34 +189,107 @@ func (r *RecordRepository) Create(ctx context.Context, sd concrnt.SignedDocument
 			}
 		}
 
-		// CIP-6 Association
-		if doc.Associate != nil {
-
-			targetRK, err := GetRecordKeyByURI(ctx, tx, *doc.Associate)
-			if err != nil {
-				return err
-			}
-
-			uniqueKey := owner + *doc.Associate
-			if doc.AssociationVariant != nil {
-				uniqueKey += *doc.AssociationVariant
-			}
-			uniqueHash := xxh3.HashString(uniqueKey)
-
-			association := models.Association{
-				TargetID: targetRK.ID,
-				ItemID:   documentID,
-				Unique:   fmt.Sprintf("%x", uniqueHash),
-			}
-			if err := tx.Create(&association).Error; err != nil {
-				return err
-			}
-		}
-
 		// signal
 		err = r.signal.Publish(ctx, uri, concrnt.Event{
 			Type: "created",
 			URI:  uri,
+			SD:   &sd,
+		})
+		if err != nil {
+			fmt.Printf("Error publishing signal: %v\n", err)
+			return err
+		}
+
+		return nil
+	})
+}
+
+func (r *RecordRepository) CreateAssociation(ctx context.Context, sd concrnt.SignedDocument) error {
+
+	var doc concrnt.Document[any]
+	err := json.Unmarshal([]byte(sd.Document), &doc)
+	if err != nil {
+		return err
+	}
+
+	hash := concrnt.GetHash([]byte(sd.Document))
+	hash10 := [10]byte{}
+	copy(hash10[:], hash[:10])
+	createdAt := doc.CreatedAt
+	documentID := cdid.New(hash10, createdAt).String()
+
+	owner := doc.Author
+	if doc.Owner != nil {
+		owner = *doc.Owner
+	}
+
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+
+		proof, err := json.Marshal(sd.Proof)
+		if err != nil {
+			return err
+		}
+
+		commitLog := models.CommitLog{
+			ID:       documentID,
+			Document: sd.Document,
+			Proof:    string(proof),
+		}
+
+		if err := tx.Clauses(clause.OnConflict{
+			DoNothing: true,
+		}).Create(&commitLog).Error; err != nil {
+			return err
+		}
+
+		var owners []string
+		owners = append(owners, doc.Author)
+		if doc.Owner != nil && doc.Author != "" {
+			owners = append(owners, *doc.Owner)
+		}
+
+		for _, owner := range owners {
+			err := tx.Clauses(clause.OnConflict{
+				Columns:   []clause.Column{{Name: "commit_log_id"}, {Name: "owner"}},
+				DoNothing: true,
+			}).Create(&models.CommitOwner{
+				CommitLogID: commitLog.ID,
+				Owner:       owner,
+			}).Error
+			if err != nil {
+				return err
+			}
+		}
+
+		targetRK, err := GetRecordKeyByURI(ctx, tx, *doc.Associate)
+		if err != nil {
+			return err
+		}
+
+		uniqueKey := owner + *doc.Associate
+		if doc.AssociationVariant != nil {
+			uniqueKey += *doc.AssociationVariant
+		}
+		uniqueHash := xxh3.HashString(uniqueKey)
+
+		association := models.Association{
+			TargetID:   targetRK.ID,
+			DocumentID: documentID,
+			Unique:     fmt.Sprintf("%x", uniqueHash),
+
+			Owner:  owner,
+			Schema: doc.Schema,
+			Value:  sd.Document,
+			CDate:  time.Now(),
+		}
+		if err := tx.Create(&association).Error; err != nil {
+			return err
+		}
+
+		// signal
+		err = r.signal.Publish(ctx, targetRK.URI, concrnt.Event{
+			Type: "created",
+			URI:  targetRK.URI,
 			SD:   &sd,
 		})
 		if err != nil {
@@ -262,9 +336,15 @@ func (r *RecordRepository) GetSignedDocument(ctx context.Context, uri string) (*
 	return &sd, nil
 }
 
-func (r *RecordRepository) Delete(ctx context.Context, uri string) error {
+func (r *RecordRepository) Delete(ctx context.Context, sd concrnt.SignedDocument) error {
 
-	record, err := getRecordByURI(ctx, r.db, uri)
+	var doc concrnt.Document[schemas.Delete]
+	err := json.Unmarshal([]byte(sd.Document), &doc)
+	if err != nil {
+		return err
+	}
+
+	record, err := getRecordByURI(ctx, r.db, string(doc.Value))
 	if err != nil {
 		return err
 	}
@@ -423,7 +503,7 @@ func (r *RecordRepository) GetAssociatedRecords(
 	var documents []concrnt.Document[any]
 	for _, assoc := range associations {
 		var doc concrnt.Document[any]
-		err := json.Unmarshal([]byte(assoc.Item.Document.Document), &doc)
+		err := json.Unmarshal([]byte(assoc.Document.Document), &doc)
 		if err != nil {
 			return nil, err
 		}
