@@ -93,10 +93,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - target: ccgateway
-            image: ghcr.io/concrnt/ccgateway
-          - target: ccapi
-            image: ghcr.io/concrnt/ccapi
+          - target: concrnt
+            file: ./cmd/concrnt/Dockerfile
+            image: ghcr.io/totegamma/concrnt
 
     permissions:
       contents: read
