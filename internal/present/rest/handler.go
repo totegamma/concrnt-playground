@@ -22,6 +22,7 @@ import (
 
 type Handler struct {
 	config    domain.Config
+	info      concrnt.SoftwareInfo
 	record    *usecase.RecordUsecase
 	chunkline *usecase.ChunklineUsecase
 	server    *usecase.ServerUsecase
@@ -31,6 +32,7 @@ type Handler struct {
 
 func NewHandler(
 	config domain.Config,
+	info concrnt.SoftwareInfo,
 	record *usecase.RecordUsecase,
 	chunkline *usecase.ChunklineUsecase,
 	server *usecase.ServerUsecase,
@@ -39,6 +41,7 @@ func NewHandler(
 ) *Handler {
 	return &Handler{
 		config:    config,
+		info:      info,
 		record:    record,
 		chunkline: chunkline,
 		server:    server,
@@ -105,6 +108,7 @@ func (h *Handler) handleWellKnown(c echo.Context) error {
 				Method:   "GET",
 			},
 		},
+		SoftwareInfo: h.info,
 	}
 	return presenter.OK(c, wellknown)
 }

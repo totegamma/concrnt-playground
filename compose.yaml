@@ -34,7 +34,7 @@ services:
       interval: 5s
       retries: 20
     volumes:
-      - ./_composeData/db:/var/lib/postgresql
+      - postgres-data:/var/lib/postgresql
     ports:
       - "5432:5432"
     environment:
@@ -48,7 +48,7 @@ services:
     restart: always
     image: redis:8.4
     volumes:
-      - ./_composeData/redis:/data
+      - redis-data:/data
     healthcheck:
       test: "redis-cli ping"
       interval: 5s
@@ -70,6 +70,40 @@ services:
     networks:
       - internal
       - external
+
+  grafana:
+    image: grafana/grafana:latest
+    volumes:
+      - ./_dev/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml
+      - ./_dev/grafana-dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml
+      - ./_dev/dashboards:/etc/grafana/dashboards
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+    ports:
+      - "3000:3000"
+    networks:
+      - external
+      - internal
+
+  tempo:
+    image: grafana/tempo:latest
+    user: root
+    ports:
+      - "4318:4318"
+    command: [ "-config.file=/etc/tempo.yaml" ]
+    volumes:
+      - ./_dev/tempo.yaml:/etc/tempo.yaml
+      - tempo-data:/var/lib/tempo
+    networks:
+      - internal
+      - external
+
+volumes:
+  postgres-data:
+  redis-data:
+  tempo-data:
 
 networks:
   external:
