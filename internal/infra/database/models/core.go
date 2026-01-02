@@ -7,7 +7,7 @@ import (
 type CommitOwner struct {
 	CommitLogID string    `json:"commit_log_id" gorm:"type:text;primaryKey"`
 	CommitLog   CommitLog `json:"-" gorm:"constraint:OnDelete:CASCADE;"`
-	Owner       string    `json:"owner" gorm:"type:text;index;primaryKey"`
+	Owner       string    `json:"owner" gorm:"type:text;primaryKey"`
 	CDate       time.Time `json:"cdate" gorm:"->;<-:create;type:timestamp with time zone;not null;default:clock_timestamp()"`
 }
 
