@@ -47,7 +47,13 @@ func main() {
 	e.HideBanner = true
 	e.HidePort = true
 
-	e.Use(echomiddleware.Logger())
+	e.Use(echomiddleware.LoggerWithConfig(echomiddleware.LoggerConfig{
+		Skipper: func(c echo.Context) bool {
+			return c.Path() == "/metrics" || c.Path() == "/health" || c.Path() == ".well-known/concrnt"
+		},
+	}))
+
+
 	e.Use(echomiddleware.Recover())
 	e.Use(echomiddleware.CORS())
 
