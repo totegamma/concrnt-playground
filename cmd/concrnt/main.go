@@ -47,7 +47,7 @@ func main() {
 	e.HideBanner = true
 	e.HidePort = true
 
-	// e.Use(middleware.Logger())
+	e.Use(echomiddleware.Logger())
 	e.Use(echomiddleware.Recover())
 	e.Use(echomiddleware.CORS())
 
