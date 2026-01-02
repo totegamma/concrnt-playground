@@ -39,10 +39,13 @@ func NewRecordUsecase(repo RecordRepository) *RecordUsecase {
 }
 
 func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) error {
+	ctx, span := tracer.Start(ctx, "Usecase.Record.Commit")
+	defer span.End()
 
 	var doc concrnt.Document[any]
 	err := json.Unmarshal([]byte(sd.Document), &doc)
 	if err != nil {
+		span.RecordError(err)
 		return err
 	}
 
@@ -50,18 +53,24 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 	switch sd.Proof.Type {
 	case concrnt.ProofTypeEcrecover:
 		if sd.Proof.Signature == nil {
-			return errors.New("[sub] signature is required for ecrecover proof")
+			err := errors.New("[sub] signature is required for ecrecover proof")
+			span.RecordError(err)
+			return err
 		}
 		signatureBytes, err := hex.DecodeString(*sd.Proof.Signature)
 		if err != nil {
-			return errors.Wrap(err, "[sub] failed to decode signature")
+			span.RecordError(err)
+			return err
 		}
 		err = concrnt.VerifySignature([]byte(sd.Document), signatureBytes, doc.Author)
 		if err != nil {
-			return errors.Wrap(err, "[sub] failed to verify signature")
+			span.RecordError(err)
+			return err
 		}
 	default:
-		return errors.New("[sub] unsupported proof type: " + sd.Proof.Type)
+		err := errors.New("unsupported proof type: " + sd.Proof.Type)
+		span.RecordError(err)
+		return err
 	}
 
 	// accept
@@ -74,6 +83,7 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 		if doc.Associate != nil {
 			path, err := url.Parse(*doc.Associate)
 			if err != nil {
+				span.RecordError(err)
 				return err
 			}
 			// uriがentityであればAck、そうでなければAssociation

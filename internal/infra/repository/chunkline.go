@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"net/url"
 	"time"
 
 	"encoding/json"
@@ -26,14 +27,18 @@ func NewChunklineRepository(db *gorm.DB) *ChunklineRepository {
 }
 
 func (r *ChunklineRepository) GetChunklineManifest(ctx context.Context, uri string) (*chunkline.Manifest, error) {
+	ctx, span := tracer.Start(ctx, "Repository.Chunkline.GetChunklineManifest")
+	defer span.End()
 
 	recordKey, err := GetRecordKeyByURI(ctx, r.db, uri)
 	if err != nil {
+		span.RecordError(err)
 		return nil, err
 	}
 
 	ccid, key, err := concrnt.ParseCCURI(uri)
 	if err != nil {
+		span.RecordError(err)
 		return nil, err
 	}
 
@@ -51,19 +56,23 @@ func (r *ChunklineRepository) GetChunklineManifest(ctx context.Context, uri stri
 		firstChunk = firstCollectionMember.Record.CDate.Unix() / 600
 	}
 
+	safekey := url.PathEscape(key)
+
 	return &chunkline.Manifest{
 		Version:    "1.0",
 		ChunkSize:  600,
 		FirstChunk: firstChunk,
 		Descending: &chunkline.Endpoint{
-			Iterator: "/chunkline/" + ccid + "/" + key + "/{chunk}/itr",
-			Body:     "/chunkline/" + ccid + "/" + key + "/{chunk}/body",
+			Iterator: "/chunkline/" + ccid + "/" + safekey + "/{chunk}/itr",
+			Body:     "/chunkline/" + ccid + "/" + safekey + "/{chunk}/body",
 		},
-		Metadata: recordKey.Record.Value,
+		// Metadata: recordKey.Record.Value,
 	}, nil
 }
 
 func (r *ChunklineRepository) LookupLocalItrs(ctx context.Context, uris []string, chunkID int64) (map[string]int64, error) {
+	ctx, span := tracer.Start(ctx, "Repository.Chunkline.LookupLocalItrs")
+	defer span.End()
 
 	type TimelineRow struct {
 		URI      string    `gorm:"column:uri"`
@@ -84,6 +93,7 @@ func (r *ChunklineRepository) LookupLocalItrs(ctx context.Context, uris []string
 		Scan(&res).Error
 
 	if err != nil {
+		span.RecordError(err)
 		return nil, err
 	}
 
@@ -95,12 +105,15 @@ func (r *ChunklineRepository) LookupLocalItrs(ctx context.Context, uris []string
 }
 
 func (r *ChunklineRepository) LoadLocalBody(ctx context.Context, uri string, chunkID int64) ([]chunkline.BodyItem, error) {
+	ctx, span := tracer.Start(ctx, "Repository.Chunkline.LoadLocalBody")
+	defer span.End()
 
 	chunkDate := time.Unix((chunkID+1)*600, 0)
 	prevChunkDate := time.Unix((chunkID-1)*600, 0)
 
 	parentRecordKey, err := GetRecordKeyByURI(ctx, r.db, uri)
 	if err != nil {
+		span.RecordError(err)
 		return nil, err
 	}
 
@@ -112,8 +125,10 @@ func (r *ChunklineRepository) LoadLocalBody(ctx context.Context, uri string, chu
 		Order("r.c_date DESC").
 		Limit(defaultChunkSize).
 		Preload("Record").
+		Preload("Record.Document").
 		Find(&members).Error
 	if err != nil {
+		span.RecordError(err)
 		return nil, err
 	}
 
@@ -125,8 +140,10 @@ func (r *ChunklineRepository) LoadLocalBody(ctx context.Context, uri string, chu
 			Where("r.c_date > ?", prevChunkDate).
 			Order("r.c_date DESC").
 			Preload("Record").
+			Preload("Record.Document").
 			Find(&members).Error
 		if err != nil {
+			span.RecordError(err)
 			return nil, err
 		}
 	}
@@ -138,15 +155,17 @@ func (r *ChunklineRepository) LoadLocalBody(ctx context.Context, uri string, chu
 		href := member.URI
 		contentType := "application/concrnt.document+json"
 		if member.Record.Schema == schemas.ReferenceURL {
-			var itemURLValue schemas.Reference
-			err = json.Unmarshal([]byte(member.Record.Value), &itemURLValue)
+			var itemURLValue concrnt.Document[schemas.Reference]
+			err = json.Unmarshal([]byte(member.Record.Document.Document), &itemURLValue)
 			if err == nil {
-				if itemURLValue.Href != "" {
-					href = itemURLValue.Href
+				if itemURLValue.Value.Href != "" {
+					href = itemURLValue.Value.Href
 				}
-				if itemURLValue.ContentType != "" {
-					contentType = itemURLValue.ContentType
+				if itemURLValue.Value.ContentType != "" {
+					contentType = itemURLValue.Value.ContentType
 				}
+			} else {
+				span.RecordError(err)
 			}
 		}
 

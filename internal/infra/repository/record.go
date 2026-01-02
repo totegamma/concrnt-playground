@@ -32,10 +32,13 @@ func NewRecordRepository(db *gorm.DB, signal *service.SignalService) *RecordRepo
 }
 
 func (r *RecordRepository) CreateRecord(ctx context.Context, sd concrnt.SignedDocument) error {
+	ctx, span := tracer.Start(ctx, "Repository.Record.CreateRecord")
+	defer span.End()
 
 	var doc concrnt.Document[any]
 	err := json.Unmarshal([]byte(sd.Document), &doc)
 	if err != nil {
+		span.RecordError(err)
 		return err
 	}
 
@@ -61,6 +64,7 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, sd concrnt.SignedDo
 
 		proof, err := json.Marshal(sd.Proof)
 		if err != nil {
+			span.RecordError(err)
 			return err
 		}
 
@@ -73,6 +77,7 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, sd concrnt.SignedDo
 		if err := tx.Clauses(clause.OnConflict{
 			DoNothing: true,
 		}).Create(&commitLog).Error; err != nil {
+			span.RecordError(err)
 			return err
 		}
 
@@ -91,6 +96,7 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, sd concrnt.SignedDo
 				Owner:       owner,
 			}).Error
 			if err != nil {
+				span.RecordError(err)
 				return err
 			}
 		}
@@ -98,6 +104,7 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, sd concrnt.SignedDo
 		if err := tx.Clauses(clause.OnConflict{
 			DoNothing: true,
 		}).Create(&record).Error; err != nil {
+			span.RecordError(err)
 			return err
 		}
 
@@ -112,19 +119,26 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, sd concrnt.SignedDo
 			Where("uri = ?", concrnt.ComposeCCURI(owner, key)).
 			Take(&oldRecordKey).Error
 		if err != nil && err != gorm.ErrRecordNotFound {
+			span.RecordError(err)
 			return err
 		}
 
 		// ParentのRecordKeyを探す
 		parentRK, err := getOrCreateParentRecordKey(ctx, tx, concrnt.ComposeCCURI(owner, key))
 		if err != nil {
+			span.RecordError(err)
 			return err
+		}
+
+		var pid *int64
+		if parentRK != nil {
+			pid = &parentRK.ID
 		}
 
 		// RecordKeyを作る
 		rk := models.RecordKey{
 			URI:      uri,
-			ParentID: &parentRK.ID,
+			ParentID: pid,
 			RecordID: &documentID,
 		}
 
@@ -133,6 +147,7 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, sd concrnt.SignedDo
 			DoUpdates: clause.Assignments(map[string]any{"record_id": documentID}),
 		}).Create(&rk).Error
 		if err != nil {
+			span.RecordError(err)
 			return err
 		}
 
@@ -141,9 +156,11 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, sd concrnt.SignedDo
 			if err := tx.Model(&models.CommitLog{}).
 				Where("id = ?", oldRecordKey.RecordID).
 				Update("gc_candidate", true).Error; err != nil {
+				span.RecordError(err)
 				return err
 			}
 			if err := tx.Delete(&models.Record{}, "document_id = ?", oldRecordKey.RecordID).Error; err != nil {
+				span.RecordError(err)
 				return err
 			}
 		}
@@ -153,10 +170,12 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, sd concrnt.SignedDo
 			for _, memberOfURI := range *doc.MemberOf {
 				joined, err := url.JoinPath(memberOfURI, documentID)
 				if err != nil {
+					span.RecordError(err)
 					return err
 				}
 				parsed, err := url.Parse(joined)
 				if err != nil {
+					span.RecordError(err)
 					return err
 				}
 				path := strings.TrimPrefix(parsed.Path, "/")
@@ -172,6 +191,7 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, sd concrnt.SignedDo
 				}
 				docBytes, err := json.Marshal(document)
 				if err != nil {
+					span.RecordError(err)
 					return err
 				}
 				sd := concrnt.SignedDocument{
@@ -197,6 +217,7 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, sd concrnt.SignedDo
 		})
 		if err != nil {
 			fmt.Printf("Error publishing signal: %v\n", err)
+			span.RecordError(err)
 			return err
 		}
 
@@ -205,10 +226,13 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, sd concrnt.SignedDo
 }
 
 func (r *RecordRepository) CreateAssociation(ctx context.Context, sd concrnt.SignedDocument) error {
+	ctx, span := tracer.Start(ctx, "Repository.Record.CreateAssociation")
+	defer span.End()
 
 	var doc concrnt.Document[any]
 	err := json.Unmarshal([]byte(sd.Document), &doc)
 	if err != nil {
+		span.RecordError(err)
 		return err
 	}
 
@@ -227,6 +251,7 @@ func (r *RecordRepository) CreateAssociation(ctx context.Context, sd concrnt.Sig
 
 		proof, err := json.Marshal(sd.Proof)
 		if err != nil {
+			span.RecordError(err)
 			return err
 		}
 
@@ -239,6 +264,7 @@ func (r *RecordRepository) CreateAssociation(ctx context.Context, sd concrnt.Sig
 		if err := tx.Clauses(clause.OnConflict{
 			DoNothing: true,
 		}).Create(&commitLog).Error; err != nil {
+			span.RecordError(err)
 			return err
 		}
 
@@ -257,12 +283,14 @@ func (r *RecordRepository) CreateAssociation(ctx context.Context, sd concrnt.Sig
 				Owner:       owner,
 			}).Error
 			if err != nil {
+				span.RecordError(err)
 				return err
 			}
 		}
 
 		targetRK, err := GetRecordKeyByURI(ctx, tx, *doc.Associate)
 		if err != nil {
+			span.RecordError(err)
 			return err
 		}
 
@@ -283,6 +311,7 @@ func (r *RecordRepository) CreateAssociation(ctx context.Context, sd concrnt.Sig
 			CDate:  time.Now(),
 		}
 		if err := tx.Create(&association).Error; err != nil {
+			span.RecordError(err)
 			return err
 		}
 
@@ -294,6 +323,7 @@ func (r *RecordRepository) CreateAssociation(ctx context.Context, sd concrnt.Sig
 		})
 		if err != nil {
 			fmt.Printf("Error publishing signal: %v\n", err)
+			span.RecordError(err)
 			return err
 		}
 
@@ -306,14 +336,19 @@ func (r *RecordRepository) CreateAck(ctx context.Context, sd concrnt.SignedDocum
 }
 
 func (r *RecordRepository) GetDocument(ctx context.Context, uri string) (*concrnt.Document[any], error) {
+	ctx, span := tracer.Start(ctx, "Repository.Record.GetDocument")
+	defer span.End()
+
 	commit, err := getCommitByURI(ctx, r.db, uri)
 	if err != nil {
+		span.RecordError(err)
 		return nil, err
 	}
 
 	var doc concrnt.Document[any]
 	err = json.Unmarshal([]byte(commit.Document), &doc)
 	if err != nil {
+		span.RecordError(err)
 		return nil, err
 	}
 
@@ -321,14 +356,19 @@ func (r *RecordRepository) GetDocument(ctx context.Context, uri string) (*concrn
 }
 
 func (r *RecordRepository) GetSignedDocument(ctx context.Context, uri string) (*concrnt.SignedDocument, error) {
+	ctx, span := tracer.Start(ctx, "Repository.Record.GetSignedDocument")
+	defer span.End()
+
 	commit, err := getCommitByURI(ctx, r.db, uri)
 	if err != nil {
+		span.RecordError(err)
 		return nil, err
 	}
 
 	var proof concrnt.Proof
 	err = json.Unmarshal([]byte(commit.Proof), &proof)
 	if err != nil {
+		span.RecordError(err)
 		return nil, err
 	}
 
@@ -341,15 +381,19 @@ func (r *RecordRepository) GetSignedDocument(ctx context.Context, uri string) (*
 }
 
 func (r *RecordRepository) Delete(ctx context.Context, sd concrnt.SignedDocument) error {
+	ctx, span := tracer.Start(ctx, "Repository.Record.Delete")
+	defer span.End()
 
 	var doc concrnt.Document[schemas.Delete]
 	err := json.Unmarshal([]byte(sd.Document), &doc)
 	if err != nil {
+		span.RecordError(err)
 		return err
 	}
 
 	record, err := getRecordByURI(ctx, r.db, string(doc.Value))
 	if err != nil {
+		span.RecordError(err)
 		return err
 	}
 
@@ -357,6 +401,7 @@ func (r *RecordRepository) Delete(ctx context.Context, sd concrnt.SignedDocument
 
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Delete(&models.CommitLog{}, "id = ?", id).Error; err != nil {
+			span.RecordError(err)
 			return err
 		}
 		return nil
@@ -364,9 +409,12 @@ func (r *RecordRepository) Delete(ctx context.Context, sd concrnt.SignedDocument
 }
 
 func getCommitByURI(ctx context.Context, db *gorm.DB, uri string) (*models.CommitLog, error) {
+	ctx, span := tracer.Start(ctx, "Repository.Record.getCommitByURI")
+	defer span.End()
 
 	_, key, err := concrnt.ParseCCURI(uri)
 	if err != nil {
+		span.RecordError(err)
 		return nil, err
 	}
 
@@ -391,12 +439,17 @@ func getCommitByURI(ctx context.Context, db *gorm.DB, uri string) (*models.Commi
 }
 
 func getOrCreateParentRecordKey(ctx context.Context, db *gorm.DB, uri string) (*models.RecordKey, error) {
+	ctx, span := tracer.Start(ctx, "Repository.Record.getOrCreateParentRecordKey")
+	defer span.End()
+
 	parentURI, err := url.JoinPath(uri, "..")
 	if err != nil {
+		span.RecordError(err)
 		return nil, err
 	}
 	parsed, err := url.Parse(parentURI)
 	if err != nil {
+		span.RecordError(err)
 		return nil, err
 	}
 	if parsed.Path == "/" {
@@ -409,23 +462,31 @@ func getOrCreateParentRecordKey(ctx context.Context, db *gorm.DB, uri string) (*
 
 			parentID, err := getOrCreateParentRecordKey(ctx, db, parentURI)
 			if err != nil {
+				span.RecordError(err)
 				return nil, err
+			}
+
+			var pid *int64
+			if parentID != nil {
+				pid = &parentID.ID
 			}
 
 			newRecordKey := models.RecordKey{
 				URI:      parentURI,
 				RecordID: nil,
-				ParentID: &parentID.ID,
+				ParentID: pid,
 			}
 
 			err = db.WithContext(ctx).Create(&newRecordKey).Error
 			if err != nil {
+				span.RecordError(err)
 				return nil, err
 			}
 
 			return &newRecordKey, nil
 
 		} else {
+			span.RecordError(err)
 			return nil, err
 		}
 	}
@@ -434,8 +495,12 @@ func getOrCreateParentRecordKey(ctx context.Context, db *gorm.DB, uri string) (*
 }
 
 func getRecordByURI(ctx context.Context, db *gorm.DB, uri string) (*models.Record, error) {
+	ctx, span := tracer.Start(ctx, "Repository.Record.getRecordByURI")
+	defer span.End()
+
 	_, key, err := concrnt.ParseCCURI(uri)
 	if err != nil {
+		span.RecordError(err)
 		return nil, err
 	}
 
@@ -459,12 +524,15 @@ func getRecordByURI(ctx context.Context, db *gorm.DB, uri string) (*models.Recor
 }
 
 func GetRecordKeyByURI(ctx context.Context, db *gorm.DB, uri string) (*models.RecordKey, error) {
+	ctx, span := tracer.Start(ctx, "Repository.Record.GetRecordKeyByURI")
+	defer span.End()
 
 	var recordKey models.RecordKey
 	err := db.WithContext(ctx).
 		Where("uri = ?", uri).
 		Take(&recordKey).Error
 	if err != nil {
+		span.RecordError(err)
 		return nil, domain.NotFoundError{Resource: "record key"}
 	}
 
@@ -475,9 +543,12 @@ func (r *RecordRepository) GetAssociatedRecords(
 	ctx context.Context,
 	targetURI, schema, variant, author string,
 ) ([]concrnt.Document[any], error) {
+	ctx, span := tracer.Start(ctx, "Repository.Record.GetAssociatedRecords")
+	defer span.End()
 
 	targetRK, err := GetRecordKeyByURI(ctx, r.db, targetURI)
 	if err != nil {
+		span.RecordError(err)
 		return nil, err
 	}
 
@@ -509,6 +580,7 @@ func (r *RecordRepository) GetAssociatedRecords(
 		var doc concrnt.Document[any]
 		err := json.Unmarshal([]byte(assoc.Document.Document), &doc)
 		if err != nil {
+			span.RecordError(err)
 			return nil, err
 		}
 		documents = append(documents, doc)
@@ -518,9 +590,12 @@ func (r *RecordRepository) GetAssociatedRecords(
 }
 
 func (r *RecordRepository) GetAssociatedRecordCountsBySchema(ctx context.Context, targetURI string) (map[string]int64, error) {
+	ctx, span := tracer.Start(ctx, "Repository.Record.GetAssociatedRecordCountsBySchema")
+	defer span.End()
 
 	targetRK, err := GetRecordKeyByURI(ctx, r.db, targetURI)
 	if err != nil {
+		span.RecordError(err)
 		return nil, err
 	}
 
@@ -539,6 +614,7 @@ func (r *RecordRepository) GetAssociatedRecordCountsBySchema(ctx context.Context
 		Scan(&counts).Error
 
 	if err != nil {
+		span.RecordError(err)
 		return nil, err
 	}
 
@@ -552,9 +628,12 @@ func (r *RecordRepository) GetAssociatedRecordCountsBySchema(ctx context.Context
 }
 
 func (r *RecordRepository) GetAssociatedRecordCountsByVariant(ctx context.Context, targetURI, schema string) (*utils.OrderedKVMap[int64], error) {
+	ctx, span := tracer.Start(ctx, "Repository.Record.GetAssociatedRecordCountsByVariant")
+	defer span.End()
 
 	targetRK, err := GetRecordKeyByURI(ctx, r.db, targetURI)
 	if err != nil {
+		span.RecordError(err)
 		return nil, err
 	}
 
@@ -574,6 +653,7 @@ func (r *RecordRepository) GetAssociatedRecordCountsByVariant(ctx context.Contex
 		Order("min_c_date ASC").
 		Scan(&counts).Error
 	if err != nil {
+		span.RecordError(err)
 		return nil, err
 	}
 
@@ -595,6 +675,9 @@ func (r *RecordRepository) Query(
 	limit int,
 	order string,
 ) ([]concrnt.Document[any], error) {
+	ctx, span := tracer.Start(ctx, "Repository.Record.Query")
+	defer span.End()
+
 	var records []models.Record
 
 	query := r.db.WithContext(ctx).
@@ -619,6 +702,7 @@ func (r *RecordRepository) Query(
 	}
 
 	if err := query.Limit(limit).Preload("Document").Find(&records).Error; err != nil {
+		span.RecordError(err)
 		return nil, err
 	}
 
@@ -626,6 +710,7 @@ func (r *RecordRepository) Query(
 	for _, record := range records {
 		var doc concrnt.Document[any]
 		if err := json.Unmarshal([]byte(record.Document.Document), &doc); err != nil {
+			span.RecordError(err)
 			return nil, err
 		}
 		documents = append(documents, doc)
