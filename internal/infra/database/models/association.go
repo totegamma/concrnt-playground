@@ -10,7 +10,7 @@ type Association struct {
 
 	DocumentID string    `json:"id" gorm:"primaryKey;type:text"`
 	Document   CommitLog `json:"-" gorm:"foreignKey:DocumentID;references:ID;constraint:OnDelete:CASCADE;"`
-	Unique     string    `json:"unique" gorm:"type:text;uniqueIndex:uniq_association"`
+	Unique     string    `json:"unique" gorm:"type:text;unique"`
 
 	Owner  string    `json:"owner" gorm:"type:text"`
 	Schema string    `json:"schema" gorm:"type:text"`
