@@ -27,7 +27,7 @@ type RecordRepository interface {
 	GetAssociatedRecords(ctx context.Context, targetURI, schema, variant, author string) ([]concrnt.Document[any], error)
 	GetAssociatedRecordCountsBySchema(ctx context.Context, targetURI string) (map[string]int64, error)
 	GetAssociatedRecordCountsByVariant(ctx context.Context, targetURI, schema string) (*utils.OrderedKVMap[int64], error)
-	Query(ctx context.Context, prefix, schema string, since, until *time.Time, limit int, order string) ([]concrnt.Document[any], error)
+	Query(ctx context.Context, prefix, schema string, since, until *time.Time, limit int, order string) (map[string]concrnt.Document[any], error)
 }
 
 type RecordUsecase struct {
@@ -124,6 +124,6 @@ func (uc *RecordUsecase) Query(
 	since, until *time.Time,
 	limit int,
 	order string,
-) ([]concrnt.Document[any], error) {
+) (map[string]concrnt.Document[any], error) {
 	return uc.repo.Query(ctx, prefix, schema, since, until, limit, order)
 }

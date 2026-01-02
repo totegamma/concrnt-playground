@@ -674,46 +674,46 @@ func (r *RecordRepository) Query(
 	since, until *time.Time,
 	limit int,
 	order string,
-) ([]concrnt.Document[any], error) {
+) (map[string]concrnt.Document[any], error) {
 	ctx, span := tracer.Start(ctx, "Repository.Record.Query")
 	defer span.End()
 
-	var records []models.Record
+	var rks []models.RecordKey
 
 	query := r.db.WithContext(ctx).
-		Model(&models.Record{}).
-		Joins("JOIN record_keys rk ON rk.record_id = records.document_id").
-		Where("rk.uri LIKE ?", prefix+"%")
+		Model(&models.RecordKey{}).
+		Joins("JOIN records r ON r.document_id = record_keys.record_id").
+		Where("uri LIKE ?", prefix+"%")
 
 	if schema != "" {
-		query = query.Where("records.schema = ?", schema)
+		query = query.Where("r.schema = ?", schema)
 	}
 	if since != nil {
-		query = query.Where("records.c_date >= ?", *since)
+		query = query.Where("r.c_date >= ?", *since)
 	}
 	if until != nil {
-		query = query.Where("records.c_date <= ?", *until)
+		query = query.Where("r.c_date <= ?", *until)
 	}
 
 	if order == "desc" {
-		query = query.Order("records.c_date DESC")
+		query = query.Order("r.c_date DESC")
 	} else {
-		query = query.Order("records.c_date ASC")
+		query = query.Order("r.c_date ASC")
 	}
 
-	if err := query.Limit(limit).Preload("Document").Find(&records).Error; err != nil {
+	if err := query.Limit(limit).Preload("Record.Document").Find(&rks).Error; err != nil {
 		span.RecordError(err)
 		return nil, err
 	}
 
-	documents := make([]concrnt.Document[any], 0, len(records))
-	for _, record := range records {
+	documents := make(map[string]concrnt.Document[any])
+	for _, rk := range rks {
 		var doc concrnt.Document[any]
-		if err := json.Unmarshal([]byte(record.Document.Document), &doc); err != nil {
+		if err := json.Unmarshal([]byte(rk.Record.Document.Document), &doc); err != nil {
 			span.RecordError(err)
 			return nil, err
 		}
-		documents = append(documents, doc)
+		documents[rk.URI] = doc
 	}
 
 	return documents, nil
