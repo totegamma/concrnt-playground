@@ -53,7 +53,6 @@ func main() {
 		},
 	}))
 
-
 	e.Use(echomiddleware.Recover())
 	e.Use(echomiddleware.CORS())
 

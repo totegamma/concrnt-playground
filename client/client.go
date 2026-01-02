@@ -123,12 +123,24 @@ func (c *Client) HttpRequest(ctx context.Context, method, resolver, path string,
 
 func (c *Client) HttpRequestText(ctx context.Context, method, resolver, path string) (string, error) {
 
-	domain, err := c.resolveResolver(ctx, resolver)
-	if err != nil {
-		return "", fmt.Errorf("failed to resolve resolver: %v", err)
+	if resolver == "" || resolver == c.defaultResolver {
+		resolver = c.defaultResolver
+		fmt.Println("defaultResolver:", c.defaultResolver)
+		fmt.Println("Using default resolver:", resolver)
+	} else {
+		domain, err := c.resolveResolver(ctx, resolver)
+		if err != nil {
+			return "", fmt.Errorf("failed to resolve resolver: %v", err)
+		}
+		resolver = domain
+		fmt.Println("Resolved resolver to domain:", resolver)
 	}
 
-	url := "https://" + domain + path
+	if resolver == "" {
+		return "", fmt.Errorf("resolver cannot be empty")
+	}
+
+	url := "https://" + resolver + path
 	fmt.Printf("Making request to URL: %s\n", url)
 	req, err := http.NewRequestWithContext(ctx, method, url, nil)
 	if err != nil {
