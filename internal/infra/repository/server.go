@@ -14,12 +14,17 @@ import (
 )
 
 type ServerRepository struct {
+	config *domain.Config
 	db     *gorm.DB
 	client *client.Client
 }
 
-func NewServerRepository(db *gorm.DB, cl *client.Client) *ServerRepository {
-	return &ServerRepository{db: db, client: cl}
+func NewServerRepository(config *domain.Config, db *gorm.DB, cl *client.Client) *ServerRepository {
+	return &ServerRepository{
+		config: config,
+		db:     db,
+		client: cl,
+	}
 }
 
 func (r *ServerRepository) Resolve(ctx context.Context, identifier, hint string) (domain.Server, error) {
@@ -42,7 +47,7 @@ func (r *ServerRepository) Resolve(ctx context.Context, identifier, hint string)
 	}
 
 	if hint == "" {
-		hint = identifier
+		return domain.Server{}, domain.ErrNotFound
 	}
 
 	wkc, err := r.client.GetServer(ctx, identifier, hint)

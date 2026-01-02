@@ -185,6 +185,10 @@ func (h *Handler) handleResource(c echo.Context) error {
 			return presenter.OK(c, entity)
 		}
 
+		if owner == h.config.CSID {
+			return c.Redirect(http.StatusSeeOther, "https://"+h.config.FQDN+"/.well-known/concrnt")
+		}
+
 		wkc, err := h.server.Resolve(ctx, owner, hint)
 		if err != nil {
 			return presenter.InternalError(c, err)

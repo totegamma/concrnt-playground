@@ -107,7 +107,7 @@ func main() {
 	chunklineGateway := gateway.NewChunklineGateway(cl)
 	chunklineUC := usecase.NewChunklineUsecase(chunklineRepo, chunklineGateway)
 
-	serverRepo := repository.NewServerRepository(db, cl)
+	serverRepo := repository.NewServerRepository(&globalConfig, db, cl)
 	serverUC := usecase.NewServerUsecase(serverRepo)
 
 	entityRepo := repository.NewEntityRepository(db, cl, globalConfig)
