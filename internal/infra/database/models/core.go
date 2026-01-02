@@ -22,7 +22,7 @@ type CommitLog struct {
 type RecordKey struct {
 	ID       int64   `json:"id" gorm:"primaryKey;autoIncrement"`
 	ParentID *int64  `json:"parentID" gorm:"index"`
-	URI      string  `json:"uri" gorm:"type:text;uniqueIndex"`
+	URI      string  `json:"uri" gorm:"type:text;index:record_key_uri,unique"`
 	RecordID *string `json:"recordID" gorm:"type:text"`
 	Record   Record  `json:"record" gorm:"foreignKey:RecordID;references:DocumentID;constraint:OnDelete:CASCADE;"`
 }
