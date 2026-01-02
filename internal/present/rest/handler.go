@@ -62,6 +62,24 @@ func (h *Handler) RegisterRoutes(e *echo.Echo) {
 	e.GET("/associations", h.handleAssociations)
 	e.GET("/association-counts", h.handleAssociationCounts)
 	e.GET("/realtime", h.handleRealtime)
+
+	e.GET("/health", func(c echo.Context) (err error) {
+		// ctx := c.Request().Context()
+
+		/*
+			err = sqlDB.Ping()
+			if err != nil {
+				return c.String(http.StatusInternalServerError, "db error")
+			}
+
+			err = rdb.Ping(ctx).Err()
+			if err != nil {
+				return c.String(http.StatusInternalServerError, "redis error")
+			}
+		*/
+
+		return c.String(http.StatusOK, "ok")
+	})
 }
 
 func (h *Handler) handleWellKnown(c echo.Context) error {
