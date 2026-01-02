@@ -49,7 +49,7 @@ func main() {
 
 	e.Use(echomiddleware.LoggerWithConfig(echomiddleware.LoggerConfig{
 		Skipper: func(c echo.Context) bool {
-			return c.Path() == "/metrics" || c.Path() == "/health" || c.Path() == ".well-known/concrnt"
+			return c.Path() == "/metrics" || c.Path() == "/health" || c.Path() == "/.well-known/concrnt"
 		},
 	}))
 
