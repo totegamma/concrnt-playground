@@ -1,6 +1,7 @@
 package rest
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -18,6 +19,7 @@ import (
 	"github.com/totegamma/concrnt-playground/internal/present/rest/presenter"
 	"github.com/totegamma/concrnt-playground/internal/service"
 	"github.com/totegamma/concrnt-playground/internal/usecase"
+	"github.com/totegamma/concrnt-playground/schemas"
 )
 
 type Handler struct {
@@ -184,7 +186,7 @@ func (h *Handler) handleResource(c echo.Context) error {
 		}
 
 		if owner == h.config.CSID {
-			return c.Redirect(http.StatusSeeOther, "https://"+h.config.FQDN+"/.well-known/concrnt")
+			return c.Redirect(http.StatusFound, "https://"+h.config.FQDN+"/.well-known/concrnt")
 		}
 
 		wkc, err := h.server.Resolve(ctx, owner, hint)
@@ -214,6 +216,18 @@ func (h *Handler) handleResource(c echo.Context) error {
 			}
 			return presenter.InternalError(c, err)
 		}
+
+		var doc concrnt.Document[schemas.Reference]
+		err = json.Unmarshal([]byte(value.Document), &doc)
+		if err != nil {
+			return presenter.OK(c, value)
+		}
+
+		if doc.Schema == schemas.ReferenceURL {
+			c.Response().Header().Set("Location", "/resource/"+url.PathEscape(doc.Value.Href))
+			return c.JSON(http.StatusFound, value)
+		}
+
 		return presenter.OK(c, value)
 	}
 
