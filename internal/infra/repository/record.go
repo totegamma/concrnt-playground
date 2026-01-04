@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"path"
 	"strings"
 	"time"
 
@@ -168,17 +169,13 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, sd concrnt.SignedDo
 		// Distribute
 		if doc.MemberOf != nil {
 			for _, memberOfURI := range *doc.MemberOf {
-				joined, err := url.JoinPath(memberOfURI, documentID)
+				memberOwner, key, err := concrnt.ParseCCURI(memberOfURI)
 				if err != nil {
+					fmt.Printf("Error parsing memberOf URI: %v\n", err)
 					span.RecordError(err)
-					return err
+					continue
 				}
-				parsed, err := url.Parse(joined)
-				if err != nil {
-					span.RecordError(err)
-					return err
-				}
-				path := strings.TrimPrefix(parsed.Path, "/")
+				path := path.Join(key, documentID)
 
 				document := concrnt.Document[schemas.Reference]{
 					Key: path,
@@ -186,6 +183,7 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, sd concrnt.SignedDo
 						Href: uri,
 					},
 					Author:    owner,
+					Owner:     &memberOwner,
 					Schema:    schemas.ReferenceURL,
 					CreatedAt: time.Now(),
 				}
