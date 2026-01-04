@@ -58,31 +58,37 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, sd concrnt.SignedDo
 		CDate:      time.Now(),
 	}
 
+	key := doc.Key
+	if strings.Contains(key, "{cdid}") {
+		key = strings.ReplaceAll(key, "{cdid}", documentID)
+	}
+	uri := concrnt.ComposeCCURI(owner, key)
+
+	proof, err := json.Marshal(sd.Proof)
+	if err != nil {
+		span.RecordError(err)
+		return nil, err
+	}
+
+	commitLog := models.CommitLog{
+		ID:       documentID,
+		Document: sd.Document,
+		Proof:    string(proof),
+	}
+
+	var owners []string
+	owners = append(owners, doc.Author)
+	if doc.Owner != nil && doc.Author != "" {
+		owners = append(owners, *doc.Owner)
+	}
+
 	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-
-		proof, err := json.Marshal(sd.Proof)
-		if err != nil {
-			span.RecordError(err)
-			return err
-		}
-
-		commitLog := models.CommitLog{
-			ID:       documentID,
-			Document: sd.Document,
-			Proof:    string(proof),
-		}
 
 		if err := tx.Clauses(clause.OnConflict{
 			DoNothing: true,
 		}).Create(&commitLog).Error; err != nil {
 			span.RecordError(err)
 			return err
-		}
-
-		var owners []string
-		owners = append(owners, doc.Author)
-		if doc.Owner != nil && doc.Author != "" {
-			owners = append(owners, *doc.Owner)
 		}
 
 		for _, owner := range owners {
@@ -105,12 +111,6 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, sd concrnt.SignedDo
 			span.RecordError(err)
 			return err
 		}
-
-		key := doc.Key
-		if strings.Contains(key, "{cdid}") {
-			key = strings.ReplaceAll(key, "{cdid}", documentID)
-		}
-		uri := concrnt.ComposeCCURI(owner, key)
 
 		var oldRecordKey models.RecordKey
 		err = tx.Clauses(clause.Locking{Strength: "UPDATE"}).
@@ -171,7 +171,7 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, sd concrnt.SignedDo
 	}
 
 	result := &domain.RecordCreationResult{
-		URI:   concrnt.ComposeCCURI(owner, doc.Key),
+		URI:   uri,
 		CDID:  documentID,
 		Owner: owner,
 	}

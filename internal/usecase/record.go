@@ -169,9 +169,19 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 					Href: &result.URI,
 				},
 			}
-			_, err = uc.repo.CreateRecord(ctx, sd)
+			distResult, err := uc.repo.CreateRecord(ctx, sd)
 			if err != nil {
 				fmt.Printf("Error creating memberOf item: %v\n", err)
+				continue
+			}
+			err = uc.signal.Publish(ctx, distResult.URI, concrnt.Event{
+				Type: "created",
+				URI:  distResult.URI,
+				SD:   &sd,
+			})
+			if err != nil {
+				fmt.Printf("Error publishing signal for memberOf item: %v\n", err)
+				span.RecordError(err)
 				continue
 			}
 		}
