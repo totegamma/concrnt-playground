@@ -16,26 +16,36 @@ func JsonPrint(tag string, v any) {
 	fmt.Printf("%s: %s\n", tag, string(b))
 }
 
-func ParseCCURI(escaped string) (string, string, error) {
+func ParseCCURIWithHint(escaped string) (string, string, string, error) {
+
 	uriString, err := url.QueryUnescape(escaped)
 	if err != nil {
-		return "", "", fmt.Errorf("invalid uri encoding")
+		return "", "", "", fmt.Errorf("invalid uri encoding")
 	}
 	uri, err := url.Parse(uriString)
 	if err != nil {
-		return "", "", fmt.Errorf("invalid uri")
+		return "", "", "", fmt.Errorf("invalid uri")
 	}
 
 	if uri.Scheme != "cc" {
-		return "", "", fmt.Errorf("unsupported uri scheme")
+		return "", "", "", fmt.Errorf("unsupported uri scheme")
 	}
 
-	owner := uri.Host
+	user := uri.User.String()
 	path := uri.Path
-
 	key := strings.TrimPrefix(path, "/")
 
-	return owner, key, nil
+	// return: owner, key , hint
+	if user == "" {
+		return uri.Host, key, "", nil
+	} else {
+		return user, key, uri.Host, nil
+	}
+}
+
+func ParseCCURI(escaped string) (string, string, error) {
+	owner, key, _, err := ParseCCURIWithHint(escaped)
+	return owner, key, err
 }
 
 func ComposeCCURI(owner, key string) string {

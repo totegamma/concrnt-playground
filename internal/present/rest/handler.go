@@ -169,9 +169,7 @@ func (h *Handler) handleResource(c echo.Context) error {
 		return presenter.BadRequestMessage(c, "unsupported uri scheme")
 	}
 
-	hint := c.QueryParam("hint")
-
-	owner, key, err := concrnt.ParseCCURI(uriString)
+	owner, key, hint, err := concrnt.ParseCCURIWithHint(uriString)
 	if err != nil {
 		return presenter.BadRequestMessage(c, "invalid uri")
 	}
