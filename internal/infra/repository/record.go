@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"path"
 	"strings"
 	"time"
 
@@ -18,21 +17,19 @@ import (
 	"github.com/totegamma/concrnt-playground/cdid"
 	"github.com/totegamma/concrnt-playground/internal/domain"
 	"github.com/totegamma/concrnt-playground/internal/infra/database/models"
-	"github.com/totegamma/concrnt-playground/internal/service"
 	"github.com/totegamma/concrnt-playground/internal/utils"
 	"github.com/totegamma/concrnt-playground/schemas"
 )
 
 type RecordRepository struct {
-	db     *gorm.DB
-	signal *service.SignalService
+	db *gorm.DB
 }
 
-func NewRecordRepository(db *gorm.DB, signal *service.SignalService) *RecordRepository {
-	return &RecordRepository{db: db, signal: signal}
+func NewRecordRepository(db *gorm.DB) *RecordRepository {
+	return &RecordRepository{db: db}
 }
 
-func (r *RecordRepository) CreateRecord(ctx context.Context, sd concrnt.SignedDocument) error {
+func (r *RecordRepository) CreateRecord(ctx context.Context, sd concrnt.SignedDocument) (*domain.RecordCreationResult, error) {
 	ctx, span := tracer.Start(ctx, "Repository.Record.CreateRecord")
 	defer span.End()
 
@@ -40,7 +37,7 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, sd concrnt.SignedDo
 	err := json.Unmarshal([]byte(sd.Document), &doc)
 	if err != nil {
 		span.RecordError(err)
-		return err
+		return nil, err
 	}
 
 	hash := concrnt.GetHash([]byte(sd.Document))
@@ -61,7 +58,7 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, sd concrnt.SignedDo
 		CDate:      time.Now(),
 	}
 
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 
 		proof, err := json.Marshal(sd.Proof)
 		if err != nil {
@@ -166,61 +163,21 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, sd concrnt.SignedDo
 			}
 		}
 
-		// Distribute
-		if doc.MemberOf != nil {
-			for _, memberOfURI := range *doc.MemberOf {
-				memberOwner, key, err := concrnt.ParseCCURI(memberOfURI)
-				if err != nil {
-					fmt.Printf("Error parsing memberOf URI: %v\n", err)
-					span.RecordError(err)
-					continue
-				}
-				path := path.Join(key, documentID)
-
-				document := concrnt.Document[schemas.Reference]{
-					Key: path,
-					Value: schemas.Reference{
-						Href: uri,
-					},
-					Author:    owner,
-					Owner:     &memberOwner,
-					Schema:    schemas.ReferenceURL,
-					CreatedAt: time.Now(),
-				}
-				docBytes, err := json.Marshal(document)
-				if err != nil {
-					span.RecordError(err)
-					return err
-				}
-				sd := concrnt.SignedDocument{
-					Document: string(docBytes),
-					Proof: concrnt.Proof{
-						Type: "document-reference",
-						Href: &uri,
-					},
-				}
-				err = r.CreateRecord(ctx, sd)
-				if err != nil {
-					fmt.Printf("Error creating memberOf item: %v\n", err)
-					continue
-				}
-			}
-		}
-
-		// signal
-		err = r.signal.Publish(ctx, uri, concrnt.Event{
-			Type: "created",
-			URI:  uri,
-			SD:   &sd,
-		})
-		if err != nil {
-			fmt.Printf("Error publishing signal: %v\n", err)
-			span.RecordError(err)
-			return err
-		}
-
 		return nil
 	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	result := &domain.RecordCreationResult{
+		URI:   concrnt.ComposeCCURI(owner, doc.Key),
+		CDID:  documentID,
+		Owner: owner,
+	}
+
+	return result, nil
+
 }
 
 func (r *RecordRepository) CreateAssociation(ctx context.Context, sd concrnt.SignedDocument) error {
@@ -309,18 +266,6 @@ func (r *RecordRepository) CreateAssociation(ctx context.Context, sd concrnt.Sig
 			CDate:  time.Now(),
 		}
 		if err := tx.Create(&association).Error; err != nil {
-			span.RecordError(err)
-			return err
-		}
-
-		// signal
-		err = r.signal.Publish(ctx, targetRK.URI, concrnt.Event{
-			Type: "associated",
-			URI:  targetRK.URI,
-			SD:   &sd,
-		})
-		if err != nil {
-			fmt.Printf("Error publishing signal: %v\n", err)
 			span.RecordError(err)
 			return err
 		}

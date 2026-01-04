@@ -105,8 +105,8 @@ func main() {
 	signal := service.NewSignalService(redis)
 	auth := service.NewAuthService(&globalConfig, cl)
 
-	recordRepo := repository.NewRecordRepository(db, signal)
-	recordUC := usecase.NewRecordUsecase(recordRepo)
+	recordRepo := repository.NewRecordRepository(db)
+	recordUC := usecase.NewRecordUsecase(recordRepo, signal)
 
 	chunklineRepo := repository.NewChunklineRepository(db)
 	chunklineGateway := gateway.NewChunklineGateway(cl)

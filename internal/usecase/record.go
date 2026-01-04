@@ -4,19 +4,23 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/url"
+	"path"
 	"time"
 
 	"github.com/pkg/errors"
 
 	"github.com/totegamma/concrnt-playground"
+	"github.com/totegamma/concrnt-playground/internal/domain"
+	"github.com/totegamma/concrnt-playground/internal/service"
 	"github.com/totegamma/concrnt-playground/internal/utils"
 	"github.com/totegamma/concrnt-playground/schemas"
 )
 
 // RecordRepository defines storage operations for records/commits.
 type RecordRepository interface {
-	CreateRecord(ctx context.Context, sd concrnt.SignedDocument) error
+	CreateRecord(ctx context.Context, sd concrnt.SignedDocument) (*domain.RecordCreationResult, error)
 	CreateAssociation(ctx context.Context, sd concrnt.SignedDocument) error
 	CreateAck(ctx context.Context, sd concrnt.SignedDocument) error
 	Delete(ctx context.Context, sd concrnt.SignedDocument) error
@@ -31,11 +35,12 @@ type RecordRepository interface {
 }
 
 type RecordUsecase struct {
-	repo RecordRepository
+	repo   RecordRepository
+	signal *service.SignalService
 }
 
-func NewRecordUsecase(repo RecordRepository) *RecordUsecase {
-	return &RecordUsecase{repo: repo}
+func NewRecordUsecase(repo RecordRepository, signal *service.SignalService) *RecordUsecase {
+	return &RecordUsecase{repo: repo, signal: signal}
 }
 
 func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) error {
@@ -73,11 +78,17 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 		return err
 	}
 
+	var result *domain.RecordCreationResult
+
 	// accept
 	switch doc.Schema {
 	// 特殊なスキーマの場合の処理
 	case schemas.DeleteURL:
-		return uc.repo.Delete(ctx, sd)
+		err := uc.repo.Delete(ctx, sd)
+		if err != nil {
+			span.RecordError(err)
+			return err
+		}
 	default:
 		// Associateフィールドがあれば通常Recordではない
 		if doc.Associate != nil {
@@ -88,14 +99,85 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 			}
 			// uriがentityであればAck、そうでなければAssociation
 			if path.Path == "" {
-				return uc.repo.CreateAck(ctx, sd)
+				err := uc.repo.CreateAck(ctx, sd)
+				if err != nil {
+					span.RecordError(err)
+					return err
+				}
 			} else {
-				return uc.repo.CreateAssociation(ctx, sd)
+				err := uc.repo.CreateAssociation(ctx, sd)
+				if err != nil {
+					span.RecordError(err)
+					return err
+				}
 			}
 		} else {
-			return uc.repo.CreateRecord(ctx, sd)
+			result, err = uc.repo.CreateRecord(ctx, sd)
+			if err != nil {
+				span.RecordError(err)
+				return err
+			}
+			// signal
+			err = uc.signal.Publish(ctx, result.URI, concrnt.Event{
+				Type: "created",
+				URI:  result.URI,
+				SD:   &sd,
+			})
+			if err != nil {
+				fmt.Printf("Error publishing signal: %v\n", err)
+				span.RecordError(err)
+				return err
+			}
+
 		}
 	}
+
+	if result == nil {
+		return nil
+	}
+
+	// Distribute
+	if doc.MemberOf != nil {
+		for _, memberOfURI := range *doc.MemberOf {
+			memberOwner, key, err := concrnt.ParseCCURI(memberOfURI)
+			if err != nil {
+				fmt.Printf("Error parsing memberOf URI: %v\n", err)
+				span.RecordError(err)
+				continue
+			}
+			path := path.Join(key, result.CDID)
+
+			document := concrnt.Document[schemas.Reference]{
+				Key: path,
+				Value: schemas.Reference{
+					Href: result.URI,
+				},
+				Author:    result.Owner,
+				Owner:     &memberOwner,
+				Schema:    schemas.ReferenceURL,
+				CreatedAt: time.Now(),
+			}
+			docBytes, err := json.Marshal(document)
+			if err != nil {
+				span.RecordError(err)
+				return err
+			}
+			sd := concrnt.SignedDocument{
+				Document: string(docBytes),
+				Proof: concrnt.Proof{
+					Type: "document-reference",
+					Href: &result.URI,
+				},
+			}
+			_, err = uc.repo.CreateRecord(ctx, sd)
+			if err != nil {
+				fmt.Printf("Error creating memberOf item: %v\n", err)
+				continue
+			}
+		}
+	}
+
+	return nil
 }
 
 func (uc *RecordUsecase) Get(ctx context.Context, uri string) (*concrnt.Document[any], error) {
