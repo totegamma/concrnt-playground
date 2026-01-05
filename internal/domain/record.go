@@ -25,9 +25,3 @@ type RecordKey struct {
 type ChunklineManifest struct {
 	Manifest chunkline.Manifest `json:"manifest"`
 }
-
-type RecordCreationResult struct {
-	URI   string `json:"uri"`
-	CDID  string `json:"cdid"`
-	Owner string `json:"owner"`
-}

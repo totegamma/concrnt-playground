@@ -68,8 +68,9 @@ type Proof struct {
 }
 
 type SignedDocument struct {
-	Document string `json:"document"`
-	Proof    Proof  `json:"proof"`
+	Document   string                    `json:"document"`
+	Proof      Proof                     `json:"proof"`
+	References map[string]SignedDocument `json:"references,omitempty"`
 }
 
 type Entity struct {
@@ -87,7 +88,7 @@ type RegisterRequest[T any] struct {
 }
 
 type Event struct {
-	Type string          `json:"type"`
-	URI  string          `json:"uri"`
-	SD   *SignedDocument `json:"signedDocument"`
+	Type       string                    `json:"type"`
+	URI        string                    `json:"uri"`
+	References map[string]SignedDocument `json:"documents,omitempty"`
 }

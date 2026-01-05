@@ -14,7 +14,6 @@ import (
 	"gorm.io/gorm/clause"
 
 	"github.com/totegamma/concrnt-playground"
-	"github.com/totegamma/concrnt-playground/cdid"
 	"github.com/totegamma/concrnt-playground/internal/domain"
 	"github.com/totegamma/concrnt-playground/internal/infra/database/models"
 	"github.com/totegamma/concrnt-playground/internal/utils"
@@ -29,7 +28,7 @@ func NewRecordRepository(db *gorm.DB) *RecordRepository {
 	return &RecordRepository{db: db}
 }
 
-func (r *RecordRepository) CreateRecord(ctx context.Context, sd concrnt.SignedDocument) (*domain.RecordCreationResult, error) {
+func (r *RecordRepository) CreateRecord(ctx context.Context, documentID string, sd concrnt.SignedDocument) (string, error) {
 	ctx, span := tracer.Start(ctx, "Repository.Record.CreateRecord")
 	defer span.End()
 
@@ -37,14 +36,8 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, sd concrnt.SignedDo
 	err := json.Unmarshal([]byte(sd.Document), &doc)
 	if err != nil {
 		span.RecordError(err)
-		return nil, err
+		return "", err
 	}
-
-	hash := concrnt.GetHash([]byte(sd.Document))
-	hash10 := [10]byte{}
-	copy(hash10[:], hash[:10])
-	createdAt := doc.CreatedAt
-	documentID := cdid.New(hash10, createdAt).String()
 
 	owner := doc.Author
 	if doc.Owner != nil {
@@ -67,7 +60,7 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, sd concrnt.SignedDo
 	proof, err := json.Marshal(sd.Proof)
 	if err != nil {
 		span.RecordError(err)
-		return nil, err
+		return "", err
 	}
 
 	commitLog := models.CommitLog{
@@ -167,20 +160,14 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, sd concrnt.SignedDo
 	})
 
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
-	result := &domain.RecordCreationResult{
-		URI:   uri,
-		CDID:  documentID,
-		Owner: owner,
-	}
-
-	return result, nil
+	return uri, nil
 
 }
 
-func (r *RecordRepository) CreateAssociation(ctx context.Context, sd concrnt.SignedDocument) error {
+func (r *RecordRepository) CreateAssociation(ctx context.Context, documentID string, sd concrnt.SignedDocument) (string, error) {
 	ctx, span := tracer.Start(ctx, "Repository.Record.CreateAssociation")
 	defer span.End()
 
@@ -188,45 +175,62 @@ func (r *RecordRepository) CreateAssociation(ctx context.Context, sd concrnt.Sig
 	err := json.Unmarshal([]byte(sd.Document), &doc)
 	if err != nil {
 		span.RecordError(err)
-		return err
+		return "", err
 	}
-
-	hash := concrnt.GetHash([]byte(sd.Document))
-	hash10 := [10]byte{}
-	copy(hash10[:], hash[:10])
-	createdAt := doc.CreatedAt
-	documentID := cdid.New(hash10, createdAt).String()
 
 	owner := doc.Author
 	if doc.Owner != nil {
 		owner = *doc.Owner
 	}
 
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	targetRK, err := GetRecordKeyByURI(ctx, r.db, *doc.Associate)
+	if err != nil {
+		span.RecordError(err)
+		return "", err
+	}
 
-		proof, err := json.Marshal(sd.Proof)
-		if err != nil {
-			span.RecordError(err)
-			return err
-		}
+	uniqueKey := owner + *doc.Associate
+	if doc.AssociationVariant != nil {
+		uniqueKey += *doc.AssociationVariant
+	}
+	uniqueHash := xxh3.HashString(uniqueKey)
 
-		commitLog := models.CommitLog{
-			ID:       documentID,
-			Document: sd.Document,
-			Proof:    string(proof),
-		}
+	association := models.Association{
+		TargetID:   targetRK.ID,
+		DocumentID: documentID,
+		Unique:     fmt.Sprintf("%x", uniqueHash),
+
+		Owner:  owner,
+		Schema: doc.Schema,
+		Value:  sd.Document,
+		CDate:  time.Now(),
+	}
+
+	proof, err := json.Marshal(sd.Proof)
+	if err != nil {
+		span.RecordError(err)
+		return "", err
+	}
+
+	commitLog := models.CommitLog{
+		ID:       documentID,
+		Document: sd.Document,
+		Proof:    string(proof),
+	}
+
+	var owners []string
+	owners = append(owners, doc.Author)
+	if doc.Owner != nil && doc.Author != "" {
+		owners = append(owners, *doc.Owner)
+	}
+
+	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 
 		if err := tx.Clauses(clause.OnConflict{
 			DoNothing: true,
 		}).Create(&commitLog).Error; err != nil {
 			span.RecordError(err)
 			return err
-		}
-
-		var owners []string
-		owners = append(owners, doc.Author)
-		if doc.Owner != nil && doc.Author != "" {
-			owners = append(owners, *doc.Owner)
 		}
 
 		for _, owner := range owners {
@@ -243,28 +247,6 @@ func (r *RecordRepository) CreateAssociation(ctx context.Context, sd concrnt.Sig
 			}
 		}
 
-		targetRK, err := GetRecordKeyByURI(ctx, tx, *doc.Associate)
-		if err != nil {
-			span.RecordError(err)
-			return err
-		}
-
-		uniqueKey := owner + *doc.Associate
-		if doc.AssociationVariant != nil {
-			uniqueKey += *doc.AssociationVariant
-		}
-		uniqueHash := xxh3.HashString(uniqueKey)
-
-		association := models.Association{
-			TargetID:   targetRK.ID,
-			DocumentID: documentID,
-			Unique:     fmt.Sprintf("%x", uniqueHash),
-
-			Owner:  owner,
-			Schema: doc.Schema,
-			Value:  sd.Document,
-			CDate:  time.Now(),
-		}
 		if err := tx.Create(&association).Error; err != nil {
 			span.RecordError(err)
 			return err
@@ -272,6 +254,8 @@ func (r *RecordRepository) CreateAssociation(ctx context.Context, sd concrnt.Sig
 
 		return nil
 	})
+
+	return *doc.Associate, err
 }
 
 func (r *RecordRepository) CreateAck(ctx context.Context, sd concrnt.SignedDocument) error {
@@ -323,7 +307,7 @@ func (r *RecordRepository) GetSignedDocument(ctx context.Context, uri string) (*
 	return &sd, nil
 }
 
-func (r *RecordRepository) Delete(ctx context.Context, sd concrnt.SignedDocument) error {
+func (r *RecordRepository) Delete(ctx context.Context, sd concrnt.SignedDocument) (string, error) {
 	ctx, span := tracer.Start(ctx, "Repository.Record.Delete")
 	defer span.End()
 
@@ -331,24 +315,31 @@ func (r *RecordRepository) Delete(ctx context.Context, sd concrnt.SignedDocument
 	err := json.Unmarshal([]byte(sd.Document), &doc)
 	if err != nil {
 		span.RecordError(err)
-		return err
+		return "", err
 	}
 
 	record, err := getRecordByURI(ctx, r.db, string(doc.Value))
 	if err != nil {
 		span.RecordError(err)
-		return err
+		return "", err
 	}
 
 	id := record.DocumentID
 
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Delete(&models.CommitLog{}, "id = ?", id).Error; err != nil {
 			span.RecordError(err)
 			return err
 		}
 		return nil
 	})
+
+	if err != nil {
+		span.RecordError(err)
+		return "", err
+	}
+
+	return string(doc.Value), nil
 }
 
 func getCommitByURI(ctx context.Context, db *gorm.DB, uri string) (*models.CommitLog, error) {
