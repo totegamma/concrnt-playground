@@ -65,6 +65,8 @@ func (h *Handler) RegisterRoutes(e *echo.Echo) {
 	e.GET("/association-counts", h.handleAssociationCounts)
 	e.GET("/realtime", h.handleRealtime)
 
+	e.GET("/internal/signal/subscriptions", h.handleCurrentSubs)
+
 	e.GET("/health", func(c echo.Context) (err error) {
 		// ctx := c.Request().Context()
 
@@ -424,6 +426,11 @@ func (h *Handler) handleAssociationCounts(c echo.Context) error {
 		return presenter.OK(c, counts)
 	}
 
+}
+
+func (h *Handler) handleCurrentSubs(c echo.Context) error {
+	subs := h.signal.GetCurrentSubscriptions()
+	return presenter.OK(c, subs)
 }
 
 var upgrader = websocket.Upgrader{

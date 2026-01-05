@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
+	"sync/atomic"
 
 	"github.com/redis/go-redis/v9"
 
@@ -11,12 +13,17 @@ import (
 )
 
 type SignalService struct {
-	rdb *redis.Client
+	rdb         *redis.Client
+	currentSubs map[int64][]string
+
+	mu sync.RWMutex
+	id atomic.Int64
 }
 
 func NewSignalService(redisClient *redis.Client) *SignalService {
 	return &SignalService{
-		rdb: redisClient,
+		rdb:         redisClient,
+		currentSubs: make(map[int64][]string),
 	}
 }
 
@@ -55,7 +62,7 @@ func (s *SignalService) Realtime(ctx context.Context, request <-chan []string, r
 
 			var subctx context.Context
 			subctx, cancel = context.WithCancel(ctx)
-			go s.Subscribe(subctx, patterns, events)
+			go s.subscribe(subctx, patterns, events)
 
 		case event := <-events:
 			response <- event
@@ -69,11 +76,28 @@ func (s *SignalService) Realtime(ctx context.Context, request <-chan []string, r
 	}
 }
 
-func (s *SignalService) Subscribe(ctx context.Context, patterns []string, event chan<- concrnt.Event) error {
+func (s *SignalService) subscribe(ctx context.Context, patterns []string, event chan<- concrnt.Event) error {
 
 	if len(patterns) == 0 {
 		return nil
 	}
+
+	id := func() int64 {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
+		id := s.id.Add(1)
+		s.currentSubs[id] = patterns
+
+		return id
+	}()
+
+	defer func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
+		delete(s.currentSubs, id)
+	}()
 
 	pubsub := s.rdb.PSubscribe(ctx, patterns...)
 	defer pubsub.Close()
@@ -94,4 +118,23 @@ func (s *SignalService) Subscribe(ctx context.Context, patterns []string, event 
 			event <- item
 		}
 	}
+}
+
+func (s *SignalService) GetCurrentSubscriptions() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	uniquePatterns := make(map[string]struct{})
+	for _, patterns := range s.currentSubs {
+		for _, pattern := range patterns {
+			uniquePatterns[pattern] = struct{}{}
+		}
+	}
+
+	patterns := make([]string, 0, len(uniquePatterns))
+	for pattern := range uniquePatterns {
+		patterns = append(patterns, pattern)
+	}
+
+	return patterns
 }
