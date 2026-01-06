@@ -12,7 +12,7 @@
 
 ## TODO
 - commitの署名検証
-- ackの実装 (CIP未定義)
+- ackの実装
 - subkeyの実装・検証
 - deleteとか
 - association未テスト
