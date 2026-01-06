@@ -7,12 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/concrnt/chunkline"
 	"github.com/patrickmn/go-cache"
 
 	"github.com/totegamma/concrnt-playground"
+	"github.com/totegamma/concrnt-playground/chunkline"
 	"github.com/totegamma/concrnt-playground/client"
-	"github.com/totegamma/concrnt-playground/internal/usecase"
 )
 
 type ChunklineGateway struct {
@@ -33,7 +32,7 @@ func NewChunklineGateway(cl *client.Client) *ChunklineGateway {
 	}
 }
 
-func (g *ChunklineGateway) QueryDescending(ctx context.Context, uris []string, until time.Time, limit int) ([]chunkline.BodyItem, error) {
+func (g *ChunklineGateway) QueryDescending(ctx context.Context, uris []string, until time.Time, limit int) ([]chunkline.BodyItemWithSource, error) {
 	return g.resolver.QueryDescending(ctx, uris, until, limit)
 }
 
@@ -162,5 +161,3 @@ func (r *resolver) LoadChunkBodies(ctx context.Context, query map[string]string)
 	return result, nil
 
 }
-
-var _ usecase.ChunklineGateway = (*ChunklineGateway)(nil)
