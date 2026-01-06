@@ -4,7 +4,6 @@ go 1.25.1
 
 require (
 	github.com/bradfitz/gomemcache v0.0.0-20250403215159-8d39553ac7cf
-	github.com/concrnt/chunkline v0.0.0-20251203232039-8352e56f50b3
 	github.com/cosmos/cosmos-sdk v0.50.7
 	github.com/ethereum/go-ethereum v1.14.5
 	github.com/go-yaml/yaml v2.1.0+incompatible
