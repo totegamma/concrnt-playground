@@ -8,8 +8,8 @@ import (
 	"encoding/json"
 	"gorm.io/gorm"
 
-	"github.com/concrnt/chunkline"
 	"github.com/totegamma/concrnt-playground"
+	"github.com/totegamma/concrnt-playground/chunkline"
 	"github.com/totegamma/concrnt-playground/internal/infra/database/models"
 	"github.com/totegamma/concrnt-playground/schemas"
 )

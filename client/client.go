@@ -275,7 +275,7 @@ func (c *Client) GetResource(ctx context.Context, uri string, accept string, opt
 
 	template := endpoint.Template
 
-	template = strings.ReplaceAll(template, "{ccid}", owner)
+	template = strings.ReplaceAll(template, "{owner}", owner)
 	template = strings.ReplaceAll(template, "{key}", key)
 	template = strings.ReplaceAll(template, "{uri}", url.QueryEscape(uri))
 	template = "https://" + info.Domain + template

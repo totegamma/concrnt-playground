@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/concrnt/chunkline"
+	"github.com/totegamma/concrnt-playground/chunkline"
 )
 
 type ChunklineUsecase struct {
@@ -22,7 +22,7 @@ type ChunklineRepository interface {
 
 // ChunklineGateway encapsulates external timeline resolution.
 type ChunklineGateway interface {
-	QueryDescending(ctx context.Context, uris []string, until time.Time, limit int) ([]chunkline.BodyItem, error)
+	QueryDescending(ctx context.Context, uris []string, until time.Time, limit int) ([]chunkline.BodyItemWithSource, error)
 }
 
 func NewChunklineUsecase(repo ChunklineRepository, gateway ChunklineGateway) *ChunklineUsecase {
@@ -44,7 +44,7 @@ func (uc *ChunklineUsecase) LoadLocalBody(ctx context.Context, uri string, chunk
 	return uc.repo.LoadLocalBody(ctx, uri, chunkID)
 }
 
-func (uc *ChunklineUsecase) GetRecent(ctx context.Context, uris []string, until time.Time, limit int) ([]chunkline.BodyItem, error) {
+func (uc *ChunklineUsecase) GetRecent(ctx context.Context, uris []string, until time.Time, limit int) ([]chunkline.BodyItemWithSource, error) {
 
 	if uc.gateway == nil {
 		return nil, fmt.Errorf("chunkline gateway not configured")
