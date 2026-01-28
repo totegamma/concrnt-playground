@@ -387,7 +387,8 @@ func getOrCreateParentRecordKey(ctx context.Context, db *gorm.DB, uri string) (*
 		span.RecordError(err)
 		return nil, err
 	}
-	if parsed.Path == "/" {
+
+	if parsed.Path == "" || parsed.Path == "/" {
 		return nil, nil
 	}
 
