@@ -189,7 +189,7 @@ func (r *RecordRepository) CreateAssociation(ctx context.Context, documentID str
 		return "", err
 	}
 
-	uniqueKey := owner + *doc.Associate
+	uniqueKey := owner + doc.Author + *doc.Associate
 	if doc.AssociationVariant != nil {
 		uniqueKey += *doc.AssociationVariant
 	}
@@ -200,10 +200,11 @@ func (r *RecordRepository) CreateAssociation(ctx context.Context, documentID str
 		DocumentID: documentID,
 		Unique:     fmt.Sprintf("%x", uniqueHash),
 
-		Owner:  owner,
-		Schema: doc.Schema,
-		Value:  sd.Document,
-		CDate:  time.Now(),
+		Owner:   owner,
+		Author:  doc.Author,
+		Variant: doc.AssociationVariant,
+		Schema:  doc.Schema,
+		CDate:   time.Now(),
 	}
 
 	proof, err := json.Marshal(sd.Proof)
@@ -480,36 +481,29 @@ func (r *RecordRepository) GetAssociatedRecords(
 	ctx, span := tracer.Start(ctx, "Repository.Record.GetAssociatedRecords")
 	defer span.End()
 
-	targetRK, err := GetRecordKeyByURI(ctx, r.db, targetURI)
-	if err != nil {
-		span.RecordError(err)
-		return nil, err
-	}
-
 	var associations []models.Association
 
 	query := r.db.WithContext(ctx).
 		Model(&models.Association{}).
-		Preload("Item.Record.Document").
-		Joins("JOIN record_keys rk ON rk.id = associations.item_id").
-		Joins("JOIN records rec ON rec.document_id = rk.record_id").
-		Where("associations.target_id = ?", targetRK.ID)
+		Preload("Document").
+		Joins("JOIN record_keys rk ON rk.id = associations.target_id").
+		Where("rk.uri = ?", targetURI)
 
 	if schema != "" {
-		query = query.Where("rec.schema = ?", schema)
+		query = query.Where("associations.schema = ?", schema)
 	}
 	if variant != "" {
-		query = query.Where("rec.variant = ?", variant)
+		query = query.Where("associations.variant = ?", variant)
 	}
 	if author != "" {
-		query = query.Where("rec.author = ?", author)
+		query = query.Where("associations.author = ?", author)
 	}
 
 	if err := query.Find(&associations).Error; err != nil {
 		return nil, err
 	}
 
-	var documents []concrnt.Document[any]
+	documents := make([]concrnt.Document[any], 0, len(associations))
 	for _, assoc := range associations {
 		var doc concrnt.Document[any]
 		err := json.Unmarshal([]byte(assoc.Document.Document), &doc)
@@ -527,24 +521,17 @@ func (r *RecordRepository) GetAssociatedRecordCountsBySchema(ctx context.Context
 	ctx, span := tracer.Start(ctx, "Repository.Record.GetAssociatedRecordCountsBySchema")
 	defer span.End()
 
-	targetRK, err := GetRecordKeyByURI(ctx, r.db, targetURI)
-	if err != nil {
-		span.RecordError(err)
-		return nil, err
-	}
-
 	var counts []struct {
 		Schema string
 		Count  int64
 	}
 
-	err = r.db.WithContext(ctx).
+	err := r.db.WithContext(ctx).
 		Model(&models.Association{}).
-		Select("rec.schema AS schema, COUNT(*) AS count").
-		Joins("JOIN record_keys rk ON rk.id = associations.item_id").
-		Joins("JOIN records rec ON rec.document_id = rk.record_id").
-		Where("associations.target_id = ?", targetRK.ID).
-		Group("rec.schema").
+		Select("schema, COUNT(*) AS count").
+		Joins("JOIN record_keys rk ON rk.id = associations.target_id").
+		Where("rk.uri = ?", targetURI).
+		Group("schema").
 		Scan(&counts).Error
 
 	if err != nil {
@@ -565,25 +552,18 @@ func (r *RecordRepository) GetAssociatedRecordCountsByVariant(ctx context.Contex
 	ctx, span := tracer.Start(ctx, "Repository.Record.GetAssociatedRecordCountsByVariant")
 	defer span.End()
 
-	targetRK, err := GetRecordKeyByURI(ctx, r.db, targetURI)
-	if err != nil {
-		span.RecordError(err)
-		return nil, err
-	}
-
 	var counts []struct {
 		Variant  string
 		Count    int64
 		MinCDate time.Time
 	}
 
-	err = r.db.WithContext(ctx).
+	err := r.db.WithContext(ctx).
 		Model(&models.Association{}).
-		Select("rec.variant AS variant, COUNT(*) AS count, MIN(rec.c_date) AS min_c_date").
-		Joins("JOIN record_keys rk ON rk.id = associations.item_id").
-		Joins("JOIN records rec ON rec.document_id = rk.record_id").
-		Where("associations.target_id = ? AND rec.schema = ?", targetRK.ID, schema).
-		Group("rec.variant").
+		Select("variant, COUNT(*) AS count, MIN(c_date) AS min_c_date").
+		Joins("JOIN record_keys rk ON rk.id = associations.target_id").
+		Where("rk.uri = ?", targetURI).
+		Group("variant").
 		Order("min_c_date ASC").
 		Scan(&counts).Error
 	if err != nil {
