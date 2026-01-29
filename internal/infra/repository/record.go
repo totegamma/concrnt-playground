@@ -282,6 +282,7 @@ func (r *RecordRepository) GetSignedDocument(ctx context.Context, uri string) (*
 			Take(&recordKey).Error
 		if err != nil {
 			span.RecordError(err)
+			return nil, errors.Join(domain.NotFoundError{Resource: uri}, err)
 		}
 
 		var proof concrnt.Proof
@@ -308,6 +309,7 @@ func (r *RecordRepository) GetSignedDocument(ctx context.Context, uri string) (*
 			Take(&record).Error
 		if err != nil {
 			span.RecordError(err)
+			return nil, errors.Join(domain.NotFoundError{Resource: uri}, err)
 		}
 
 		var cckv *string = nil

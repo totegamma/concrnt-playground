@@ -182,7 +182,7 @@ func (c *Client) GetEntity(ctx context.Context, address string, hint *string) (c
 	}
 
 	var entity concrnt.Entity
-	err := c.GetResource(ctx, "cc://"+address, "application/json", opts, &entity)
+	err := c.GetResource(ctx, "cckv://"+address, "application/json", opts, &entity)
 	if err != nil {
 		return concrnt.Entity{}, fmt.Errorf("failed to get entity: %v", err)
 	}
@@ -205,7 +205,7 @@ func (c *Client) GetServer(ctx context.Context, domainOrCSID string, hint *strin
 
 	if concrnt.IsCSID(domainOrCSID) {
 		var wkc concrnt.WellKnownConcrnt
-		err := c.GetResource(ctx, "cc://"+domainOrCSID, "application/json", Options{Resolver: c.defaultResolver}, &wkc)
+		err := c.GetResource(ctx, "cckv://"+domainOrCSID, "application/json", Options{Resolver: c.defaultResolver}, &wkc)
 		if err != nil {
 			return concrnt.WellKnownConcrnt{}, fmt.Errorf("failed to get well-known concrnt: %v", err)
 		}

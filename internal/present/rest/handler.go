@@ -169,10 +169,6 @@ func (h *Handler) handleResource(c echo.Context) error {
 		return c.JSON(http.StatusSeeOther, echo.Map{"location": uri.String()})
 	}
 
-	if uri.Scheme != "cc" {
-		return presenter.BadRequestMessage(c, "unsupported uri scheme")
-	}
-
 	parsed, err := concrnt.ParseCCURI(uriString)
 	if err != nil {
 		return presenter.BadRequestMessage(c, "invalid uri")
