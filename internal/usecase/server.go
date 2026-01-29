@@ -8,7 +8,7 @@ import (
 
 // ServerRepository defines persistence/lookup for remote servers.
 type ServerRepository interface {
-	Resolve(ctx context.Context, identifier, hint string) (domain.Server, error)
+	Resolve(ctx context.Context, identifier string, hint *string) (domain.Server, error)
 }
 
 type ServerUsecase struct {
@@ -19,6 +19,6 @@ func NewServerUsecase(repo ServerRepository) *ServerUsecase {
 	return &ServerUsecase{repo: repo}
 }
 
-func (uc *ServerUsecase) Resolve(ctx context.Context, identifier, hint string) (domain.Server, error) {
+func (uc *ServerUsecase) Resolve(ctx context.Context, identifier string, hint *string) (domain.Server, error) {
 	return uc.repo.Resolve(ctx, identifier, hint)
 }

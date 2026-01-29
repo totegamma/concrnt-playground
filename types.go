@@ -68,6 +68,8 @@ type Proof struct {
 }
 
 type SignedDocument struct {
+	CCKV       *string                   `json:"cckv,omitempty"`
+	CCFS       *string                   `json:"ccfs,omitempty"`
 	Document   string                    `json:"document"`
 	Proof      Proof                     `json:"proof"`
 	References map[string]SignedDocument `json:"references,omitempty"`

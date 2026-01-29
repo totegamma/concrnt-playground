@@ -27,7 +27,7 @@ func NewServerRepository(config *domain.Config, db *gorm.DB, cl *client.Client) 
 	}
 }
 
-func (r *ServerRepository) Resolve(ctx context.Context, identifier, hint string) (domain.Server, error) {
+func (r *ServerRepository) Resolve(ctx context.Context, identifier string, hint *string) (domain.Server, error) {
 
 	var server models.Server
 	err := r.db.WithContext(ctx).
@@ -46,7 +46,7 @@ func (r *ServerRepository) Resolve(ctx context.Context, identifier, hint string)
 		}
 	}
 
-	if hint == "" {
+	if hint == nil {
 		return domain.Server{}, domain.ErrNotFound
 	}
 

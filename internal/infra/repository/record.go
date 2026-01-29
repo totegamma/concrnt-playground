@@ -55,7 +55,7 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, documentID string, 
 	if strings.Contains(key, "{cdid}") {
 		key = strings.ReplaceAll(key, "{cdid}", documentID)
 	}
-	uri := concrnt.ComposeCCURI(owner, key)
+	cckv := concrnt.ComposeCCURI("cckv", owner, key)
 
 	proof, err := json.Marshal(sd.Proof)
 	if err != nil {
@@ -107,7 +107,7 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, documentID string, 
 
 		var oldRecordKey models.RecordKey
 		err = tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-			Where("uri = ?", concrnt.ComposeCCURI(owner, key)).
+			Where("uri = ?", cckv).
 			Take(&oldRecordKey).Error
 		if err != nil && err != gorm.ErrRecordNotFound {
 			span.RecordError(err)
@@ -115,7 +115,7 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, documentID string, 
 		}
 
 		// ParentのRecordKeyを探す
-		parentRK, err := getOrCreateParentRecordKey(ctx, tx, concrnt.ComposeCCURI(owner, key))
+		parentRK, err := getOrCreateParentRecordKey(ctx, tx, cckv)
 		if err != nil {
 			span.RecordError(err)
 			return err
@@ -128,7 +128,7 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, documentID string, 
 
 		// RecordKeyを作る
 		rk := models.RecordKey{
-			URI:      uri,
+			URI:      cckv,
 			ParentID: pid,
 			RecordID: &documentID,
 		}
@@ -163,7 +163,7 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, documentID string, 
 		return "", err
 	}
 
-	return uri, nil
+	return cckv, nil
 
 }
 
@@ -263,49 +263,81 @@ func (r *RecordRepository) CreateAck(ctx context.Context, sd concrnt.SignedDocum
 	return fmt.Errorf("not implemented")
 }
 
-func (r *RecordRepository) GetDocument(ctx context.Context, uri string) (*concrnt.Document[any], error) {
-	ctx, span := tracer.Start(ctx, "Repository.Record.GetDocument")
-	defer span.End()
-
-	commit, err := getCommitByURI(ctx, r.db, uri)
-	if err != nil {
-		span.RecordError(err)
-		return nil, err
-	}
-
-	var doc concrnt.Document[any]
-	err = json.Unmarshal([]byte(commit.Document), &doc)
-	if err != nil {
-		span.RecordError(err)
-		return nil, err
-	}
-
-	return &doc, nil
-}
-
 func (r *RecordRepository) GetSignedDocument(ctx context.Context, uri string) (*concrnt.SignedDocument, error) {
 	ctx, span := tracer.Start(ctx, "Repository.Record.GetSignedDocument")
 	defer span.End()
 
-	commit, err := getCommitByURI(ctx, r.db, uri)
+	parsed, err := concrnt.ParseCCURI(uri)
 	if err != nil {
 		span.RecordError(err)
 		return nil, err
 	}
 
-	var proof concrnt.Proof
-	err = json.Unmarshal([]byte(commit.Proof), &proof)
-	if err != nil {
+	switch parsed.Scheme {
+	case "cckv":
+		var recordKey models.RecordKey
+		err = r.db.WithContext(ctx).Preload("Record").
+			Preload("Record.Document").
+			Where("uri = ?", uri).
+			Take(&recordKey).Error
+		if err != nil {
+			span.RecordError(err)
+		}
+
+		var proof concrnt.Proof
+		err = json.Unmarshal([]byte(recordKey.Record.Document.Proof), &proof)
+		if err != nil {
+			span.RecordError(err)
+			return nil, err
+		}
+
+		ccfs := concrnt.ComposeCCURI("ccfs", parsed.Owner, parsed.CDID)
+
+		return &concrnt.SignedDocument{
+			CCKV:     &uri,
+			CCFS:     &ccfs,
+			Document: recordKey.Record.Document.Document,
+			Proof:    proof,
+		}, nil
+
+	case "ccfs":
+		var record models.Record
+		err = r.db.WithContext(ctx).
+			Preload("Document").
+			Where("document_id = ?", parsed.CDID).
+			Take(&record).Error
+		if err != nil {
+			span.RecordError(err)
+		}
+
+		var cckv *string = nil
+		var recordKey models.RecordKey
+		err = r.db.WithContext(ctx).
+			Preload("Record").
+			Where("record_id = ?", record.DocumentID).
+			Take(&models.RecordKey{}).Error
+		if err == nil {
+			cckv = &recordKey.URI
+		}
+
+		var proof concrnt.Proof
+		err = json.Unmarshal([]byte(record.Document.Proof), &proof)
+		if err != nil {
+			span.RecordError(err)
+			return nil, err
+		}
+
+		return &concrnt.SignedDocument{
+			CCFS:     &uri,
+			CCKV:     cckv,
+			Document: record.Document.Document,
+			Proof:    proof,
+		}, nil
+	default:
+		err := fmt.Errorf("unsupported uri scheme: %s", parsed.Scheme)
 		span.RecordError(err)
 		return nil, err
 	}
-
-	sd := concrnt.SignedDocument{
-		Document: commit.Document,
-		Proof:    proof,
-	}
-
-	return &sd, nil
 }
 
 func (r *RecordRepository) Delete(ctx context.Context, sd concrnt.SignedDocument) (string, error) {
@@ -319,58 +351,58 @@ func (r *RecordRepository) Delete(ctx context.Context, sd concrnt.SignedDocument
 		return "", err
 	}
 
-	record, err := getRecordByURI(ctx, r.db, string(doc.Value))
+	target := string(doc.Value)
+	parsed, err := concrnt.ParseCCURI(target)
 	if err != nil {
 		span.RecordError(err)
 		return "", err
 	}
 
-	id := record.DocumentID
-
-	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Delete(&models.CommitLog{}, "id = ?", id).Error; err != nil {
+	switch parsed.Scheme {
+	case "cckv":
+		var recordKey models.RecordKey
+		err = r.db.WithContext(ctx).Preload("Record").
+			Preload("Record.Document").
+			Where("uri = ?", target).
+			Take(&recordKey).Error
+		if err != nil {
 			span.RecordError(err)
-			return err
+			return "", err
 		}
-		return nil
-	})
 
-	if err != nil {
+		id := recordKey.Record.DocumentID
+		err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			if err := tx.Delete(&models.CommitLog{}, "id = ?", id).Error; err != nil {
+				span.RecordError(err)
+				return err
+			}
+			return nil
+		})
+		if err != nil {
+			span.RecordError(err)
+			return "", err
+		}
+
+		return target, nil
+
+	case "ccfs":
+		err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			if err := tx.Delete(&models.CommitLog{}, "id = ?", parsed.CDID).Error; err != nil {
+				span.RecordError(err)
+				return err
+			}
+			return nil
+		})
+		if err != nil {
+			span.RecordError(err)
+			return "", err
+		}
+		return target, nil
+	default:
+		err := fmt.Errorf("unsupported uri scheme: %s", parsed.Scheme)
 		span.RecordError(err)
 		return "", err
 	}
-
-	return string(doc.Value), nil
-}
-
-func getCommitByURI(ctx context.Context, db *gorm.DB, uri string) (*models.CommitLog, error) {
-	ctx, span := tracer.Start(ctx, "Repository.Record.getCommitByURI")
-	defer span.End()
-
-	_, key, err := concrnt.ParseCCURI(uri)
-	if err != nil {
-		span.RecordError(err)
-		return nil, err
-	}
-
-	var commit models.CommitLog
-	err = db.WithContext(ctx).
-		Where("id = ?", key).
-		Take(&commit).Error
-	if err == nil {
-		return &commit, nil
-	}
-
-	var recordKey models.RecordKey
-	err = db.WithContext(ctx).Preload("Record.Document").
-		Where("uri = ?", uri).
-		Take(&recordKey).Error
-	if err == nil {
-		return &recordKey.Record.Document, nil
-	}
-
-	return nil, domain.NotFoundError{Resource: "commit"}
-
 }
 
 func getOrCreateParentRecordKey(ctx context.Context, db *gorm.DB, uri string) (*models.RecordKey, error) {
@@ -428,35 +460,6 @@ func getOrCreateParentRecordKey(ctx context.Context, db *gorm.DB, uri string) (*
 	}
 
 	return parentRK, nil
-}
-
-func getRecordByURI(ctx context.Context, db *gorm.DB, uri string) (*models.Record, error) {
-	ctx, span := tracer.Start(ctx, "Repository.Record.getRecordByURI")
-	defer span.End()
-
-	_, key, err := concrnt.ParseCCURI(uri)
-	if err != nil {
-		span.RecordError(err)
-		return nil, err
-	}
-
-	var record models.Record
-	err = db.WithContext(ctx).
-		Where("document_id = ?", key).
-		Take(&record).Error
-	if err == nil {
-		return &record, nil
-	}
-
-	var recordKey models.RecordKey
-	err = db.WithContext(ctx).Preload("Record").
-		Where("uri = ?", uri).
-		Take(&recordKey).Error
-	if err == nil {
-		return &recordKey.Record, nil
-	}
-
-	return nil, domain.NotFoundError{Resource: "record"}
 }
 
 func GetRecordKeyByURI(ctx context.Context, db *gorm.DB, uri string) (*models.RecordKey, error) {

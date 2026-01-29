@@ -173,25 +173,25 @@ func (h *Handler) handleResource(c echo.Context) error {
 		return presenter.BadRequestMessage(c, "unsupported uri scheme")
 	}
 
-	owner, key, hint, err := concrnt.ParseCCURIWithHint(uriString)
+	parsed, err := concrnt.ParseCCURI(uriString)
 	if err != nil {
 		return presenter.BadRequestMessage(c, "invalid uri")
 	}
 
-	if key == "" {
-		if concrnt.IsCCID(owner) {
-			entity, err := h.entity.Get(ctx, owner, hint)
+	if parsed.Key == "" {
+		if concrnt.IsCCID(parsed.Owner) {
+			entity, err := h.entity.Get(ctx, parsed.Owner, parsed.Hint)
 			if err != nil {
 				return presenter.InternalError(c, err)
 			}
 			return presenter.OK(c, entity)
 		}
 
-		if owner == h.config.CSID {
+		if parsed.Owner == h.config.CSID {
 			return c.Redirect(http.StatusFound, "https://"+h.config.FQDN+"/.well-known/concrnt")
 		}
 
-		wkc, err := h.server.Resolve(ctx, owner, hint)
+		wkc, err := h.server.Resolve(ctx, parsed.Owner, parsed.Hint)
 		if err != nil {
 			return presenter.InternalError(c, err)
 		}
@@ -298,7 +298,7 @@ func (h *Handler) handleChunklineItr(c echo.Context) error {
 	if err != nil {
 		return presenter.BadRequestMessage(c, "invalid key")
 	}
-	uri := concrnt.ComposeCCURI(c.Param("owner"), key)
+	uri := concrnt.ComposeCCURI("cckv", c.Param("owner"), key)
 
 	chunkID, err := strconv.ParseInt(c.Param("chunk"), 10, 64)
 	if err != nil {
@@ -319,7 +319,7 @@ func (h *Handler) handleChunklineBody(c echo.Context) error {
 	if err != nil {
 		return presenter.BadRequestMessage(c, "invalid key")
 	}
-	uri := concrnt.ComposeCCURI(c.Param("owner"), key)
+	uri := concrnt.ComposeCCURI("cckv", c.Param("owner"), key)
 
 	chunkID, err := strconv.ParseInt(c.Param("chunk"), 10, 64)
 	if err != nil {

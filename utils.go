@@ -16,41 +16,61 @@ func JsonPrint(tag string, v any) {
 	fmt.Printf("%s: %s\n", tag, string(b))
 }
 
-func ParseCCURIWithHint(escaped string) (string, string, string, error) {
+type CCURI struct {
+	Scheme string  `json:"schema"`
+	Owner  string  `json:"owner"`
+	Key    string  `json:"key"`
+	CDID   string  `json:"cdid"`
+	Hint   *string `json:"hint,omitempty"`
+}
+
+func ParseCCURI(escaped string) (*CCURI, error) {
 
 	uriString, err := url.QueryUnescape(escaped)
 	if err != nil {
-		return "", "", "", fmt.Errorf("invalid uri encoding")
+		return nil, fmt.Errorf("invalid uri encoding")
 	}
 	uri, err := url.Parse(uriString)
 	if err != nil {
-		return "", "", "", fmt.Errorf("invalid uri")
-	}
-
-	if uri.Scheme != "cc" {
-		return "", "", "", fmt.Errorf("unsupported uri scheme")
+		return nil, fmt.Errorf("invalid uri")
 	}
 
 	user := uri.User.String()
 	path := uri.Path
 	key := strings.TrimPrefix(path, "/")
 
-	// return: owner, key , hint
-	if user == "" {
-		return uri.Host, key, "", nil
-	} else {
-		return user, key, uri.Host, nil
+	owner := uri.Host
+	var hint *string = nil
+	if user != "" {
+		owner = user
+		hint = &uri.Host
+	}
+
+	switch uri.Scheme {
+	case "cckv":
+		return &CCURI{
+			Scheme: uri.Scheme,
+			Owner:  owner,
+			Key:    key,
+			CDID:   "",
+			Hint:   hint,
+		}, nil
+	case "ccfs":
+		return &CCURI{
+			Scheme: uri.Scheme,
+			Owner:  owner,
+			Key:    "",
+			CDID:   key,
+			Hint:   hint,
+		}, nil
+	default:
+		return nil, fmt.Errorf("unsupported uri scheme")
 	}
 }
 
-func ParseCCURI(escaped string) (string, string, error) {
-	owner, key, _, err := ParseCCURIWithHint(escaped)
-	return owner, key, err
-}
-
-func ComposeCCURI(owner, key string) string {
+func ComposeCCURI(scheme, owner, key string) string {
 	u := &url.URL{
-		Scheme: "cc",
+		Scheme: scheme,
 		Host:   owner,
 		Path:   key,
 	}

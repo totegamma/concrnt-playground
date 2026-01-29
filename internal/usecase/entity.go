@@ -12,7 +12,7 @@ import (
 // EntityRepository defines persistence/lookup for entities.
 type EntityRepository interface {
 	Register(ctx context.Context, entity domain.Entity, meta domain.EntityMeta) error
-	Get(ctx context.Context, ccid string, resolver string) (domain.Entity, error)
+	Get(ctx context.Context, ccid string, resolver *string) (domain.Entity, error)
 }
 
 type EntityUsecase struct {
@@ -40,6 +40,6 @@ func (uc *EntityUsecase) Register(ctx context.Context, req concrnt.RegisterReque
 	return uc.repo.Register(ctx, entity, req.Meta)
 }
 
-func (uc *EntityUsecase) Get(ctx context.Context, ccid string, resolver string) (domain.Entity, error) {
+func (uc *EntityUsecase) Get(ctx context.Context, ccid string, resolver *string) (domain.Entity, error) {
 	return uc.repo.Get(ctx, ccid, resolver)
 }

@@ -56,7 +56,7 @@ func (r *EntityRepository) Register(ctx context.Context, entity domain.Entity, m
 	})
 }
 
-func (r *EntityRepository) Get(ctx context.Context, ccid string, hint string) (domain.Entity, error) {
+func (r *EntityRepository) Get(ctx context.Context, ccid string, hint *string) (domain.Entity, error) {
 
 	var entity models.Entity
 	err := r.db.WithContext(ctx).First(&entity, "id = ?", ccid).Error
@@ -71,7 +71,7 @@ func (r *EntityRepository) Get(ctx context.Context, ccid string, hint string) (d
 		}, nil
 	}
 
-	if hint == "" || hint == r.config.FQDN {
+	if hint == nil || *hint == r.config.FQDN {
 		return domain.Entity{}, err
 	}
 

@@ -92,7 +92,7 @@ func (r *resolver) LookupChunkItrs(ctx context.Context, timelines []string, unti
 			return nil, fmt.Errorf("timeline %s does not support descending iteration", tl)
 		}
 
-		owner, _, err := concrnt.ParseCCURI(tl)
+		parsed, err := concrnt.ParseCCURI(tl)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse timeline URI %s: %v", tl, err)
 		}
@@ -100,7 +100,7 @@ func (r *resolver) LookupChunkItrs(ctx context.Context, timelines []string, unti
 		result, err := r.client.HttpRequestText(
 			ctx,
 			"GET",
-			owner,
+			parsed.Owner,
 			strings.ReplaceAll(manifest.Descending.Iterator, "{chunk}", fmt.Sprintf("%d", manifest.Time2Chunk(until))),
 		)
 		if err != nil {
@@ -129,7 +129,7 @@ func (r *resolver) LoadChunkBodies(ctx context.Context, query map[string]string)
 
 		manifest := manifests[tl]
 
-		owner, _, err := concrnt.ParseCCURI(tl)
+		parsed, err := concrnt.ParseCCURI(tl)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse timeline URI %s: %v", tl, err)
 		}
@@ -138,7 +138,7 @@ func (r *resolver) LoadChunkBodies(ctx context.Context, query map[string]string)
 		err = r.client.HttpRequest(
 			ctx,
 			"GET",
-			owner,
+			parsed.Owner,
 			strings.ReplaceAll(manifest.Descending.Body, "{chunk}", itr),
 			&items,
 		)

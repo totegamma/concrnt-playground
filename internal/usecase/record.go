@@ -25,7 +25,6 @@ type RecordRepository interface {
 	CreateAck(ctx context.Context, sd concrnt.SignedDocument) error
 	Delete(ctx context.Context, sd concrnt.SignedDocument) (string, error)
 
-	GetDocument(ctx context.Context, uri string) (*concrnt.Document[any], error)
 	GetSignedDocument(ctx context.Context, uri string) (*concrnt.SignedDocument, error)
 
 	GetAssociatedRecords(ctx context.Context, targetURI, schema, variant, author string) ([]concrnt.Document[any], error)
@@ -168,13 +167,13 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 	// Distribute
 	if doc.MemberOf != nil {
 		for _, memberOfURI := range *doc.MemberOf {
-			memberOwner, key, err := concrnt.ParseCCURI(memberOfURI)
+			parsed, err := concrnt.ParseCCURI(memberOfURI)
 			if err != nil {
 				fmt.Printf("Error parsing memberOf URI: %v\n", err)
 				span.RecordError(err)
 				continue
 			}
-			path := path.Join(key, documentID)
+			path := path.Join(parsed.Key, documentID)
 
 			document := concrnt.Document[schemas.Reference]{
 				Key: path,
@@ -182,7 +181,7 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 					Href: resultURI,
 				},
 				Author:    doc.Author,
-				Owner:     &memberOwner,
+				Owner:     &parsed.Owner,
 				Schema:    schemas.ReferenceURL,
 				CreatedAt: time.Now(),
 			}
@@ -227,10 +226,6 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 	}
 
 	return nil
-}
-
-func (uc *RecordUsecase) Get(ctx context.Context, uri string) (*concrnt.Document[any], error) {
-	return uc.repo.GetDocument(ctx, uri)
 }
 
 func (uc *RecordUsecase) GetSigned(ctx context.Context, uri string) (*concrnt.SignedDocument, error) {
