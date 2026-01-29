@@ -346,6 +346,9 @@ func (h *Handler) handleRegister(c echo.Context) error {
 func (h *Handler) handleTimelineRecent(c echo.Context) error {
 	ctx := c.Request().Context()
 	uriString := c.QueryParam("uris")
+	if uriString == "" {
+		return presenter.OK(c, []any{})
+	}
 	uris := strings.Split(uriString, ",")
 	untilStr := c.QueryParam("until")
 	var until time.Time

@@ -43,6 +43,8 @@ type resolver struct {
 }
 
 func (r *resolver) ResolveTimelines(ctx context.Context, timelines []string) (map[string]chunkline.Manifest, error) {
+	ctx, span := tracer.Start(ctx, "ChunklineResolver.ResolveTimelines")
+	defer span.End()
 
 	result := make(map[string]chunkline.Manifest)
 	remaining := []string{}
@@ -59,6 +61,7 @@ func (r *resolver) ResolveTimelines(ctx context.Context, timelines []string) (ma
 		var manifest chunkline.Manifest
 		err := r.client.GetResource(ctx, tl, "application/chunkline+json", client.Options{}, &manifest)
 		if err != nil {
+			span.RecordError(err)
 			return nil, fmt.Errorf("failed to resolve timeline %s: %v", tl, err)
 		}
 		result[tl] = manifest
@@ -77,9 +80,12 @@ func (r *resolver) GetRemovedItems(ctx context.Context, timelines []string) (map
 }
 
 func (r *resolver) LookupChunkItrs(ctx context.Context, timelines []string, until time.Time) (map[string]string, error) {
+	ctx, span := tracer.Start(ctx, "ChunklineResolver.LookupChunkItrs")
+	defer span.End()
 
 	manifests, err := r.ResolveTimelines(ctx, timelines)
 	if err != nil {
+		span.RecordError(err)
 		return nil, err
 	}
 
@@ -89,11 +95,14 @@ func (r *resolver) LookupChunkItrs(ctx context.Context, timelines []string, unti
 		manifest := manifests[tl]
 
 		if manifest.Descending.Iterator == "" {
-			return nil, fmt.Errorf("timeline %s does not support descending iteration", tl)
+			err := fmt.Errorf("timeline %s does not support descending iteration", tl)
+			span.RecordError(err)
+			return nil, err
 		}
 
 		parsed, err := concrnt.ParseCCURI(tl)
 		if err != nil {
+			span.RecordError(err)
 			return nil, fmt.Errorf("failed to parse timeline URI %s: %v", tl, err)
 		}
 
@@ -104,6 +113,7 @@ func (r *resolver) LookupChunkItrs(ctx context.Context, timelines []string, unti
 			strings.ReplaceAll(manifest.Descending.Iterator, "{chunk}", fmt.Sprintf("%d", manifest.Time2Chunk(until))),
 		)
 		if err != nil {
+			span.RecordError(err)
 			return nil, err
 		}
 
@@ -113,6 +123,8 @@ func (r *resolver) LookupChunkItrs(ctx context.Context, timelines []string, unti
 }
 
 func (r *resolver) LoadChunkBodies(ctx context.Context, query map[string]string) (map[string]chunkline.BodyChunk, error) {
+	ctx, span := tracer.Start(ctx, "ChunklineResolver.LoadChunkBodies")
+	defer span.End()
 
 	uris := []string{}
 	for itr := range query {
@@ -121,6 +133,7 @@ func (r *resolver) LoadChunkBodies(ctx context.Context, query map[string]string)
 
 	manifests, err := r.ResolveTimelines(ctx, uris)
 	if err != nil {
+		span.RecordError(err)
 		return nil, err
 	}
 
@@ -131,6 +144,7 @@ func (r *resolver) LoadChunkBodies(ctx context.Context, query map[string]string)
 
 		parsed, err := concrnt.ParseCCURI(tl)
 		if err != nil {
+			span.RecordError(err)
 			return nil, fmt.Errorf("failed to parse timeline URI %s: %v", tl, err)
 		}
 
@@ -143,11 +157,13 @@ func (r *resolver) LoadChunkBodies(ctx context.Context, query map[string]string)
 			&items,
 		)
 		if err != nil {
+			span.RecordError(err)
 			return nil, err
 		}
 
 		chunkID, err := strconv.ParseInt(itr, 10, 64)
 		if err != nil {
+			span.RecordError(err)
 			return nil, fmt.Errorf("invalid chunk ID %s: %v", itr, err)
 		}
 
@@ -159,5 +175,4 @@ func (r *resolver) LoadChunkBodies(ctx context.Context, query map[string]string)
 
 	}
 	return result, nil
-
 }
