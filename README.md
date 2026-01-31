@@ -11,11 +11,8 @@
       - lambdaとかで動けるとすごい
 
 ## TODO
-- commitの署名検証
 - ackの実装
 - subkeyの実装・検証
-- deleteとか
-- association未テスト
 - policyの評価
   - そもそもpolicy自体の仮実装はしたものの全くテストされてない
 - 他サーバーとのrealtime通信
@@ -23,6 +20,13 @@
     - リーダーインスタンスを決めてそこから受信するとか
       - k8sだったらleaseが使える
 - NATSとredis pubsubを切り替えられるように
+- valkey対応？
+- batchエンドポイント
+- passportの発行
+- timeline読み込みをキャッシュに載せる
+- proxy実装
+- 通知周り
+  - webpushはともかくiOSやAndroidのpushはどうする？
 
 ## まだ考え中なこと
 - マイグレーションとか
