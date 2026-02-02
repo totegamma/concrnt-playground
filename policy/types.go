@@ -1,13 +1,13 @@
 package policy
 
-type Conclusion int
+type Conclusion string
 
 const (
-	UNSET Conclusion = iota
-	OK
-	NG
-	ALLOW
-	DENY
+	UNSET Conclusion = "unset"
+	OK    Conclusion = "ok"
+	NG    Conclusion = "ng"
+	ALLOW Conclusion = "allow"
+	DENY  Conclusion = "deny"
 )
 
 func ParseConclusion(s string) Conclusion {
@@ -68,13 +68,14 @@ type PolicyDocument struct {
 }
 
 type Policy struct {
-	Statements map[string][]Stmt `json:"statements"`
-	Defaults   map[string]bool   `json:"defaults"`
+	Statements map[string][]Stmt     `json:"statements"`
+	Defaults   map[string]Conclusion `json:"defaults"`
 }
 
 type Stmt struct {
-	Emit      string `json:"emit"`
-	Condition Expr   `json:"condition"`
+	Emit      Conclusion `json:"emit"`
+	Condition Expr       `json:"condition"`
+	Reason    string     `json:"reason,omitempty"`
 }
 
 type Expr struct {

@@ -146,6 +146,9 @@ func (h *Handler) handleCommit(c echo.Context) error {
 
 	err = h.record.Commit(ctx, sd)
 	if err != nil {
+		if errors.Is(err, domain.ErrPermissionDenied) {
+			return presenter.Forbidden(c, "permission denied")
+		}
 		return presenter.InternalError(c, err)
 	}
 

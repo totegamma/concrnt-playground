@@ -26,3 +26,26 @@ func (e NotFoundError) Is(target error) bool {
 
 // ErrNotFound is the sentinel error for missing resources.
 var ErrNotFound = NotFoundError{}
+
+type PermissionError struct {
+	Reason string
+}
+
+var ErrPermissionDenied = PermissionError{}
+
+func (e PermissionError) Error() string {
+	if e.Reason == "" {
+		return "permission denied"
+	}
+	return fmt.Sprintf("permission denied: %s", e.Reason)
+}
+
+// Is enables errors.Is matching on PermissionError.
+func (e PermissionError) Is(target error) bool {
+	_, ok := target.(PermissionError)
+	if ok {
+		return true
+	}
+	_, ok = target.(*PermissionError)
+	return ok
+}

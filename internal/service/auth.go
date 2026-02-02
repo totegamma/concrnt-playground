@@ -5,15 +5,12 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
-	"go.opentelemetry.io/otel"
 
 	"github.com/totegamma/concrnt-playground"
 	"github.com/totegamma/concrnt-playground/client"
 	"github.com/totegamma/concrnt-playground/internal/domain"
 	"github.com/totegamma/concrnt-playground/jwt"
 )
-
-var tracer = otel.Tracer("auth")
 
 type AuthService struct {
 	config *domain.Config

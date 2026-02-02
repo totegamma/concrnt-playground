@@ -64,7 +64,7 @@ func ParseCCURI(escaped string) (*CCURI, error) {
 			Hint:   hint,
 		}, nil
 	default:
-		return nil, fmt.Errorf("unsupported uri scheme")
+		return nil, fmt.Errorf("unsupported uri scheme: %s", uri.Scheme)
 	}
 }
 

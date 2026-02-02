@@ -104,19 +104,20 @@ func main() {
 	cl := client.New(conf.Server.GatewayAddr)
 	signal := service.NewSignalService(redis)
 	auth := service.NewAuthService(&globalConfig, cl)
-
-	recordRepo := repository.NewRecordRepository(db)
-	recordUC := usecase.NewRecordUsecase(recordRepo, signal)
-
-	chunklineRepo := repository.NewChunklineRepository(db)
-	chunklineGateway := gateway.NewChunklineGateway(cl)
-	chunklineUC := usecase.NewChunklineUsecase(chunklineRepo, chunklineGateway)
+	policy := service.NewPolicyService(GetGlobalPolicy())
 
 	serverRepo := repository.NewServerRepository(&globalConfig, db, cl)
 	serverUC := usecase.NewServerUsecase(serverRepo)
 
 	entityRepo := repository.NewEntityRepository(db, cl, globalConfig)
 	entityUC := usecase.NewEntityUsecase(entityRepo)
+
+	recordRepo := repository.NewRecordRepository(db)
+	recordUC := usecase.NewRecordUsecase(recordRepo, entityUC, signal, policy)
+
+	chunklineRepo := repository.NewChunklineRepository(db)
+	chunklineGateway := gateway.NewChunklineGateway(cl)
+	chunklineUC := usecase.NewChunklineUsecase(chunklineRepo, chunklineGateway)
 
 	authMiddleware := middleware.NewAuthMiddleware(auth, globalConfig)
 

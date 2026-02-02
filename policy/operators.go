@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"reflect"
 	"slices"
+
+	"github.com/totegamma/concrnt-playground"
 )
 
 type Operator func(ctx RequestContext, args []any) (EvalResult, error)
@@ -17,7 +19,6 @@ func init() {
 	operators["Eq"] = opEq
 	operators["Contains"] = opContains
 	operators["Load"] = opLoad
-	// Additional operators can be registered here...
 }
 
 func opAnd(ctx RequestContext, args []any) (EvalResult, error) {
@@ -158,7 +159,8 @@ func opLoad(ctx RequestContext, args []any) (EvalResult, error) {
 	mappedCtx := structToMap(ctx)
 	value, ok := resolveDotNotation(mappedCtx, key)
 	if !ok {
-		err := fmt.Errorf("key not found: %s\n", key)
+		err := fmt.Errorf("key not found: %s", key)
+		concrnt.JsonPrint("mappedCtx", mappedCtx)
 		return EvalResult{
 			Operator: "Load",
 			Error:    err.Error(),

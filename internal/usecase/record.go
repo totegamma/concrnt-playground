@@ -15,6 +15,7 @@ import (
 	"github.com/totegamma/concrnt-playground/cdid"
 	"github.com/totegamma/concrnt-playground/internal/service"
 	"github.com/totegamma/concrnt-playground/internal/utils"
+	"github.com/totegamma/concrnt-playground/policy"
 	"github.com/totegamma/concrnt-playground/schemas"
 )
 
@@ -35,11 +36,16 @@ type RecordRepository interface {
 
 type RecordUsecase struct {
 	repo   RecordRepository
+	entity *EntityUsecase
 	signal *service.SignalService
+	policy *service.PolicyService
 }
 
-func NewRecordUsecase(repo RecordRepository, signal *service.SignalService) *RecordUsecase {
-	return &RecordUsecase{repo: repo, signal: signal}
+func NewRecordUsecase(repo RecordRepository, entity *EntityUsecase,
+	signal *service.SignalService, policy *service.PolicyService) *RecordUsecase {
+	return &RecordUsecase{repo: repo,
+		entity: entity,
+		signal: signal, policy: policy}
 }
 
 func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) error {
@@ -83,12 +89,53 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 	createdAt := doc.CreatedAt
 	documentID := cdid.New(hash10, createdAt).String()
 
+	requesterID := doc.Author
+	requester, err := uc.entity.Get(ctx, requesterID, nil)
+	if err != nil {
+		span.RecordError(err)
+		return err
+	}
+
 	var resultURI string
 
 	// accept
 	switch doc.Schema {
 	// 特殊なスキーマの場合の処理
 	case schemas.DeleteURL:
+
+		var deletedoc concrnt.Document[schemas.Delete]
+		err := json.Unmarshal([]byte(sd.Document), &deletedoc)
+		if err != nil {
+			span.RecordError(err)
+			return err
+		}
+
+		target, err := uc.repo.GetSignedDocument(ctx, string(deletedoc.Value))
+		if err != nil {
+			span.RecordError(err)
+			return err
+		}
+
+		targetDoc := concrnt.Document[any]{}
+		err = json.Unmarshal([]byte(target.Document), &targetDoc)
+		if err != nil {
+			span.RecordError(err)
+			return err
+		}
+
+		err = uc.policy.Eval(
+			ctx,
+			policy.RequestContext{
+				Requester: requester,
+				This:      targetDoc,
+			},
+			"commit.delete",
+		)
+		if err != nil {
+			span.RecordError(err)
+			return err
+		}
+
 		resultURI, err = uc.repo.Delete(ctx, sd)
 		if err != nil {
 			span.RecordError(err)
