@@ -2,12 +2,14 @@ package database
 
 import (
 	"log"
+	"log/slog"
 	"os"
 	"time"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+	"gorm.io/plugin/opentelemetry/tracing"
 
 	"github.com/totegamma/concrnt-playground/internal/infra/database/models"
 )
@@ -27,6 +29,16 @@ func NewPostgres(dsn string) (*gorm.DB, error) {
 		TranslateError: true,
 		Logger:         gormLogger,
 	})
+	if err != nil {
+		return nil, err
+	}
+
+	if err = db.Use(tracing.NewPlugin(
+		tracing.WithDBSystem("postgresql"),
+	)); err != nil {
+		slog.Error("failed to enable tracing plugin for postgres", slog.String("error", err.Error()))
+	}
+
 	return db, err
 }
 
