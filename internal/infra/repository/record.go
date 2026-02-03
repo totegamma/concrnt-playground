@@ -124,10 +124,10 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, documentID string, 
 				defaultsStr := string(defaultsBytes)
 
 				policies = append(policies, models.Policy{
-					DocumentID: documentID,
-					URL:        p.URL,
-					Params:     &paramsStr,
-					Defaults:   &defaultsStr,
+					TargetID: documentID,
+					URL:      p.URL,
+					Params:   &paramsStr,
+					Defaults: &defaultsStr,
 				})
 			}
 
