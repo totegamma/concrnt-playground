@@ -105,6 +105,26 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, documentID string, 
 			return err
 		}
 
+		// create policy
+		if doc.Policies != nil {
+			var policies []models.Policy
+			for _, p := range *doc.Policies {
+				policies = append(policies, models.Policy{
+					DocumentID: documentID,
+					URL:        p.URL,
+					Params:     p.Params,
+					Defaults:   p.Defaults,
+				})
+			}
+
+			err = tx.Create(&policies).Error
+			if err != nil {
+				span.RecordError(err)
+				return err
+			}
+		}
+
+		// update RecordKey
 		var oldRecordKey models.RecordKey
 		err = tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 			Where("uri = ?", cckv).

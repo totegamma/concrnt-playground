@@ -34,3 +34,12 @@ type Record struct {
 	Schema     string    `json:"schema" gorm:"type:text"`
 	CDate      time.Time `json:"cdate" gorm:"->;<-:create;type:timestamp with time zone;not null;default:clock_timestamp()"`
 }
+
+type Policy struct {
+	DocumentID string    `json:"id" gorm:"primaryKey;type:text"`
+	Document   CommitLog `json:"documnet" gorm:"foreignKey:DocumentID;references:ID;constraint:OnDelete:CASCADE;"`
+	URL        string    `json:"url" gorm:"type:text;uniqueIndex"`
+	Params     *string   `json:"params,omitempty" gorm:"type:text"`
+	Defaults   *string   `json:"defaults,omitempty" gorm:"type:text"`
+	CDate      time.Time `json:"cdate" gorm:"->;<-:create;type:timestamp with time zone;not null;default:clock_timestamp()"`
+}
