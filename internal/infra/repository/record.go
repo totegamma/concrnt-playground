@@ -109,11 +109,25 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, documentID string, 
 		if doc.Policies != nil {
 			var policies []models.Policy
 			for _, p := range *doc.Policies {
+				paramsBytes, err := json.Marshal(p.Params)
+				if err != nil {
+					span.RecordError(err)
+					return err
+				}
+				paramsStr := string(paramsBytes)
+
+				defaultsBytes, err := json.Marshal(p.Defaults)
+				if err != nil {
+					span.RecordError(err)
+					return err
+				}
+				defaultsStr := string(defaultsBytes)
+
 				policies = append(policies, models.Policy{
 					DocumentID: documentID,
 					URL:        p.URL,
-					Params:     p.Params,
-					Defaults:   p.Defaults,
+					Params:     &paramsStr,
+					Defaults:   &defaultsStr,
 				})
 			}
 
