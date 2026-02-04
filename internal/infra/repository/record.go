@@ -44,10 +44,22 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, documentID string, 
 		owner = *doc.Owner
 	}
 
+	var policies *string
+
+	if doc.Policies != nil {
+		policiesBytes, err := json.Marshal(doc.Policies)
+		if err != nil {
+			return "", err
+		}
+		policiesStr := string(policiesBytes)
+		policies = &policiesStr
+	}
+
 	record := models.Record{
 		DocumentID: documentID,
 		Owner:      owner,
 		Schema:     doc.Schema,
+		Policies:   policies,
 		CDate:      time.Now(),
 	}
 
@@ -103,39 +115,6 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, documentID string, 
 		}).Create(&record).Error; err != nil {
 			span.RecordError(err)
 			return err
-		}
-
-		// create policy
-		if doc.Policies != nil {
-			var policies []models.Policy
-			for _, p := range *doc.Policies {
-				paramsBytes, err := json.Marshal(p.Params)
-				if err != nil {
-					span.RecordError(err)
-					return err
-				}
-				paramsStr := string(paramsBytes)
-
-				defaultsBytes, err := json.Marshal(p.Defaults)
-				if err != nil {
-					span.RecordError(err)
-					return err
-				}
-				defaultsStr := string(defaultsBytes)
-
-				policies = append(policies, models.Policy{
-					TargetID: documentID,
-					URL:      p.URL,
-					Params:   &paramsStr,
-					Defaults: &defaultsStr,
-				})
-			}
-
-			err = tx.Create(&policies).Error
-			if err != nil {
-				span.RecordError(err)
-				return err
-			}
 		}
 
 		// update RecordKey

@@ -32,15 +32,6 @@ type Record struct {
 	Document   CommitLog `json:"documnet" gorm:"foreignKey:DocumentID;references:ID;constraint:OnDelete:CASCADE;"`
 	Owner      string    `json:"owner" gorm:"type:text"`
 	Schema     string    `json:"schema" gorm:"type:text"`
-	Policies   []Policy  `json:"policies" gorm:"foreignKey:TargetID;references:DocumentID;constraint:OnDelete:CASCADE;"`
+	Policies   *string   `json:"policies" gorm:"type:text"`
 	CDate      time.Time `json:"cdate" gorm:"->;<-:create;type:timestamp with time zone;not null;default:clock_timestamp()"`
-}
-
-type Policy struct {
-	ID       int64     `json:"id" gorm:"primaryKey;autoIncrement"`
-	TargetID string    `json:"documentId" gorm:"type:text;not null;index"`
-	URL      string    `json:"url" gorm:"type:text"`
-	Params   *string   `json:"params,omitempty" gorm:"type:text"`
-	Defaults *string   `json:"defaults,omitempty" gorm:"type:text"`
-	CDate    time.Time `json:"cdate" gorm:"->;<-:create;type:timestamp with time zone;not null;default:clock_timestamp()"`
 }
