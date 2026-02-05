@@ -68,11 +68,11 @@ type PolicyDocument struct {
 }
 
 type Policy struct {
-	Statements map[string][]Stmt     `json:"statements"`
-	Defaults   map[string]Conclusion `json:"defaults"`
+	Statements map[string][]Statement `json:"statements"`
+	Defaults   map[string]Conclusion  `json:"defaults"`
 }
 
-type Stmt struct {
+type Statement struct {
 	Emit      Conclusion `json:"emit"`
 	Condition Expr       `json:"condition"`
 	Reason    string     `json:"reason,omitempty"`

@@ -16,11 +16,13 @@ func NewPolicyService(global policy.PolicyDocument) *PolicyService {
 	return &PolicyService{global: global}
 }
 
-func (s *PolicyService) Eval(ctx context.Context, req policy.RequestContext, action string) error {
+func (s *PolicyService) Eval(ctx context.Context, req policy.RequestContext, stack [][]policy.PolicyDocument, action string) error {
 	ctx, span := tracer.Start(ctx, "Policy.Service.Eval")
 	defer span.End()
 
-	conclusion, error := policy.EvaluatePolicy(ctx, s.global, req, action)
+	stack = append([][]policy.PolicyDocument{{s.global}}, stack...)
+
+	conclusion, error := policy.EvaluateStack(ctx, req, stack, action)
 	if error != nil {
 		return error
 	}

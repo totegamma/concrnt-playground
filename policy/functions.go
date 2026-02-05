@@ -27,6 +27,61 @@ func SummerizeConclusion(conclusions []Conclusion, defaultAllow bool) bool {
 	return result == ALLOW
 }
 
+func MergePolicies(policies []PolicyDocument) PolicyDocument {
+	merged := PolicyDocument{
+		Versions: make(map[string]Policy),
+	}
+
+	for _, policy := range policies {
+		for version, policyVersion := range policy.Versions {
+			if _, exists := merged.Versions[version]; !exists {
+				merged.Versions[version] = Policy{
+					Statements: make(map[string][]Statement),
+					Defaults:   make(map[string]Conclusion),
+				}
+			}
+			mergedVersion := merged.Versions[version]
+
+			for action, statements := range policyVersion.Statements {
+				mergedVersion.Statements[action] = append(mergedVersion.Statements[action], statements...)
+			}
+
+			for action, def := range policyVersion.Defaults {
+				mergedVersion.Defaults[action] = def
+			}
+
+			merged.Versions[version] = mergedVersion
+		}
+	}
+
+	return merged
+}
+
+func EvaluateStack(ctx context.Context, req RequestContext, stack [][]PolicyDocument, action string) (Conclusion, error) {
+
+	conclusion := UNSET
+
+	for _, level := range stack {
+		merged := MergePolicies(level)
+
+		result, err := EvaluatePolicy(ctx, merged, req, action)
+		if err != nil {
+			return UNSET, err
+		}
+
+		switch result {
+		case DENY:
+			return DENY, nil
+		case ALLOW:
+			return ALLOW, nil
+		default:
+			conclusion = conclusion.Or(result)
+		}
+	}
+
+	return conclusion, nil
+}
+
 func EvaluatePolicy(ctx context.Context, policydoc PolicyDocument, req RequestContext, action string) (Conclusion, error) {
 	ctx, span := tracer.Start(ctx, "Policy.EvaluatePolicy")
 	defer span.End()

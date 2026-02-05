@@ -124,12 +124,19 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 			return err
 		}
 
+		stack, err := uc.repo.GetHierarchicalRecordPolicies(ctx, string(deletedoc.Value))
+		if err != nil {
+			span.RecordError(err)
+			return err
+		}
+
 		err = uc.policy.Eval(
 			ctx,
 			policy.RequestContext{
 				Requester: requester,
 				This:      targetDoc,
 			},
+			stack,
 			"commit.delete",
 		)
 		if err != nil {
@@ -276,8 +283,34 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 	return nil
 }
 
+// net.concrnt.resource
 func (uc *RecordUsecase) GetSigned(ctx context.Context, uri string) (*concrnt.SignedDocument, error) {
-	return uc.repo.GetSignedDocument(ctx, uri)
+
+	doc, err := uc.repo.GetSignedDocument(ctx, uri)
+	if err != nil {
+		return nil, err
+	}
+
+	stack, err := uc.repo.GetHierarchicalRecordPolicies(ctx, uri)
+	if err != nil {
+		return nil, err
+	}
+
+	err = uc.policy.Eval(
+		ctx,
+		policy.RequestContext{
+			// TODO: set requester
+			This: doc,
+		},
+		stack,
+		"net.concrnt.resource",
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return doc, nil
 }
 
 func (uc *RecordUsecase) GetAssociatedRecords(ctx context.Context, targetURI, schema, variant, author string) ([]concrnt.Document[any], error) {
