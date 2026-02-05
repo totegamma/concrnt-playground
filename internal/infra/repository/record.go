@@ -17,6 +17,7 @@ import (
 	"github.com/totegamma/concrnt-playground/internal/domain"
 	"github.com/totegamma/concrnt-playground/internal/infra/database/models"
 	"github.com/totegamma/concrnt-playground/internal/utils"
+	"github.com/totegamma/concrnt-playground/policy"
 	"github.com/totegamma/concrnt-playground/schemas"
 )
 
@@ -274,6 +275,84 @@ func (r *RecordRepository) CreateAssociation(ctx context.Context, documentID str
 
 func (r *RecordRepository) CreateAck(ctx context.Context, sd concrnt.SignedDocument) error {
 	return fmt.Errorf("not implemented")
+}
+
+func (r *RecordRepository) GetHierarchicalRecordPolicies(ctx context.Context, uri string) ([][]policy.PolicyDocument, error) {
+	ctx, span := tracer.Start(ctx, "Repository.Record.GetRecordHierarchy")
+	defer span.End()
+
+	parsed, err := concrnt.ParseCCURI(uri)
+	if err != nil {
+		span.RecordError(err)
+		return nil, err
+	}
+
+	cckv := uri
+	if parsed.Scheme == "ccfs" {
+		var rk models.RecordKey
+		err = r.db.WithContext(ctx).
+			Joins("JOIN records r ON r.document_id = record_keys.record_id").
+			Where("r.document_id = ?", parsed.CDID).
+			Take(&rk).Error
+		if err != nil {
+			span.RecordError(err)
+			return nil, errors.Join(domain.NotFoundError{Resource: uri}, err)
+		}
+		cckv = rk.URI
+	}
+
+	hierarchy := []string{}
+	currentURI := cckv
+	for {
+		hierarchy = append([]string{currentURI}, hierarchy...)
+		parentURI, err := url.JoinPath(currentURI, "..")
+		if err != nil {
+			span.RecordError(err)
+			return nil, err
+		}
+		if parentURI == currentURI {
+			break
+		}
+		currentURI = parentURI
+	}
+
+	type tuple struct {
+		uri    string
+		record models.Record
+	}
+
+	var entries []tuple
+	err = r.db.WithContext(ctx).
+		Joins("JOIN record_keys rk ON rk.record_id = records.document_id").
+		Where("rk.uri IN ?", hierarchy).
+		Find(&entries).Error
+	if err != nil {
+		span.RecordError(err)
+		return nil, err
+	}
+
+	recordMap := make(map[string]models.Record)
+	for _, res := range entries {
+		recordMap[res.uri] = res.record
+	}
+
+	policies := [][]policy.PolicyDocument{}
+	for i := len(hierarchy) - 1; i >= 0; i-- {
+		uri := hierarchy[i]
+		if record, ok := recordMap[uri]; ok {
+			if record.Policies != nil {
+				var policyDocs []policy.PolicyDocument
+				err := json.Unmarshal([]byte(*record.Policies), &policyDocs)
+				if err != nil {
+					span.RecordError(err)
+					return nil, err
+				}
+				policies = append(policies, policyDocs)
+			}
+		}
+	}
+
+	return policies, nil
 }
 
 func (r *RecordRepository) GetSignedDocument(ctx context.Context, uri string) (*concrnt.SignedDocument, error) {
