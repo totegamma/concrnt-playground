@@ -28,7 +28,7 @@ type RecordRepository interface {
 	Delete(ctx context.Context, sd concrnt.SignedDocument) (string, error)
 
 	GetSignedDocument(ctx context.Context, uri string) (*concrnt.SignedDocument, error)
-	GetHierarchicalRecordPolicies(ctx context.Context, uri string) ([][]policy.PolicyDocument, error)
+	GetHierarchicalRecordPolicies(ctx context.Context, uri string) ([][]concrnt.Policy, error)
 
 	GetAssociatedRecords(ctx context.Context, targetURI, schema, variant, author string) ([]concrnt.Document[any], error)
 	GetAssociatedRecordCountsBySchema(ctx context.Context, targetURI string) (map[string]int64, error)

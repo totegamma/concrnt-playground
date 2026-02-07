@@ -67,6 +67,14 @@ type PolicyDocument struct {
 	Versions    map[string]Policy `json:"versions"`
 }
 
+type EvaluationSet struct {
+	PolicyDocument PolicyDocument     `json:"policyDocument"`
+	Params         *map[string]any    `json:"params"`
+	Defaults       *map[string]string `json:"defaults"`
+}
+
+type PolicyStack [][]EvaluationSet
+
 type Policy struct {
 	Statements map[string][]Statement `json:"statements"`
 	Defaults   map[string]Conclusion  `json:"defaults"`

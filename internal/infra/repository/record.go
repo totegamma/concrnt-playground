@@ -17,7 +17,6 @@ import (
 	"github.com/totegamma/concrnt-playground/internal/domain"
 	"github.com/totegamma/concrnt-playground/internal/infra/database/models"
 	"github.com/totegamma/concrnt-playground/internal/utils"
-	"github.com/totegamma/concrnt-playground/policy"
 	"github.com/totegamma/concrnt-playground/schemas"
 )
 
@@ -277,7 +276,7 @@ func (r *RecordRepository) CreateAck(ctx context.Context, sd concrnt.SignedDocum
 	return fmt.Errorf("not implemented")
 }
 
-func (r *RecordRepository) GetHierarchicalRecordPolicies(ctx context.Context, uri string) ([][]policy.PolicyDocument, error) {
+func (r *RecordRepository) GetHierarchicalRecordPolicies(ctx context.Context, uri string) ([][]concrnt.Policy, error) {
 	ctx, span := tracer.Start(ctx, "Repository.Record.GetHierarchicalRecordPolicies")
 	defer span.End()
 
@@ -337,12 +336,12 @@ func (r *RecordRepository) GetHierarchicalRecordPolicies(ctx context.Context, ur
 		recordMap[res.uri] = res.record
 	}
 
-	policies := [][]policy.PolicyDocument{}
+	policies := [][]concrnt.Policy{}
 	for i := len(hierarchy) - 1; i >= 0; i-- {
 		uri := hierarchy[i]
 		if record, ok := recordMap[uri]; ok {
 			if record.Policies != nil {
-				var policyDocs []policy.PolicyDocument
+				var policyDocs []concrnt.Policy
 				err := json.Unmarshal([]byte(*record.Policies), &policyDocs)
 				if err != nil {
 					span.RecordError(err)
