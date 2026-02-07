@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -36,7 +37,6 @@ func New(defaultResolver string) *Client {
 		Timeout: defaultTimeout,
 	}
 
-	fmt.Println("Initialize Client with default resolver:", defaultResolver)
 	c := &Client{
 		client:          &httpClient,
 		cache:           cache.New(10*time.Minute, 15*time.Minute),
@@ -65,7 +65,8 @@ func (c *Client) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 func (c *Client) resolveResolver(ctx context.Context, resolver string) (string, error) {
-	fmt.Println("Resolving resolver:", resolver)
+	ctx, span := tracer.Start(ctx, "Client.resolveResolver")
+	defer span.End()
 
 	if resolver == "" {
 		return c.defaultResolver, nil
@@ -74,7 +75,9 @@ func (c *Client) resolveResolver(ctx context.Context, resolver string) (string, 
 	if concrnt.IsCCID(resolver) {
 		entity, err := c.GetEntity(ctx, resolver, nil)
 		if err != nil {
-			return "", fmt.Errorf("failed to get entity for ccid %s: %v", resolver, err)
+			err := errors.Join(fmt.Errorf("failed to get entity for ccid %s", resolver), err)
+			span.RecordError(err)
+			return "", err
 		}
 		return entity.Domain, nil
 	}
@@ -82,7 +85,9 @@ func (c *Client) resolveResolver(ctx context.Context, resolver string) (string, 
 	if concrnt.IsCSID(resolver) {
 		wkc, err := c.GetServer(ctx, resolver, nil)
 		if err != nil {
-			return "", fmt.Errorf("failed to get server for csid %s: %v", resolver, err)
+			err := errors.Join(fmt.Errorf("failed to get server for csid %s", resolver), err)
+			span.RecordError(err)
+			return "", err
 		}
 		return wkc.Domain, nil
 	}
@@ -91,44 +96,54 @@ func (c *Client) resolveResolver(ctx context.Context, resolver string) (string, 
 }
 
 func (c *Client) HttpRequest(ctx context.Context, method, resolver, path string, response any) error {
+	ctx, span := tracer.Start(ctx, "Client.HttpRequest")
+	defer span.End()
 
 	if resolver == "" || resolver == c.defaultResolver {
 		resolver = c.defaultResolver
-		fmt.Println("defaultResolver:", c.defaultResolver)
-		fmt.Println("Using default resolver:", resolver)
 	} else {
 		domain, err := c.resolveResolver(ctx, resolver)
 		if err != nil {
-			return fmt.Errorf("failed to resolve resolver: %v", err)
+			err := errors.Join(fmt.Errorf("failed to resolve resolver %s", resolver), err)
+			span.RecordError(err)
+			return err
 		}
 		resolver = domain
-		fmt.Println("Resolved resolver to domain:", resolver)
 	}
 
 	if resolver == "" {
-		return fmt.Errorf("resolver cannot be empty")
+		err := fmt.Errorf("resolver cannot be empty")
+		span.RecordError(err)
+		return err
 	}
 
 	url := "https://" + resolver + path
-	fmt.Printf("Making request to URL: %s\n", url)
 	req, err := http.NewRequestWithContext(ctx, method, url, nil)
 	if err != nil {
-		return fmt.Errorf("failed to create request: %v", err)
+		err := errors.Join(fmt.Errorf("failed to create request to %s", url), err)
+		span.RecordError(err)
+		return err
 	}
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to perform request: %v", err)
+		err := errors.Join(fmt.Errorf("failed to perform request to %s", url), err)
+		span.RecordError(err)
+		return err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		err := fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		span.RecordError(err)
+		return err
 	}
 
 	err = json.NewDecoder(resp.Body).Decode(&response)
 	if err != nil {
-		return fmt.Errorf("failed to decode response: %v", err)
+		err := errors.Join(fmt.Errorf("failed to decode response from %s", url), err)
+		span.RecordError(err)
+		return err
 	}
 
 	return nil
@@ -136,44 +151,55 @@ func (c *Client) HttpRequest(ctx context.Context, method, resolver, path string,
 }
 
 func (c *Client) HttpRequestText(ctx context.Context, method, resolver, path string) (string, error) {
+	ctx, span := tracer.Start(ctx, "Client.HttpRequestText")
+	defer span.End()
 
 	if resolver == "" || resolver == c.defaultResolver {
 		resolver = c.defaultResolver
-		fmt.Println("defaultResolver:", c.defaultResolver)
-		fmt.Println("Using default resolver:", resolver)
 	} else {
 		domain, err := c.resolveResolver(ctx, resolver)
 		if err != nil {
-			return "", fmt.Errorf("failed to resolve resolver: %v", err)
+			err := errors.Join(fmt.Errorf("failed to resolve resolver %s", resolver), err)
+			span.RecordError(err)
+			return "", err
 		}
 		resolver = domain
-		fmt.Println("Resolved resolver to domain:", resolver)
 	}
 
 	if resolver == "" {
-		return "", fmt.Errorf("resolver cannot be empty")
+		err := fmt.Errorf("resolver cannot be empty")
+		span.RecordError(err)
+		return "", err
 	}
 
 	url := "https://" + resolver + path
-	fmt.Printf("Making request to URL: %s\n", url)
 	req, err := http.NewRequestWithContext(ctx, method, url, nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to create request: %v", err)
+		err := errors.Join(fmt.Errorf("failed to create request to %s", url), err)
+		span.RecordError(err)
+		return "", err
 	}
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("failed to perform request: %v", err)
+		err := errors.Join(fmt.Errorf("failed to perform request to %s", url), err)
+		span.RecordError(err)
+		return "", err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		err := fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		span.RecordError(err)
+		return "", err
+
 	}
 
 	bytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("failed to read response body: %v", err)
+		err := errors.Join(fmt.Errorf("failed to read response body from %s", url), err)
+		span.RecordError(err)
+		return "", err
 	}
 
 	return string(bytes), nil
@@ -181,12 +207,12 @@ func (c *Client) HttpRequestText(ctx context.Context, method, resolver, path str
 }
 
 func (c *Client) GetEntity(ctx context.Context, address string, hint *string) (concrnt.Entity, error) {
-	fmt.Printf("Getting entity for address: %s with hint: %v\n", address, hint)
+	ctx, span := tracer.Start(ctx, "Client.GetEntity")
+	defer span.End()
 
 	cacheKey := "entity:" + address
 	x, found := c.cache.Get(cacheKey)
 	if found {
-		fmt.Println("Cache hit for entity:", address)
 		return x.(concrnt.Entity), nil
 	}
 
@@ -198,7 +224,9 @@ func (c *Client) GetEntity(ctx context.Context, address string, hint *string) (c
 	var entity concrnt.Entity
 	err := c.GetResource(ctx, "cckv://"+address, "application/json", opts, &entity)
 	if err != nil {
-		return concrnt.Entity{}, fmt.Errorf("failed to get entity: %v", err)
+		err := errors.Join(fmt.Errorf("failed to get entity for address %s", address), err)
+		span.RecordError(err)
+		return concrnt.Entity{}, err
 	}
 
 	c.cache.Set(cacheKey, entity, cache.DefaultExpiration)
@@ -207,13 +235,13 @@ func (c *Client) GetEntity(ctx context.Context, address string, hint *string) (c
 }
 
 func (c *Client) GetServer(ctx context.Context, domainOrCSID string, hint *string) (concrnt.WellKnownConcrnt, error) {
-	fmt.Printf("Getting server for domain or CSID: %s\n", domainOrCSID)
+	ctx, span := tracer.Start(ctx, "Client.GetServer")
+	defer span.End()
 
 	cacheKey := "server:" + domainOrCSID
 
 	x, found := c.cache.Get(cacheKey)
 	if found {
-		fmt.Println("Cache hit for well-known concrnt:", domainOrCSID)
 		return x.(concrnt.WellKnownConcrnt), nil
 	}
 
@@ -221,7 +249,9 @@ func (c *Client) GetServer(ctx context.Context, domainOrCSID string, hint *strin
 		var wkc concrnt.WellKnownConcrnt
 		err := c.GetResource(ctx, "cckv://"+domainOrCSID, "application/json", Options{Resolver: c.defaultResolver}, &wkc)
 		if err != nil {
-			return concrnt.WellKnownConcrnt{}, fmt.Errorf("failed to get well-known concrnt: %v", err)
+			err := errors.Join(fmt.Errorf("failed to get well-known concrnt for csid %s", domainOrCSID), err)
+			span.RecordError(err)
+			return concrnt.WellKnownConcrnt{}, err
 		}
 		c.cache.Set(cacheKey, wkc, cache.DefaultExpiration)
 		return wkc, nil
@@ -235,20 +265,28 @@ func (c *Client) GetServer(ctx context.Context, domainOrCSID string, hint *strin
 		url := "https://" + domain + "/.well-known/concrnt"
 		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 		if err != nil {
-			return concrnt.WellKnownConcrnt{}, fmt.Errorf("failed to create request: %v", err)
+			err := errors.Join(fmt.Errorf("failed to create request for well-known concrnt at %s", url), err)
+			span.RecordError(err)
+			return concrnt.WellKnownConcrnt{}, err
 		}
 		resp, err := c.client.Do(req)
 		if err != nil {
-			return concrnt.WellKnownConcrnt{}, fmt.Errorf("failed to perform request: %v", err)
+			err := errors.Join(fmt.Errorf("failed to perform request for well-known concrnt at %s", url), err)
+			span.RecordError(err)
+			return concrnt.WellKnownConcrnt{}, err
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
-			return concrnt.WellKnownConcrnt{}, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+			err := errors.Join(fmt.Errorf("failed to get well-known concrnt from %s", url), err)
+			span.RecordError(err)
+			return concrnt.WellKnownConcrnt{}, err
 		}
 		var wkc concrnt.WellKnownConcrnt
 		err = json.NewDecoder(resp.Body).Decode(&wkc)
 		if err != nil {
-			return concrnt.WellKnownConcrnt{}, fmt.Errorf("failed to decode well-known concrnt: %v", err)
+			err := errors.Join(fmt.Errorf("failed to decode well-known concrnt from %s", url), err)
+			span.RecordError(err)
+			return concrnt.WellKnownConcrnt{}, err
 		}
 		c.cache.Set(cacheKey, wkc, cache.DefaultExpiration)
 		return wkc, nil
@@ -256,35 +294,44 @@ func (c *Client) GetServer(ctx context.Context, domainOrCSID string, hint *strin
 }
 
 func (c *Client) GetResource(ctx context.Context, uri string, accept string, opts Options, result any) error {
-	fmt.Printf("Getting resource for URI: %s\n", uri)
+	ctx, span := tracer.Start(ctx, "Client.GetResource")
+	defer span.End()
 
 	parsed, err := concrnt.ParseCCURI(uri)
 	if err != nil {
-		return fmt.Errorf("failed to parse cc uri: %v", err)
+		err := errors.Join(fmt.Errorf("invalid cc uri %s", uri), err)
+		span.RecordError(err)
+		return err
 	}
-
-	fmt.Printf("Parsed URI - Owner: %s, Key: %s\n", parsed.Owner, parsed.Key)
 
 	var info concrnt.WellKnownConcrnt
 	if opts.Resolver != "" {
 		info, err = c.GetServer(ctx, opts.Resolver, nil)
 		if err != nil {
-			return fmt.Errorf("failed to get server for resolver %s: %v", opts.Resolver, err)
+			err := errors.Join(fmt.Errorf("failed to get server for resolver %s", opts.Resolver), err)
+			span.RecordError(err)
+			return err
 		}
 	} else {
 		domain, err := c.resolveResolver(ctx, parsed.Owner)
 		if err != nil {
-			return fmt.Errorf("failed to resolve default resolver: %v", err)
+			err := errors.Join(fmt.Errorf("failed to resolve default resolver for owner %s", parsed.Owner), err)
+			span.RecordError(err)
+			return err
 		}
 		info, err = c.GetServer(ctx, domain, nil)
 		if err != nil {
-			return fmt.Errorf("failed to get server for default resolver %s: %v", domain, err)
+			err := errors.Join(fmt.Errorf("failed to get server for default resolver %s", domain), err)
+			span.RecordError(err)
+			return err
 		}
 	}
 
 	desc, ok := info.Endpoints["net.concrnt.core.resolve"]
 	if !ok {
-		return fmt.Errorf("resource endpoint not found")
+		err := fmt.Errorf("resource endpoint not found in server %s", info.Domain)
+		span.RecordError(err)
+		return err
 	}
 
 	path := concrnt.RenderURITemplate(desc, map[string]string{
@@ -295,26 +342,33 @@ func (c *Client) GetResource(ctx context.Context, uri string, accept string, opt
 
 	endpoint := "https://" + info.Domain + path
 
-	req, err := http.NewRequest("GET", endpoint, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
 	if err != nil {
-		return fmt.Errorf("failed to create request: %v", err)
+		err := errors.Join(fmt.Errorf("failed to create request for resource %s", uri), err)
+		span.RecordError(err)
+		return err
 	}
 	if accept != "" {
 		req.Header.Set("Accept", accept)
 	}
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := c.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to get resource: %v", err)
+		err := errors.Join(fmt.Errorf("failed to perform request for resource %s", uri), err)
+		span.RecordError(err)
+		return err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		err := fmt.Errorf("failed to get resource %s: status code %d", uri, resp.StatusCode)
+		span.RecordError(err)
+		return err
 	}
 	err = json.NewDecoder(resp.Body).Decode(&result)
 	if err != nil {
-		return fmt.Errorf("failed to decode resource: %v", err)
+		err := errors.Join(fmt.Errorf("failed to decode resource %s", uri), err)
+		span.RecordError(err)
+		return err
 	}
 
 	return nil

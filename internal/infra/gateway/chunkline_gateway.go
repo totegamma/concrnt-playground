@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -61,8 +62,8 @@ func (r *resolver) ResolveTimelines(ctx context.Context, timelines []string) (ma
 		var manifest chunkline.Manifest
 		err := r.client.GetResource(ctx, tl, "application/chunkline+json", client.Options{}, &manifest)
 		if err != nil {
-			span.RecordError(err)
-			return nil, fmt.Errorf("failed to resolve timeline %s: %v", tl, err)
+			span.RecordError(errors.Join(fmt.Errorf("failed to fetch chunkline manifest for %s", tl), err))
+			continue
 		}
 		result[tl] = manifest
 		r.cache.Set(tl, manifest, cache.DefaultExpiration)
@@ -92,18 +93,23 @@ func (r *resolver) LookupChunkItrs(ctx context.Context, timelines []string, unti
 	results := make(map[string]string)
 	for _, tl := range timelines {
 
-		manifest := manifests[tl]
+		manifest, ok := manifests[tl]
+		if !ok {
+			err := fmt.Errorf("missing chunkline manifest for timeline %s", tl)
+			span.RecordError(err)
+			continue
+		}
 
 		if manifest.Descending.Iterator == "" {
 			err := fmt.Errorf("timeline %s does not support descending iteration", tl)
 			span.RecordError(err)
-			return nil, err
+			continue
 		}
 
 		parsed, err := concrnt.ParseCCURI(tl)
 		if err != nil {
 			span.RecordError(err)
-			return nil, fmt.Errorf("failed to parse timeline URI %s: %v", tl, err)
+			continue
 		}
 
 		result, err := r.client.HttpRequestText(
@@ -114,7 +120,7 @@ func (r *resolver) LookupChunkItrs(ctx context.Context, timelines []string, unti
 		)
 		if err != nil {
 			span.RecordError(err)
-			return nil, err
+			continue
 		}
 
 		results[tl] = result
@@ -145,7 +151,7 @@ func (r *resolver) LoadChunkBodies(ctx context.Context, query map[string]string)
 		parsed, err := concrnt.ParseCCURI(tl)
 		if err != nil {
 			span.RecordError(err)
-			return nil, fmt.Errorf("failed to parse timeline URI %s: %v", tl, err)
+			continue
 		}
 
 		var items []chunkline.BodyItem
@@ -158,13 +164,13 @@ func (r *resolver) LoadChunkBodies(ctx context.Context, query map[string]string)
 		)
 		if err != nil {
 			span.RecordError(err)
-			return nil, err
+			continue
 		}
 
 		chunkID, err := strconv.ParseInt(itr, 10, 64)
 		if err != nil {
 			span.RecordError(err)
-			return nil, fmt.Errorf("invalid chunk ID %s: %v", itr, err)
+			continue
 		}
 
 		result[tl] = chunkline.BodyChunk{

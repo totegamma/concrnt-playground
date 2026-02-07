@@ -172,7 +172,11 @@ func (h *Handler) handleCommit(c echo.Context) error {
 func (h *Handler) handleResource(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	uriString := c.QueryParam("uri")
+	uriEscaped := c.QueryParam("uri")
+	uriString, err := url.PathUnescape(uriEscaped)
+	if err != nil {
+		return presenter.BadRequestMessage(c, "invalid uri")
+	}
 
 	uri, err := url.Parse(uriString)
 	if err != nil {
