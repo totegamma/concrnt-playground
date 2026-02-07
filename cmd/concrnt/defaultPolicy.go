@@ -17,11 +17,11 @@ var globalPolicyJson = `
 					"args": [
 						{
 							"op": "Load",
-							"args": [ {"const": "requester.ccid"} ]
+							"const": "requester.ccid"
 						},
 						{
 							"op": "Load",
-							"args": [ {"const": "this.author"} ]
+							"const": "this.author"
 						}
 					]
 				}
@@ -38,11 +38,11 @@ var globalPolicyJson = `
 							"args": [
 								{
 									"op": "Load",
-									"args": [ {"const": "requester.ccid"} ]
+									"const": "requester.ccid"
 								},
 								{
 									"op": "Load",
-									"args": [ {"const": "this.author"} ]
+									"const": "this.author"
 								}
 							]
 						},
@@ -51,11 +51,11 @@ var globalPolicyJson = `
 							"args": [
 								{
 									"op": "Load",
-									"args": [ {"const": "requester.ccid"} ]
+									"const": "requester.ccid"
 								},
 								{
 									"op": "Load",
-									"args": [ {"const": "this.owner"} ]
+									"const": "this.owner"
 								}
 							]
 						}
