@@ -93,28 +93,33 @@ func (h *Handler) handleWellKnown(c echo.Context) error {
 		CSID:    h.config.CSID,
 		Layer:   h.config.Layer,
 		Endpoints: map[string]concrnt.ConcrntEndpoint{
-			"net.concrnt.resource": {
-				Template: "/resource/{uri}",
+			"net.concrnt.core.resolve": {
+				Template: "/resolve",
 				Method:   "GET",
+				Query:    &[]string{"uri"},
 			},
-			"net.concrnt.commit": {
+			"net.concrnt.core.commit": {
 				Template: "/commit",
 				Method:   "POST",
 			},
-			"net.concrnt.query": {
+			"net.concrnt.core.query": {
 				Template: "/query",
 				Method:   "GET",
 				Query:    &[]string{"prefix", "schema", "since", "until", "limit", "order"},
 			},
-			"net.concrnt.associations": {
+			"net.concrnt.core.associations": {
 				Template: "/associations",
 				Method:   "GET",
 				Query:    &[]string{"uri", "schema", "variant", "author"},
 			},
-			"net.concrnt.association-counts": {
+			"net.concrnt.core.association-counts": {
 				Template: "/association-counts",
 				Method:   "GET",
 				Query:    &[]string{"uri", "schema"},
+			},
+			"net.concrnt.core.realtime": {
+				Template: "/realtime",
+				Method:   "GET",
 			},
 			"net.concrnt.world.register": {
 				Template: "/api/v1/register",
@@ -124,10 +129,6 @@ func (h *Handler) handleWellKnown(c echo.Context) error {
 				Template: "/api/v1/timeline/recent",
 				Method:   "GET",
 				Query:    &[]string{"uris", "until", "limit"},
-			},
-			"net.concrnt.realtime": {
-				Template: "/realtime",
-				Method:   "GET",
 			},
 		},
 		SoftwareInfo: h.info,

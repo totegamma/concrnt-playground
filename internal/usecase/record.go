@@ -138,7 +138,7 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 				This:      targetDoc,
 			},
 			stack,
-			"commit.delete",
+			"net.concrnt.core.commit.delete",
 		)
 		if err != nil {
 			span.RecordError(err)
@@ -284,7 +284,6 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 	return nil
 }
 
-// net.concrnt.resource
 func (uc *RecordUsecase) GetSigned(ctx context.Context, uri string) (*concrnt.SignedDocument, error) {
 
 	sd, err := uc.repo.GetSignedDocument(ctx, uri)
@@ -315,7 +314,7 @@ func (uc *RecordUsecase) GetSigned(ctx context.Context, uri string) (*concrnt.Si
 			This:      doc,
 		},
 		stack,
-		"net.concrnt.resource",
+		"net.concrnt.core.resolve",
 	)
 
 	if err != nil {

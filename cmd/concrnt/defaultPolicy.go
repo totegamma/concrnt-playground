@@ -12,7 +12,7 @@ var globalPolicyJson = `
 	"versions": {
 		"2025-12-23": {
 			"statements": {
-				"commit.delete": [
+				"net.concrnt.core.commit.delete": [
 					{
 						"emit": "allow",
 						"condition": {
@@ -30,7 +30,7 @@ var globalPolicyJson = `
 						}
 					}
 				],
-				"net.concrnt.resource": [
+				"net.concrnt.core.resolve": [
 					{
 						"emit": "allow",
 						"condition": {
