@@ -181,7 +181,9 @@ func (h *Handler) handleResource(c echo.Context) error {
 		if concrnt.IsCCID(parsed.Owner) {
 			entity, err := h.entity.Get(ctx, parsed.Owner, parsed.Hint)
 			if err != nil {
-				return presenter.InternalError(c, err)
+				if errors.Is(err, domain.ErrPermissionDenied) {
+					return presenter.Forbidden(c, "permission denied") // TODO: should be return NotFound
+				}
 			}
 			return presenter.OK(c, entity)
 		}
@@ -192,6 +194,9 @@ func (h *Handler) handleResource(c echo.Context) error {
 
 		wkc, err := h.server.Resolve(ctx, parsed.Owner, parsed.Hint)
 		if err != nil {
+			if errors.Is(err, domain.ErrPermissionDenied) {
+				return presenter.Forbidden(c, "permission denied") // TODO: should be return NotFound
+			}
 			return presenter.InternalError(c, err)
 		}
 		return presenter.OK(c, wkc.WellKnown)
@@ -206,6 +211,9 @@ func (h *Handler) handleResource(c echo.Context) error {
 			if errors.Is(err, domain.ErrNotFound) {
 				return presenter.NotFound(c, "resource not found")
 			}
+			if errors.Is(err, domain.ErrPermissionDenied) {
+				return presenter.Forbidden(c, "permission denied") // TODO: should be return NotFound
+			}
 			return presenter.InternalError(c, err)
 		}
 		return presenter.OK(c, value)
@@ -214,6 +222,9 @@ func (h *Handler) handleResource(c echo.Context) error {
 		if err != nil {
 			if errors.Is(err, domain.ErrNotFound) {
 				return presenter.NotFound(c, "resource not found")
+			}
+			if errors.Is(err, domain.ErrPermissionDenied) {
+				return presenter.Forbidden(c, "permission denied") // TODO: should be return NotFound
 			}
 			return presenter.InternalError(c, err)
 		}

@@ -29,6 +29,42 @@ var globalPolicyJson = `
 							]
 						}
 					}
+				],
+				"net.concrnt.resource": [
+					{
+						"emit": "allow",
+						"condition": {
+							"op": "Or",
+							"args": [
+								{
+									"op": "Eq",
+									"args": [
+										{
+											"op": "Load",
+											"args": [ {"const": "requester.ccid"} ]
+										},
+										{
+											"op": "Load",
+											"args": [ {"const": "this.author"} ]
+										}
+									]
+								},
+								{
+									"op": "Eq",
+									"args": [
+										{
+											"op": "Load",
+											"args": [ {"const": "requester.ccid"} ]
+										},
+										{
+											"op": "Load",
+											"args": [ {"const": "this.owner"} ]
+										}
+									]
+								}
+							]
+						}
+					}
 				]
 			},
 			"defaults": {

@@ -13,6 +13,7 @@ import (
 
 	"github.com/totegamma/concrnt-playground"
 	"github.com/totegamma/concrnt-playground/cdid"
+	"github.com/totegamma/concrnt-playground/internal/domain"
 	"github.com/totegamma/concrnt-playground/internal/service"
 	"github.com/totegamma/concrnt-playground/internal/utils"
 	"github.com/totegamma/concrnt-playground/policy"
@@ -286,7 +287,13 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 // net.concrnt.resource
 func (uc *RecordUsecase) GetSigned(ctx context.Context, uri string) (*concrnt.SignedDocument, error) {
 
-	doc, err := uc.repo.GetSignedDocument(ctx, uri)
+	sd, err := uc.repo.GetSignedDocument(ctx, uri)
+	if err != nil {
+		return nil, err
+	}
+
+	var doc concrnt.Document[any]
+	err = json.Unmarshal([]byte(sd.Document), &doc)
 	if err != nil {
 		return nil, err
 	}
@@ -296,11 +303,16 @@ func (uc *RecordUsecase) GetSigned(ctx context.Context, uri string) (*concrnt.Si
 		return nil, err
 	}
 
+	requester, ok := ctx.Value(domain.RequesterCtxKey).(concrnt.Entity)
+	if !ok {
+		requester = concrnt.Entity{}
+	}
+
 	err = uc.policy.Eval(
 		ctx,
 		policy.RequestContext{
-			// TODO: set requester
-			This: doc,
+			Requester: requester,
+			This:      doc,
 		},
 		stack,
 		"net.concrnt.resource",
@@ -310,7 +322,7 @@ func (uc *RecordUsecase) GetSigned(ctx context.Context, uri string) (*concrnt.Si
 		return nil, err
 	}
 
-	return doc, nil
+	return sd, nil
 }
 
 func (uc *RecordUsecase) GetAssociatedRecords(ctx context.Context, targetURI, schema, variant, author string) ([]concrnt.Document[any], error) {

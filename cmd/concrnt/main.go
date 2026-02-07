@@ -119,7 +119,7 @@ func main() {
 	chunklineGateway := gateway.NewChunklineGateway(cl)
 	chunklineUC := usecase.NewChunklineUsecase(chunklineRepo, chunklineGateway)
 
-	authMiddleware := middleware.NewAuthMiddleware(auth, globalConfig)
+	authMiddleware := middleware.NewAuthMiddleware(auth, globalConfig, entityRepo)
 
 	e.Use(authMiddleware.IdentifyIdentity)
 

@@ -11,6 +11,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/totegamma/concrnt-playground/internal/domain"
+	"github.com/totegamma/concrnt-playground/internal/infra/repository"
 	"github.com/totegamma/concrnt-playground/internal/service"
 )
 
@@ -19,15 +20,18 @@ var tracer = otel.Tracer("auth")
 type AuthMiddleware struct {
 	auth   *service.AuthService
 	config domain.Config
+	entity *repository.EntityRepository
 }
 
 func NewAuthMiddleware(
 	auth *service.AuthService,
 	config domain.Config,
+	entity *repository.EntityRepository,
 ) *AuthMiddleware {
 	return &AuthMiddleware{
 		auth:   auth,
 		config: config,
+		entity: entity,
 	}
 }
 
@@ -60,7 +64,13 @@ func (s *AuthMiddleware) IdentifyIdentity(next echo.HandlerFunc) echo.HandlerFun
 				goto skipCheckAuthorization
 			}
 
-			ctx = context.WithValue(ctx, domain.RequesterIdCtxKey, result.CCID)
+			requester, err := s.entity.Get(ctx, result.CCID, nil) // TODO use passport to get hint
+			if err != nil {
+				span.RecordError(errors.Wrap(err, "AuthMiddleware.IdentifyIdentity: s.entity.Get failed"))
+				goto skipCheckAuthorization
+			}
+
+			ctx = context.WithValue(ctx, domain.RequesterCtxKey, requester)
 			span.SetAttributes(attribute.String("RequesterId", result.CCID))
 
 		}

@@ -278,7 +278,7 @@ func (r *RecordRepository) CreateAck(ctx context.Context, sd concrnt.SignedDocum
 }
 
 func (r *RecordRepository) GetHierarchicalRecordPolicies(ctx context.Context, uri string) ([][]policy.PolicyDocument, error) {
-	ctx, span := tracer.Start(ctx, "Repository.Record.GetRecordHierarchy")
+	ctx, span := tracer.Start(ctx, "Repository.Record.GetHierarchicalRecordPolicies")
 	defer span.End()
 
 	parsed, err := concrnt.ParseCCURI(uri)
@@ -323,6 +323,7 @@ func (r *RecordRepository) GetHierarchicalRecordPolicies(ctx context.Context, ur
 
 	var entries []tuple
 	err = r.db.WithContext(ctx).
+		Model(&models.Record{}).
 		Joins("JOIN record_keys rk ON rk.record_id = records.document_id").
 		Where("rk.uri IN ?", hierarchy).
 		Find(&entries).Error
