@@ -55,7 +55,7 @@ func NewHandler(
 func (h *Handler) RegisterRoutes(e *echo.Echo) {
 	e.GET("/.well-known/concrnt", h.handleWellKnown)
 	e.POST("/commit", h.handleCommit)
-	e.GET("/resource/:uri", h.handleResource)
+	e.GET("/resolve", h.handleResource)
 	e.GET("/query", h.handleQuery)
 	e.GET("/chunkline/:owner/:key/:chunk/itr", h.handleChunklineItr)
 	e.GET("/chunkline/:owner/:key/:chunk/body", h.handleChunklineBody)
@@ -172,11 +172,8 @@ func (h *Handler) handleCommit(c echo.Context) error {
 func (h *Handler) handleResource(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	escaped := c.Param("uri")
-	uriString, err := url.QueryUnescape(escaped)
-	if err != nil {
-		return presenter.BadRequestMessage(c, "invalid uri")
-	}
+	uriString := c.QueryParam("uri")
+
 	uri, err := url.Parse(uriString)
 	if err != nil {
 		return presenter.BadRequestMessage(c, "invalid uri")
