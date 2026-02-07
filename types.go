@@ -26,8 +26,10 @@ type WellKnownConcrnt struct {
 	Domain       string                     `json:"domain"`
 	CSID         string                     `json:"csid"`
 	Layer        string                     `json:"layer"`
+	Dimension    string                     `json:"dimension"` // for backwards compatibility
 	Endpoints    map[string]ConcrntEndpoint `json:"endpoints"`
 	SoftwareInfo SoftwareInfo               `json:"softwareInfo"`
+	Meta         *any                       `json:"meta,omitempty"`
 }
 
 type Policy struct {

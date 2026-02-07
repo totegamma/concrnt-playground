@@ -64,6 +64,7 @@ func (h *Handler) RegisterRoutes(e *echo.Echo) {
 	e.GET("/associations", h.handleAssociations)
 	e.GET("/association-counts", h.handleAssociationCounts)
 	e.GET("/realtime", h.handleRealtime)
+	e.GET("/api/v1/domain", h.handleLegacyDomain)
 
 	e.GET("/internal/signal/subscriptions", h.handleCurrentSubs)
 
@@ -86,12 +87,23 @@ func (h *Handler) RegisterRoutes(e *echo.Echo) {
 	})
 }
 
+func (h *Handler) handleLegacyDomain(c echo.Context) error {
+	domain := echo.Map{
+		"fqdn":      h.config.FQDN,
+		"csid":      h.config.CSID,
+		"dimension": h.config.Dimension,
+		"meta":      h.config.Meta,
+	}
+	return presenter.OK(c, echo.Map{"content": domain})
+}
+
 func (h *Handler) handleWellKnown(c echo.Context) error {
 	wellknown := concrnt.WellKnownConcrnt{
-		Version: "2.0",
-		Domain:  h.config.FQDN,
-		CSID:    h.config.CSID,
-		Layer:   h.config.Layer,
+		Version:   "2.0",
+		Domain:    h.config.FQDN,
+		CSID:      h.config.CSID,
+		Layer:     h.config.Layer,
+		Dimension: h.config.Dimension,
 		Endpoints: map[string]concrnt.ConcrntEndpoint{
 			"net.concrnt.core.resolve": {
 				Template: "/resolve",
@@ -132,6 +144,7 @@ func (h *Handler) handleWellKnown(c echo.Context) error {
 			},
 		},
 		SoftwareInfo: h.info,
+		Meta:         h.config.Meta,
 	}
 	return presenter.OK(c, wellknown)
 }
