@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/patrickmn/go-cache"
@@ -268,21 +267,20 @@ func (c *Client) GetResource(ctx context.Context, uri string, accept string, opt
 		}
 	}
 
-	endpoint, ok := info.Endpoints["net.concrnt.core.resource"]
+	desc, ok := info.Endpoints["net.concrnt.core.resolve"]
 	if !ok {
 		return fmt.Errorf("resource endpoint not found")
 	}
 
-	template := endpoint.Template
+	path := concrnt.RenderURITemplate(desc, map[string]string{
+		"owner": parsed.Owner,
+		"key":   parsed.Key,
+		"uri":   url.QueryEscape(uri),
+	})
 
-	template = strings.ReplaceAll(template, "{owner}", parsed.Owner)
-	template = strings.ReplaceAll(template, "{key}", parsed.Key)
-	template = strings.ReplaceAll(template, "{uri}", url.QueryEscape(uri))
-	template = "https://" + info.Domain + template
+	endpoint := "https://" + info.Domain + path
 
-	fmt.Printf("Resolved endpoint: %s\n", template)
-
-	req, err := http.NewRequest("GET", template, nil)
+	req, err := http.NewRequest("GET", endpoint, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %v", err)
 	}

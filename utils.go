@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 )
 
@@ -96,4 +97,30 @@ func IsCSID(keyID string) bool {
 
 func IsCKID(keyID string) bool {
 	return len(keyID) == 42 && keyID[:3] == "cck" && !hasChar(keyID, '.')
+}
+
+func RenderURITemplate(desc ConcrntEndpoint, args map[string]string) string {
+
+	endpoint := desc.Template
+	queries := []string{}
+
+	for key, value := range args {
+		if value == "" {
+			continue
+		}
+		placeholder := "{" + key + "}"
+
+		if strings.Contains(desc.Template, placeholder) {
+			endpoint = strings.ReplaceAll(endpoint, placeholder, value)
+		}
+		if slices.Contains(*desc.Query, key) {
+			queries = append(queries, fmt.Sprintf("%s=%s", key, url.QueryEscape(value)))
+		}
+	}
+
+	if len(queries) > 0 {
+		endpoint += "?" + strings.Join(queries, "&")
+	}
+
+	return endpoint
 }
