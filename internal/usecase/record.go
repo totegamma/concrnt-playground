@@ -88,8 +88,7 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 	hash := concrnt.GetHash([]byte(sd.Document))
 	hash10 := [10]byte{}
 	copy(hash10[:], hash[:10])
-	createdAt := doc.CreatedAt
-	documentID := cdid.New(hash10, createdAt).String()
+	documentID := cdid.New(hash10, doc.CreatedAt).String()
 
 	requesterID := doc.Author
 	requester, err := uc.entity.Get(ctx, requesterID, nil)
@@ -231,7 +230,7 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 			}
 			path := path.Join(parsed.Key, documentID)
 
-			document := concrnt.Document[schemas.Reference]{
+			distDoc := concrnt.Document[schemas.Reference]{
 				Key: path,
 				Value: schemas.Reference{
 					Href: resultURI,
@@ -241,7 +240,7 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 				Schema:    schemas.ReferenceURL,
 				CreatedAt: time.Now(),
 			}
-			docBytes, err := json.Marshal(document)
+			docBytes, err := json.Marshal(distDoc)
 			if err != nil {
 				span.RecordError(err)
 				return err
@@ -254,11 +253,10 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 				},
 			}
 
-			hash := concrnt.GetHash([]byte(sd.Document))
-			hash10 := [10]byte{}
-			copy(hash10[:], hash[:10])
-			createdAt := doc.CreatedAt
-			distCDID := cdid.New(hash10, createdAt).String()
+			distHash := concrnt.GetHash(docBytes)
+			distHash10 := [10]byte{}
+			copy(distHash10[:], distHash[:10])
+			distCDID := cdid.New(distHash10, doc.CreatedAt).String()
 
 			distURI, err := uc.repo.CreateRecord(ctx, distCDID, distSD)
 			if err != nil {
