@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -14,29 +15,30 @@ import (
 )
 
 type PolicyService struct {
-	global policy.PolicyDocument
+	global policy.Policy
 	cache  *cache.Cache
 }
 
-func NewPolicyService(global policy.PolicyDocument) *PolicyService {
+func NewPolicyService(global policy.Policy) *PolicyService {
 	return &PolicyService{
 		global: global,
 		cache:  cache.New(10*time.Minute, 15*time.Minute),
 	}
 }
 
-func (s *PolicyService) ResolvePolicyURL(ctx context.Context, policyURL string) (policy.PolicyDocument, error) {
+func (s *PolicyService) ResolvePolicyURL(ctx context.Context, policyURL string) (policy.Policy, error) {
 	ctx, span := tracer.Start(ctx, "Policy.Service.ResolvePolicyURL")
 	defer span.End()
 
 	cached, found := s.cache.Get(policyURL)
 	if found {
-		return cached.(policy.PolicyDocument), nil
+		return cached.(policy.Policy), nil
 	}
 
 	resp, err := http.Get(policyURL)
 	if err != nil {
-		return policy.PolicyDocument{}, err
+		span.RecordError(err)
+		return policy.Policy{}, err
 	}
 	defer resp.Body.Close()
 
@@ -44,12 +46,31 @@ func (s *PolicyService) ResolvePolicyURL(ctx context.Context, policyURL string) 
 	decoder := json.NewDecoder(resp.Body)
 	err = decoder.Decode(&policyDoc)
 	if err != nil {
-		return policy.PolicyDocument{}, err
+		span.RecordError(err)
+		return policy.Policy{}, err
 	}
 
-	s.cache.Set(policyURL, policyDoc, cache.DefaultExpiration)
+	policyAny, ok := policyDoc.Versions["2025-12-23"]
+	if !ok {
+		return policy.Policy{}, fmt.Errorf("unsupported policy version in %s", policyURL)
+	}
 
-	return policyDoc, nil
+	policyString, err := json.Marshal(policyAny)
+	if err != nil {
+		span.RecordError(err)
+		return policy.Policy{}, err
+	}
+
+	var policy20251223 policy.Policy
+	err = json.Unmarshal(policyString, &policy20251223)
+	if err != nil {
+		span.RecordError(err)
+		return policy.Policy{}, err
+	}
+
+	s.cache.Set(policyURL, policy20251223, cache.DefaultExpiration)
+
+	return policy20251223, nil
 }
 
 func (s *PolicyService) Eval(ctx context.Context, req policy.RequestContext, stack [][]concrnt.Policy, action string) error {
@@ -59,22 +80,23 @@ func (s *PolicyService) Eval(ctx context.Context, req policy.RequestContext, sta
 	var policyStack policy.PolicyStack
 	policyStack = append(policyStack, []policy.EvaluationSet{
 		{
-			PolicyDocument: s.global,
+			Policy: s.global,
 		},
 	})
 
 	for _, layer := range stack {
 		policyLayer := []policy.EvaluationSet{}
 		for _, p := range layer {
-			doc, err := s.ResolvePolicyURL(ctx, p.URL)
+			pol, err := s.ResolvePolicyURL(ctx, p.URL)
 			if err != nil {
+				span.RecordError(err)
 				continue // TODO:
 			}
 
 			policyLayer = append(policyLayer, policy.EvaluationSet{
-				PolicyDocument: doc,
-				Params:         p.Params,
-				Defaults:       p.Defaults,
+				Policy:   pol,
+				Params:   p.Params,
+				Defaults: p.Defaults,
 			})
 		}
 		policyStack = append(policyStack, policyLayer)

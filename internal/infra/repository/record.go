@@ -316,13 +316,14 @@ func (r *RecordRepository) GetHierarchicalRecordPolicies(ctx context.Context, ur
 	}
 
 	type tuple struct {
-		uri    string
-		record models.Record
+		Uri    string  `gorm:"column:uri"`
+		Policy *string `gorm:"column:policy"`
 	}
 
 	var entries []tuple
 	err = r.db.WithContext(ctx).
 		Model(&models.Record{}).
+		Select("rk.uri AS uri, records.policies AS policy").
 		Joins("JOIN record_keys rk ON rk.record_id = records.document_id").
 		Where("rk.uri IN ?", hierarchy).
 		Find(&entries).Error
@@ -331,18 +332,18 @@ func (r *RecordRepository) GetHierarchicalRecordPolicies(ctx context.Context, ur
 		return nil, err
 	}
 
-	recordMap := make(map[string]models.Record)
+	policyMap := make(map[string]*string)
 	for _, res := range entries {
-		recordMap[res.uri] = res.record
+		policyMap[res.Uri] = res.Policy
 	}
 
 	policies := [][]concrnt.Policy{}
 	for i := len(hierarchy) - 1; i >= 0; i-- {
 		uri := hierarchy[i]
-		if record, ok := recordMap[uri]; ok {
-			if record.Policies != nil {
+		if policy, ok := policyMap[uri]; ok {
+			if policy != nil {
 				var policyDocs []concrnt.Policy
-				err := json.Unmarshal([]byte(*record.Policies), &policyDocs)
+				err := json.Unmarshal([]byte(*policy), &policyDocs)
 				if err != nil {
 					span.RecordError(err)
 					return nil, err

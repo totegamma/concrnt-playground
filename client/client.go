@@ -9,9 +9,15 @@ import (
 	"net/url"
 	"time"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/propagation"
+
 	"github.com/patrickmn/go-cache"
 	"github.com/totegamma/concrnt-playground"
 )
+
+var tracer = otel.Tracer("client")
 
 const (
 	defaultTimeout = 3 * time.Second
@@ -46,6 +52,15 @@ type Options struct {
 
 func (c *Client) RoundTrip(req *http.Request) (*http.Response, error) {
 	req.Header.Set("User-Agent", c.userAgent)
+
+	ctx, span := tracer.Start(req.Context(), "HTTP "+req.Method)
+	defer span.End()
+
+	span.SetAttributes(attribute.String("http.method", req.Method))
+	span.SetAttributes(attribute.String("http.url", req.URL.String()))
+
+	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(req.Header))
+
 	return http.DefaultTransport.RoundTrip(req)
 }
 

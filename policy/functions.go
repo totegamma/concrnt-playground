@@ -28,6 +28,10 @@ func SummerizeConclusion(conclusions []Conclusion, defaultAllow bool) bool {
 }
 
 func EvaluateStack(ctx context.Context, req RequestContext, stack PolicyStack, action string) (Conclusion, error) {
+	ctx, span := tracer.Start(ctx, "Policy.EvaluateStack")
+	defer span.End()
+
+	span.SetAttributes(attribute.Int("policy.stack.layers", len(stack)))
 
 	conclusion := UNSET
 
@@ -41,8 +45,9 @@ func EvaluateStack(ctx context.Context, req RequestContext, stack PolicyStack, a
 				reqCtx.Params = *evalSet.Params
 			}
 
-			result, err := EvaluatePolicy(ctx, evalSet.PolicyDocument, reqCtx, action)
+			result, err := EvaluatePolicy(ctx, evalSet.Policy, reqCtx, action)
 			if err != nil {
+				span.RecordError(err)
 				return UNSET, err
 			}
 
@@ -63,14 +68,9 @@ func EvaluateStack(ctx context.Context, req RequestContext, stack PolicyStack, a
 	return conclusion, nil
 }
 
-func EvaluatePolicy(ctx context.Context, policydoc PolicyDocument, req RequestContext, action string) (Conclusion, error) {
+func EvaluatePolicy(ctx context.Context, policy Policy, req RequestContext, action string) (Conclusion, error) {
 	ctx, span := tracer.Start(ctx, "Policy.EvaluatePolicy")
 	defer span.End()
-
-	policy, ok := policydoc.Versions["2025-12-23"]
-	if !ok {
-		return UNSET, fmt.Errorf("unsupported policy version")
-	}
 
 	statements, ok := policy.Statements[action]
 	if !ok {
@@ -102,21 +102,33 @@ func EvaluatePolicy(ctx context.Context, policydoc PolicyDocument, req RequestCo
 	if conclusion == UNSET {
 		def := policy.Defaults[action]
 		if def == "" {
-			return DENY, nil
+			conclusion = NG
 		}
-		return def, nil
+		conclusion = def
 	}
+
+	span.SetAttributes(attribute.String("policy.conclusion", conclusion.String()))
 
 	return conclusion, nil
 }
 
 func Eval(ctx RequestContext, expr Expr) (EvalResult, error) {
 
-	if expr.Const != nil {
+	if expr.Operator == "Const" {
 		return EvalResult{
 			Operator: "Const",
 			Result:   expr.Const,
 		}, nil
+	}
+
+	// syntax sugar: if Const is set, prepend a Const arg
+	if expr.Const != nil {
+		expr.Args = append([]Expr{
+			{
+				Operator: "Const",
+				Const:    expr.Const,
+			},
+		}, expr.Args...)
 	}
 
 	args := make([]any, 0, len(expr.Args))

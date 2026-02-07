@@ -83,7 +83,7 @@ func opNot(ctx RequestContext, args []any) (EvalResult, error) {
 
 	evaluated, ok := args[0].(bool)
 	if !ok {
-		err := fmt.Errorf("bad argument type for NOT. Expected bool but got %s\n", reflect.TypeOf(args[0]))
+		err := fmt.Errorf("bad argument type for NOT. Expected bool but got %s: %v\n", reflect.TypeOf(args[0]), args[0])
 		return EvalResult{
 			Operator: "Not",
 			Error:    err.Error(),
@@ -122,7 +122,7 @@ func opContains(ctx RequestContext, args []any) (EvalResult, error) {
 
 	arg0, ok := args[0].([]any)
 	if !ok {
-		err := fmt.Errorf("bad argument type for CONTAINS. Expected []any but got %s\n", reflect.TypeOf(args[0]))
+		err := fmt.Errorf("bad argument type for CONTAINS. Expected []any but got %s: %v\n", reflect.TypeOf(args[0]), args[0])
 		return EvalResult{
 			Operator: "Contains",
 			Error:    err.Error(),

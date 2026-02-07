@@ -25,6 +25,10 @@ func ParseConclusion(s string) Conclusion {
 	}
 }
 
+func (c Conclusion) String() string {
+	return string(c)
+}
+
 func (c Conclusion) Or(other Conclusion) Conclusion {
 	if c == UNSET {
 		return other
@@ -62,15 +66,15 @@ type RequestContext struct {
 }
 
 type PolicyDocument struct {
-	Name        string            `json:"name"`
-	Description string            `json:"description"`
-	Versions    map[string]Policy `json:"versions"`
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
+	Versions    map[string]any `json:"versions"`
 }
 
 type EvaluationSet struct {
-	PolicyDocument PolicyDocument     `json:"policyDocument"`
-	Params         *map[string]any    `json:"params"`
-	Defaults       *map[string]string `json:"defaults"`
+	Policy   Policy             `json:"policy"`
+	Params   *map[string]any    `json:"params"`
+	Defaults *map[string]string `json:"defaults"`
 }
 
 type PolicyStack [][]EvaluationSet
@@ -83,7 +87,7 @@ type Policy struct {
 type Statement struct {
 	Emit      Conclusion `json:"emit"`
 	Condition Expr       `json:"condition"`
-	Reason    string     `json:"reason,omitempty"`
+	Reason    *string    `json:"reason,omitempty"`
 }
 
 type Expr struct {
