@@ -167,7 +167,7 @@ func (c *Client) HttpRequestText(ctx context.Context, method, resolver, path str
 }
 
 func (c *Client) GetEntity(ctx context.Context, address string, hint *string) (concrnt.Entity, error) {
-	fmt.Printf("Getting entity for address: %s with hint: %s\n", address, *hint)
+	fmt.Printf("Getting entity for address: %s with hint: %v\n", address, hint)
 
 	cacheKey := "entity:" + address
 	x, found := c.cache.Get(cacheKey)
