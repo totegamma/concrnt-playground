@@ -12,6 +12,7 @@ import (
 type Config struct {
 	NodeInfo NodeInfo `yaml:"nodeInfo"`
 	Server   Server   `yaml:"server"`
+	Profile  any      `yaml:"profile"`
 }
 
 type NodeInfo struct {
@@ -20,6 +21,7 @@ type NodeInfo struct {
 	Registration string `yaml:"registration"` // open, invite, close
 	SiteKey      string `yaml:"sitekey"`
 	Layer        string `yaml:"layer"`
+	Dimension    string `yaml:"dimension"` // backward compatibility
 }
 
 type Server struct {
@@ -66,6 +68,8 @@ func (c Config) GlobalConfig() domain.Config {
 		Registration: c.NodeInfo.Registration,
 		SiteKey:      c.NodeInfo.SiteKey,
 		Layer:        c.NodeInfo.Layer,
+		Dimension:    c.NodeInfo.Dimension,
 		CSID:         csid,
+		Meta:         &c.Profile,
 	}
 }
