@@ -64,7 +64,6 @@ func (h *Handler) RegisterRoutes(e *echo.Echo) {
 	e.GET("/associations", h.handleAssociations)
 	e.GET("/association-counts", h.handleAssociationCounts)
 	e.GET("/realtime", h.handleRealtime)
-	e.GET("/api/v1/domain", h.handleLegacyDomain)
 
 	e.GET("/internal/signal/subscriptions", h.handleCurrentSubs)
 
@@ -85,16 +84,14 @@ func (h *Handler) RegisterRoutes(e *echo.Echo) {
 
 		return c.String(http.StatusOK, "ok")
 	})
-}
 
-func (h *Handler) handleLegacyDomain(c echo.Context) error {
-	domain := echo.Map{
-		"fqdn":      h.config.FQDN,
-		"csid":      h.config.CSID,
-		"dimension": h.config.Dimension,
-		"meta":      h.config.Meta,
-	}
-	return presenter.OK(c, echo.Map{"content": domain})
+	// Legacy endpoints
+	e.GET("/api/v1/domain", h.handleLegacyDomain)
+	e.GET("/api/v1/entity/:id", h.handleLegacyEntity)
+	e.GET("/api/v1/entities", h.handleLegacyEntities)
+	e.GET("/api/v1/timelines", h.handleLegacyTimelines)
+	e.GET("/api/v1/profile/:owner/:semanticid", h.handleLegacyProfile)
+	e.GET("/api/v1/profiles", h.handleLegacyProfiles)
 }
 
 func (h *Handler) handleWellKnown(c echo.Context) error {
@@ -561,4 +558,97 @@ func (h *Handler) handleRealtime(c echo.Context) error {
 			}
 		}
 	}
+}
+
+func (h *Handler) handleLegacyDomain(c echo.Context) error {
+	domain := echo.Map{
+		"fqdn":      h.config.FQDN,
+		"csid":      h.config.CSID,
+		"dimension": h.config.Dimension,
+		"meta":      h.config.Meta,
+	}
+	return presenter.OK(c, echo.Map{"status": "ok", "content": domain})
+}
+
+func (h *Handler) handleLegacyEntity(c echo.Context) error {
+	id := c.Param("id")
+	ctx := c.Request().Context()
+
+	entity, err := h.entity.Get(ctx, id, nil)
+	if err != nil {
+		return presenter.InternalError(c, err)
+	}
+	return presenter.OK(c, echo.Map{"status": "ok", "content": entity})
+
+}
+
+func (h *Handler) handleLegacyEntities(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	entities, err := h.entity.List(ctx)
+	if err != nil {
+		return presenter.InternalError(c, err)
+	}
+	return presenter.OK(c, echo.Map{"status": "ok", "content": entities})
+}
+
+func (h *Handler) handleLegacyTimelines(c echo.Context) error {
+	ctx := c.Request().Context()
+	schemaEscaped := c.QueryParam("schema")
+	schema, err := url.PathUnescape(schemaEscaped)
+	if err != nil {
+		return presenter.BadRequestMessage(c, "invalid schema")
+	}
+
+	results, err := h.record.Query(ctx, "", schema, nil, nil, 0, "desc")
+	if err != nil {
+		return presenter.InternalError(c, err)
+	}
+	return presenter.OK(c, echo.Map{"status": "ok", "content": results})
+}
+
+func (h *Handler) handleLegacyProfile(c echo.Context) error {
+	owner, err := url.PathUnescape(c.Param("owner"))
+	if err != nil {
+		return presenter.BadRequestMessage(c, "invalid owner")
+	}
+	semanticID, err := url.PathUnescape(c.Param("semanticid"))
+	if err != nil {
+		return presenter.BadRequestMessage(c, "invalid semanticid")
+	}
+
+	if semanticID == "world.concrnt.p" {
+		semanticID = "concrnt.world/main/profile"
+	}
+
+	uri := concrnt.ComposeCCURI("cckv", owner, semanticID)
+
+	ctx := c.Request().Context()
+	sd, err := h.record.GetSigned(ctx, uri)
+	if err != nil {
+		return presenter.InternalError(c, err)
+	}
+
+	doc, err := concrnt.ToLegacyDocument(sd)
+	if err != nil {
+		return presenter.InternalError(c, err)
+	}
+
+	return presenter.OK(c, echo.Map{"status": "ok", "content": doc})
+}
+
+func (h *Handler) handleLegacyProfiles(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	schemaEscaped := c.QueryParam("schema")
+	schema, err := url.PathUnescape(schemaEscaped)
+	if err != nil {
+		return presenter.BadRequestMessage(c, "invalid schema")
+	}
+
+	results, err := h.record.Query(ctx, "", schema, nil, nil, 0, "desc")
+	if err != nil {
+		return presenter.InternalError(c, err)
+	}
+	return presenter.OK(c, echo.Map{"status": "ok", "content": results})
 }

@@ -61,6 +61,16 @@ type Document[T any] struct {
 	Policies *[]Policy `json:"policies,omitempty"`
 }
 
+type LegacyDocument struct {
+	ID        string    `json:"id"`
+	Author    string    `json:"author"`
+	Owner     *string   `json:"owner,omitempty"`
+	Schema    string    `json:"schema,omitempty"`
+	Document  string    `json:"document"`
+	Signature string    `json:"signature"`
+	CDate     time.Time `json:"cdate"`
+}
+
 type SchemaDeleteType string
 
 type Proof struct {

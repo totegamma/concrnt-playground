@@ -102,3 +102,22 @@ func (r *EntityRepository) Get(ctx context.Context, ccid string, hint *string) (
 		AffiliationSignature: newEntity.AffiliationSignature,
 	}, nil
 }
+
+func (r *EntityRepository) List(ctx context.Context) ([]concrnt.Entity, error) {
+	var entities []models.Entity
+	if err := r.db.WithContext(ctx).Find(&entities).Error; err != nil {
+		return nil, err
+	}
+
+	result := make([]concrnt.Entity, len(entities))
+	for i, e := range entities {
+		result[i] = concrnt.Entity{
+			CCID:                 e.ID,
+			Domain:               e.Domain,
+			AffiliationDocument:  e.AffiliationDocument,
+			AffiliationSignature: e.AffiliationSignature,
+		}
+	}
+
+	return result, nil
+}

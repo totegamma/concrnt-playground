@@ -714,7 +714,11 @@ func (r *RecordRepository) Query(
 		query = query.Order("r.c_date ASC")
 	}
 
-	if err := query.Limit(limit).Preload("Record.Document").Find(&rks).Error; err != nil {
+	if limit > 0 {
+		query = query.Limit(limit)
+	}
+
+	if err := query.Preload("Record.Document").Find(&rks).Error; err != nil {
 		span.RecordError(err)
 		return nil, err
 	}

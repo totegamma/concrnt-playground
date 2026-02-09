@@ -6,6 +6,8 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+
+	"github.com/totegamma/concrnt-playground/cdid"
 )
 
 func JsonPrint(tag string, v any) {
@@ -123,4 +125,28 @@ func RenderURITemplate(desc ConcrntEndpoint, args map[string]string) string {
 	}
 
 	return endpoint
+}
+
+func ToLegacyDocument(sd *SignedDocument) (*LegacyDocument, error) {
+
+	var doc Document[any]
+	err := json.Unmarshal([]byte(sd.Document), &doc)
+	if err != nil {
+		return nil, err
+	}
+
+	hash := GetHash([]byte(sd.Document))
+	hash10 := [10]byte{}
+	copy(hash10[:], hash[:10])
+	documentID := cdid.New(hash10, doc.CreatedAt).String()
+
+	return &LegacyDocument{
+		ID:        documentID,
+		Author:    doc.Author,
+		Owner:     doc.Owner,
+		Schema:    doc.Schema,
+		Document:  sd.Document,
+		Signature: *sd.Proof.Signature,
+		CDate:     doc.CreatedAt,
+	}, nil
 }

@@ -29,6 +29,13 @@ var globalPolicyJson = `
 		],
 		"net.concrnt.core.resolve": [
 			{
+				"emit": "ok",
+				"condition": {
+					"op": "Const",
+					"const": true
+				}
+			},
+			{
 				"emit": "allow",
 				"condition": {
 					"op": "Or",

@@ -13,6 +13,7 @@ import (
 type EntityRepository interface {
 	Register(ctx context.Context, entity domain.Entity, meta domain.EntityMeta) error
 	Get(ctx context.Context, ccid string, resolver *string) (concrnt.Entity, error)
+	List(ctx context.Context) ([]concrnt.Entity, error)
 }
 
 type EntityUsecase struct {
@@ -42,4 +43,8 @@ func (uc *EntityUsecase) Register(ctx context.Context, req concrnt.RegisterReque
 
 func (uc *EntityUsecase) Get(ctx context.Context, ccid string, resolver *string) (concrnt.Entity, error) {
 	return uc.repo.Get(ctx, ccid, resolver)
+}
+
+func (uc *EntityUsecase) List(ctx context.Context) ([]concrnt.Entity, error) {
+	return uc.repo.List(ctx)
 }
