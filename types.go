@@ -29,7 +29,7 @@ type WellKnownConcrnt struct {
 	Dimension    string                     `json:"dimension"` // for backwards compatibility
 	Endpoints    map[string]ConcrntEndpoint `json:"endpoints"`
 	SoftwareInfo SoftwareInfo               `json:"softwareInfo"`
-	Meta         *any                       `json:"meta,omitempty"`
+	Meta         map[string]any             `json:"meta,omitempty"`
 }
 
 type Policy struct {

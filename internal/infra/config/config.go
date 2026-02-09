@@ -10,9 +10,9 @@ import (
 )
 
 type Config struct {
-	NodeInfo NodeInfo `yaml:"nodeInfo"`
-	Server   Server   `yaml:"server"`
-	Profile  any      `yaml:"profile"`
+	NodeInfo NodeInfo       `yaml:"nodeInfo"`
+	Server   Server         `yaml:"server"`
+	Profile  map[string]any `yaml:"profile"`
 }
 
 type NodeInfo struct {
@@ -70,6 +70,6 @@ func (c Config) GlobalConfig() domain.Config {
 		Layer:        c.NodeInfo.Layer,
 		Dimension:    c.NodeInfo.Dimension,
 		CSID:         csid,
-		Meta:         &c.Profile,
+		Meta:         c.Profile,
 	}
 }
