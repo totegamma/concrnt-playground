@@ -30,6 +30,8 @@ type RecordRepository interface {
 	GetSignedDocument(ctx context.Context, uri string) (*concrnt.SignedDocument, error)
 	GetHierarchicalRecordPolicies(ctx context.Context, uri string) ([][]concrnt.Policy, error)
 
+	GetDistributions(ctx context.Context, uri string) ([]string, error)
+
 	GetAssociatedRecords(ctx context.Context, targetURI, schema, variant, author string) ([]concrnt.Document[any], error)
 	GetAssociatedRecordCountsBySchema(ctx context.Context, targetURI string) (map[string]int64, error)
 	GetAssociatedRecordCountsByVariant(ctx context.Context, targetURI, schema string) (*utils.OrderedKVMap[int64], error)
@@ -181,18 +183,28 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 					span.RecordError(err)
 					return err
 				}
+
 				// signal
-				err = uc.signal.Publish(ctx, resultURI, concrnt.Event{
-					Type: "associated",
-					URI:  targetURI,
-					References: map[string]concrnt.SignedDocument{
-						resultURI: sd,
-					},
-				})
+				distributions, err := uc.repo.GetDistributions(ctx, targetURI)
 				if err != nil {
-					fmt.Printf("Error publishing signal for association: %v\n", err)
 					span.RecordError(err)
 					return err
+				}
+
+				notificationChannels := append(distributions, targetURI)
+				for _, channel := range notificationChannels {
+					err = uc.signal.Publish(ctx, channel, concrnt.Event{
+						Type: "associated",
+						URI:  targetURI,
+						References: map[string]concrnt.SignedDocument{
+							resultURI: sd,
+						},
+					})
+					if err != nil {
+						fmt.Printf("Error publishing signal for association: %v\n", err)
+						span.RecordError(err)
+						return err
+					}
 				}
 			}
 		} else { // 通常Record

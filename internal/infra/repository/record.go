@@ -55,12 +55,18 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, documentID string, 
 		policies = &policiesStr
 	}
 
+	distributions := []string{}
+	if doc.Distributes != nil {
+		distributions = *doc.Distributes
+	}
+
 	record := models.Record{
-		DocumentID: documentID,
-		Owner:      owner,
-		Schema:     doc.Schema,
-		Policies:   policies,
-		CDate:      time.Now(),
+		DocumentID:    documentID,
+		Owner:         owner,
+		Schema:        doc.Schema,
+		Policies:      policies,
+		Distributions: distributions,
+		CDate:         time.Now(),
 	}
 
 	key := doc.Key
@@ -572,6 +578,45 @@ func GetRecordKeyByURI(ctx context.Context, db *gorm.DB, uri string) (*models.Re
 	}
 
 	return &recordKey, nil
+}
+
+func (r *RecordRepository) GetDistributions(ctx context.Context, uri string) ([]string, error) {
+	ctx, span := tracer.Start(ctx, "Repository.Record.GetRecord")
+	defer span.End()
+
+	parsed, err := concrnt.ParseCCURI(uri)
+	if err != nil {
+		span.RecordError(err)
+		return nil, err
+	}
+
+	switch parsed.Scheme {
+	case "cckv":
+		var recordKey models.RecordKey
+		err = r.db.WithContext(ctx).Preload("Record").
+			Preload("Record.Document").
+			Where("uri = ?", uri).
+			Take(&recordKey).Error
+		if err != nil {
+			span.RecordError(err)
+			return nil, errors.Join(domain.NotFoundError{Resource: uri}, err)
+		}
+		return recordKey.Record.Distributions, nil
+	case "ccfs":
+		var record models.Record
+		err = r.db.WithContext(ctx).
+			Where("document_id = ?", parsed.CDID).
+			Take(&record).Error
+		if err != nil {
+			span.RecordError(err)
+			return nil, errors.Join(domain.NotFoundError{Resource: uri}, err)
+		}
+		return record.Distributions, nil
+	default:
+		err := fmt.Errorf("unsupported uri scheme: %s", parsed.Scheme)
+		span.RecordError(err)
+		return nil, err
+	}
 }
 
 func (r *RecordRepository) GetAssociatedRecords(

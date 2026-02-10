@@ -2,6 +2,8 @@ package models
 
 import (
 	"time"
+
+	"github.com/lib/pq"
 )
 
 type CommitOwner struct {
@@ -28,10 +30,11 @@ type RecordKey struct {
 }
 
 type Record struct {
-	DocumentID string    `json:"id" gorm:"primaryKey;type:text"`
-	Document   CommitLog `json:"documnet" gorm:"foreignKey:DocumentID;references:ID;constraint:OnDelete:CASCADE;"`
-	Owner      string    `json:"owner" gorm:"type:text"`
-	Schema     string    `json:"schema" gorm:"type:text"`
-	Policies   *string   `json:"policies" gorm:"type:text"`
-	CDate      time.Time `json:"cdate" gorm:"->;<-:create;type:timestamp with time zone;not null;default:clock_timestamp()"`
+	DocumentID    string         `json:"id" gorm:"primaryKey;type:text"`
+	Document      CommitLog      `json:"documnet" gorm:"foreignKey:DocumentID;references:ID;constraint:OnDelete:CASCADE;"`
+	Owner         string         `json:"owner" gorm:"type:text"`
+	Schema        string         `json:"schema" gorm:"type:text"`
+	Policies      *string        `json:"policies" gorm:"type:text"`
+	Distributions pq.StringArray `json:"distributions" gorm:"type:text[]"`
+	CDate         time.Time      `json:"cdate" gorm:"->;<-:create;type:timestamp with time zone;not null;default:clock_timestamp()"`
 }
