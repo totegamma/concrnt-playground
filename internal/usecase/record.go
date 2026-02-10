@@ -220,8 +220,8 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 	}
 
 	// Distribute
-	if doc.MemberOf != nil {
-		for _, memberOfURI := range *doc.MemberOf {
+	if doc.Distributes != nil {
+		for _, memberOfURI := range *doc.Distributes {
 			parsed, err := concrnt.ParseCCURI(memberOfURI)
 			if err != nil {
 				fmt.Printf("Error parsing memberOf URI: %v\n", err)

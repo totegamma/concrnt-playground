@@ -51,7 +51,7 @@ type Document[T any] struct {
 	CreatedAt time.Time `json:"createdAt"`
 
 	// CIP-5
-	MemberOf *[]string `json:"memberOf,omitempty"`
+	Distributes *[]string `json:"distributes,omitempty"`
 
 	// CIP-6
 	Associate          *string `json:"associate,omitempty"`
