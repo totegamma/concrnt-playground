@@ -687,7 +687,7 @@ func (r *RecordRepository) Query(
 	since, until *time.Time,
 	limit int,
 	order string,
-) (map[string]concrnt.Document[any], error) {
+) ([]concrnt.SignedDocument, error) {
 	ctx, span := tracer.Start(ctx, "Repository.Record.Query")
 	defer span.End()
 
@@ -723,15 +723,24 @@ func (r *RecordRepository) Query(
 		return nil, err
 	}
 
-	documents := make(map[string]concrnt.Document[any])
+	sds := make([]concrnt.SignedDocument, 0, len(rks))
 	for _, rk := range rks {
-		var doc concrnt.Document[any]
-		if err := json.Unmarshal([]byte(rk.Record.Document.Document), &doc); err != nil {
+		var proof concrnt.Proof
+		err := json.Unmarshal([]byte(rk.Record.Document.Proof), &proof)
+		if err != nil {
 			span.RecordError(err)
 			return nil, err
 		}
-		documents[rk.URI] = doc
+
+		ccfs := concrnt.ComposeCCURI("ccfs", rk.Record.Owner, rk.Record.DocumentID)
+
+		sds = append(sds, concrnt.SignedDocument{
+			CCKV:     &rk.URI,
+			CCFS:     &ccfs,
+			Document: rk.Record.Document.Document,
+			Proof:    proof,
+		})
 	}
 
-	return documents, nil
+	return sds, nil
 }
