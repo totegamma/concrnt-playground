@@ -23,7 +23,7 @@ import (
 // RecordRepository defines storage operations for records/commits.
 type RecordRepository interface {
 	CreateRecord(ctx context.Context, documentID string, sd concrnt.SignedDocument) (string, error)
-	CreateAssociation(ctx context.Context, documentID string, sd concrnt.SignedDocument) (string, error)
+	CreateAssociation(ctx context.Context, documentID string, sd concrnt.SignedDocument) (string, string, error)
 	CreateAck(ctx context.Context, sd concrnt.SignedDocument) error
 	Delete(ctx context.Context, sd concrnt.SignedDocument) (string, error)
 
@@ -175,7 +175,8 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 					return err
 				}
 			} else { // association
-				resultURI, err = uc.repo.CreateAssociation(ctx, documentID, sd)
+				var targetURI string
+				targetURI, resultURI, err = uc.repo.CreateAssociation(ctx, documentID, sd)
 				if err != nil {
 					span.RecordError(err)
 					return err
@@ -183,7 +184,7 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 				// signal
 				err = uc.signal.Publish(ctx, resultURI, concrnt.Event{
 					Type: "associated",
-					URI:  resultURI,
+					URI:  targetURI,
 					References: map[string]concrnt.SignedDocument{
 						resultURI: sd,
 					},
@@ -283,6 +284,8 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 }
 
 func (uc *RecordUsecase) GetSigned(ctx context.Context, uri string) (*concrnt.SignedDocument, error) {
+	ctx, span := tracer.Start(ctx, "Usecase.Record.GetSigned")
+	defer span.End()
 
 	sd, err := uc.repo.GetSignedDocument(ctx, uri)
 	if err != nil {
@@ -297,7 +300,8 @@ func (uc *RecordUsecase) GetSigned(ctx context.Context, uri string) (*concrnt.Si
 
 	stack, err := uc.repo.GetHierarchicalRecordPolicies(ctx, uri)
 	if err != nil {
-		return nil, err
+		span.RecordError(err)
+		stack = [][]concrnt.Policy{}
 	}
 
 	requester, ok := ctx.Value(domain.RequesterCtxKey).(concrnt.Entity)

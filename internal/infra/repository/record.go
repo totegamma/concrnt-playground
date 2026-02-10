@@ -180,7 +180,7 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, documentID string, 
 
 }
 
-func (r *RecordRepository) CreateAssociation(ctx context.Context, documentID string, sd concrnt.SignedDocument) (string, error) {
+func (r *RecordRepository) CreateAssociation(ctx context.Context, documentID string, sd concrnt.SignedDocument) (string, string, error) {
 	ctx, span := tracer.Start(ctx, "Repository.Record.CreateAssociation")
 	defer span.End()
 
@@ -188,7 +188,7 @@ func (r *RecordRepository) CreateAssociation(ctx context.Context, documentID str
 	err := json.Unmarshal([]byte(sd.Document), &doc)
 	if err != nil {
 		span.RecordError(err)
-		return "", err
+		return "", "", err
 	}
 
 	owner := doc.Author
@@ -199,7 +199,7 @@ func (r *RecordRepository) CreateAssociation(ctx context.Context, documentID str
 	targetRK, err := GetRecordKeyByURI(ctx, r.db, *doc.Associate)
 	if err != nil {
 		span.RecordError(err)
-		return "", err
+		return "", "", err
 	}
 
 	uniqueKey := owner + doc.Author + *doc.Associate
@@ -223,7 +223,7 @@ func (r *RecordRepository) CreateAssociation(ctx context.Context, documentID str
 	proof, err := json.Marshal(sd.Proof)
 	if err != nil {
 		span.RecordError(err)
-		return "", err
+		return "", "", err
 	}
 
 	commitLog := models.CommitLog{
@@ -269,7 +269,9 @@ func (r *RecordRepository) CreateAssociation(ctx context.Context, documentID str
 		return nil
 	})
 
-	return *doc.Associate, err
+	ccfs := concrnt.ComposeCCURI("ccfs", owner, documentID)
+
+	return *doc.Associate, ccfs, err
 }
 
 func (r *RecordRepository) CreateAck(ctx context.Context, sd concrnt.SignedDocument) error {
@@ -395,11 +397,10 @@ func (r *RecordRepository) GetSignedDocument(ctx context.Context, uri string) (*
 		}, nil
 
 	case "ccfs":
-		var record models.Record
+		var commitLog models.CommitLog
 		err = r.db.WithContext(ctx).
-			Preload("Document").
-			Where("document_id = ?", parsed.CDID).
-			Take(&record).Error
+			Where("id = ?", parsed.CDID).
+			Take(&commitLog).Error
 		if err != nil {
 			span.RecordError(err)
 			return nil, errors.Join(domain.NotFoundError{Resource: uri}, err)
@@ -409,14 +410,14 @@ func (r *RecordRepository) GetSignedDocument(ctx context.Context, uri string) (*
 		var recordKey models.RecordKey
 		err = r.db.WithContext(ctx).
 			Preload("Record").
-			Where("record_id = ?", record.DocumentID).
+			Where("record_id = ?", commitLog.ID).
 			Take(&models.RecordKey{}).Error
 		if err == nil {
 			cckv = &recordKey.URI
 		}
 
 		var proof concrnt.Proof
-		err = json.Unmarshal([]byte(record.Document.Proof), &proof)
+		err = json.Unmarshal([]byte(commitLog.Proof), &proof)
 		if err != nil {
 			span.RecordError(err)
 			return nil, err
@@ -425,7 +426,7 @@ func (r *RecordRepository) GetSignedDocument(ctx context.Context, uri string) (*
 		return &concrnt.SignedDocument{
 			CCFS:     &uri,
 			CCKV:     cckv,
-			Document: record.Document.Document,
+			Document: commitLog.Document,
 			Proof:    proof,
 		}, nil
 	default:

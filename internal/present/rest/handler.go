@@ -189,7 +189,7 @@ func (h *Handler) handleResource(c echo.Context) error {
 		return presenter.BadRequestMessage(c, "invalid uri")
 	}
 
-	if parsed.Key == "" {
+	if parsed.Key == "" && parsed.CDID == "" {
 		if concrnt.IsCCID(parsed.Owner) {
 			entity, err := h.entity.Get(ctx, parsed.Owner, parsed.Hint)
 			if err != nil {
