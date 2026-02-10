@@ -302,7 +302,7 @@ func (h *Handler) handleQuery(c echo.Context) error {
 
 	order := c.QueryParam("order")
 	if order == "" {
-		order = "asc"
+		order = "desc"
 	} else if order != "asc" && order != "desc" {
 		return presenter.BadRequestMessage(c, "invalid order parameter")
 	}
