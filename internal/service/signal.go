@@ -29,6 +29,8 @@ func NewSignalService(redisClient *redis.Client) *SignalService {
 
 func (s *SignalService) Publish(ctx context.Context, channel string, event concrnt.Event) error {
 
+	event.Source = channel
+
 	jsonstr, err := json.Marshal(event)
 	if err != nil {
 		return err

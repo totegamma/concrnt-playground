@@ -103,6 +103,7 @@ type RegisterRequest[T any] struct {
 
 type Event struct {
 	Type       string                    `json:"type"`
+	Source     string                    `json:"source"`
 	URI        string                    `json:"uri"`
 	References map[string]SignedDocument `json:"documents,omitempty"`
 }
