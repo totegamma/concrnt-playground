@@ -248,7 +248,7 @@ func (h *Handler) handleResource(c echo.Context) error {
 		}
 
 		if doc.Schema == schemas.ReferenceURL {
-			c.Response().Header().Set("Location", "/resource/"+url.PathEscape(doc.Value.Href))
+			c.Response().Header().Set("Location", "/resolve?uri="+url.PathEscape(doc.Value.Href))
 			return c.JSON(http.StatusFound, value)
 		}
 
