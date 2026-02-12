@@ -13,8 +13,8 @@ var (
 )
 
 type CDID struct {
-	data [10]byte
 	time [6]byte
+	data [10]byte
 }
 
 func New(data [10]byte, t time.Time) CDID {
@@ -70,7 +70,7 @@ func (c CDID) GetTime() time.Time {
 }
 
 func (c *CDID) Bytes() []byte {
-	return append(c.data[:], c.time[:]...)
+	return append(c.time[:], c.data[:]...)
 }
 
 func (c CDID) String() string {
@@ -88,8 +88,8 @@ func Parse(s string) (CDID, error) {
 	}
 
 	var c CDID
-	copy(c.data[:], b[:10])
-	copy(c.time[:], b[10:])
+	copy(c.time[:], b[:6])
+	copy(c.data[:], b[6:])
 	return c, nil
 }
 
