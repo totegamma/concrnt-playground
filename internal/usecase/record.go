@@ -13,6 +13,7 @@ import (
 
 	"github.com/totegamma/concrnt-playground"
 	"github.com/totegamma/concrnt-playground/cdid"
+	"github.com/totegamma/concrnt-playground/client"
 	"github.com/totegamma/concrnt-playground/internal/domain"
 	"github.com/totegamma/concrnt-playground/internal/service"
 	"github.com/totegamma/concrnt-playground/internal/utils"
@@ -40,16 +41,26 @@ type RecordRepository interface {
 
 type RecordUsecase struct {
 	repo   RecordRepository
+	client *client.Client
 	entity *EntityUsecase
 	signal *service.SignalService
 	policy *service.PolicyService
 }
 
-func NewRecordUsecase(repo RecordRepository, entity *EntityUsecase,
-	signal *service.SignalService, policy *service.PolicyService) *RecordUsecase {
-	return &RecordUsecase{repo: repo,
+func NewRecordUsecase(
+	repo RecordRepository,
+	client *client.Client,
+	entity *EntityUsecase,
+	signal *service.SignalService,
+	policy *service.PolicyService,
+) *RecordUsecase {
+	return &RecordUsecase{
+		repo:   repo,
+		client: client,
 		entity: entity,
-		signal: signal, policy: policy}
+		signal: signal,
+		policy: policy,
+	}
 }
 
 func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) error {
@@ -81,6 +92,13 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 			span.RecordError(err)
 			return err
 		}
+	case concrnt.ProofTypeDocumentReference:
+		if sd.Proof.Href == nil {
+			err := errors.New("href is required for document-reference proof")
+			span.RecordError(err)
+			return err
+		}
+		// TODO: 参照先のドキュメントの検証
 	default:
 		err := errors.New("unsupported proof type: " + sd.Proof.Type)
 		span.RecordError(err)
@@ -266,26 +284,9 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 				},
 			}
 
-			distHash := concrnt.GetHash(docBytes)
-			distHash10 := [10]byte{}
-			copy(distHash10[:], distHash[:10])
-			distCDID := cdid.New(distHash10, doc.CreatedAt).String()
-
-			distURI, err := uc.repo.CreateRecord(ctx, distCDID, distSD)
+			err = uc.client.Commit(ctx, parsed.Owner, distSD)
 			if err != nil {
-				fmt.Printf("Error creating memberOf item: %v\n", err)
-				continue
-			}
-			err = uc.signal.Publish(ctx, distURI, concrnt.Event{
-				Type: "created",
-				URI:  distURI,
-				References: map[string]concrnt.SignedDocument{
-					distURI:   distSD,
-					resultURI: sd,
-				},
-			})
-			if err != nil {
-				fmt.Printf("Error publishing signal for memberOf item: %v\n", err)
+				fmt.Printf("Error committing memberOf item: %v\n", err)
 				span.RecordError(err)
 				continue
 			}

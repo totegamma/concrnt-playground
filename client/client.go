@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -367,6 +368,76 @@ func (c *Client) GetResource(ctx context.Context, uri string, accept string, opt
 	err = json.NewDecoder(resp.Body).Decode(&result)
 	if err != nil {
 		err := errors.Join(fmt.Errorf("failed to decode resource %s", uri), err)
+		span.RecordError(err)
+		return err
+	}
+
+	return nil
+}
+
+func (c *Client) Commit(ctx context.Context, resolver string, sd concrnt.SignedDocument) error {
+	ctx, span := tracer.Start(ctx, "Client.Commit")
+	defer span.End()
+
+	if resolver == "" || resolver == c.defaultResolver {
+		resolver = c.defaultResolver
+	} else {
+		domain, err := c.resolveResolver(ctx, resolver)
+		if err != nil {
+			err := errors.Join(fmt.Errorf("failed to resolve resolver %s", resolver), err)
+			span.RecordError(err)
+			return err
+		}
+		resolver = domain
+	}
+
+	if resolver == "" {
+		err := fmt.Errorf("resolver cannot be empty")
+		span.RecordError(err)
+		return err
+	}
+
+	server, err := c.GetServer(ctx, resolver, nil)
+	if err != nil {
+		err := errors.Join(fmt.Errorf("failed to get server for resolver %s", resolver), err)
+		span.RecordError(err)
+		return err
+	}
+
+	desc, ok := server.Endpoints["net.concrnt.core.commit"]
+	if !ok {
+		err := fmt.Errorf("commit endpoint not found in server %s", server.Domain)
+		span.RecordError(err)
+		return err
+	}
+
+	path := concrnt.RenderURITemplate(desc, map[string]string{})
+	url := "https://" + server.Domain + path
+
+	body, err := json.Marshal(sd)
+	if err != nil {
+		err := errors.Join(fmt.Errorf("failed to marshal signed document for commit to %s", url), err)
+		span.RecordError(err)
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, "POST", url, io.NopCloser(bytes.NewReader(body)))
+	if err != nil {
+		err := errors.Join(fmt.Errorf("failed to create request for commit to %s", url), err)
+		span.RecordError(err)
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		err := errors.Join(fmt.Errorf("failed to perform request for commit to %s", url), err)
+		span.RecordError(err)
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		err := fmt.Errorf("failed to commit to %s: status code %d", url, resp.StatusCode)
 		span.RecordError(err)
 		return err
 	}

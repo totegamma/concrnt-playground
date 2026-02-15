@@ -113,7 +113,7 @@ func main() {
 	entityUC := usecase.NewEntityUsecase(entityRepo)
 
 	recordRepo := repository.NewRecordRepository(db)
-	recordUC := usecase.NewRecordUsecase(recordRepo, entityUC, signal, policy)
+	recordUC := usecase.NewRecordUsecase(recordRepo, cl, entityUC, signal, policy)
 
 	chunklineRepo := repository.NewChunklineRepository(db)
 	chunklineGateway := gateway.NewChunklineGateway(cl)

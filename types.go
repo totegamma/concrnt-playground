@@ -5,7 +5,8 @@ import (
 )
 
 const (
-	ProofTypeEcrecover = "concrnt-ecrecover-direct"
+	ProofTypeEcrecover         = "concrnt-ecrecover-direct"
+	ProofTypeDocumentReference = "document-reference"
 )
 
 type ConcrntEndpoint struct {
