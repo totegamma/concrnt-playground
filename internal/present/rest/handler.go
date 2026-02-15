@@ -63,6 +63,7 @@ func (h *Handler) RegisterRoutes(e *echo.Echo) {
 	e.GET("/api/v1/timeline/recent", h.handleTimelineRecent)
 	e.GET("/associations", h.handleAssociations)
 	e.GET("/association-counts", h.handleAssociationCounts)
+	e.GET("/known-servers", h.handleKnownServers)
 	e.GET("/realtime", h.handleRealtime)
 
 	e.GET("/internal/signal/subscriptions", h.handleCurrentSubs)
@@ -139,6 +140,10 @@ func (h *Handler) handleWellKnown(c echo.Context) error {
 				Method:   "GET",
 				Query:    &[]string{"uris", "until", "limit"},
 			},
+			"net.concrnt.core.known-servers": {
+				Template: "/known-servers",
+				Method:   "GET",
+			},
 		},
 		SoftwareInfo: h.info,
 		Meta:         h.config.Meta,
@@ -167,7 +172,8 @@ func (h *Handler) handleCommit(c echo.Context) error {
 }
 
 func (h *Handler) handleResource(c echo.Context) error {
-	ctx := c.Request().Context()
+	ctx, span := tracer.Start(c.Request().Context(), "Handler.handleResource")
+	defer span.End()
 
 	uriEscaped := c.QueryParam("uri")
 	uriString, err := url.PathUnescape(uriEscaped)
@@ -211,7 +217,7 @@ func (h *Handler) handleResource(c echo.Context) error {
 			}
 			return presenter.InternalError(c, err)
 		}
-		return presenter.OK(c, wkc.WellKnown)
+		return presenter.OK(c, wkc)
 	}
 
 	accept := c.Request().Header.Get("Accept")
@@ -651,4 +657,14 @@ func (h *Handler) handleLegacyProfiles(c echo.Context) error {
 		return presenter.InternalError(c, err)
 	}
 	return presenter.OK(c, echo.Map{"status": "ok", "content": results})
+}
+
+func (h *Handler) handleKnownServers(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	servers, err := h.server.List(ctx)
+	if err != nil {
+		return presenter.InternalError(c, err)
+	}
+	return presenter.OK(c, servers)
 }
