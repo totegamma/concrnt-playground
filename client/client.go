@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
 
+	"github.com/gorilla/websocket"
 	"github.com/patrickmn/go-cache"
 	"github.com/totegamma/concrnt-playground"
 )
@@ -63,6 +65,40 @@ func (c *Client) RoundTrip(req *http.Request) (*http.Response, error) {
 	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(req.Header))
 
 	return http.DefaultTransport.RoundTrip(req)
+}
+
+func (c *Client) ResolveResourceHost(ctx context.Context, uri string) (string, error) {
+	ctx, span := tracer.Start(ctx, "Client.ResolveResourceHost")
+	defer span.End()
+
+	parsed, err := concrnt.ParseCCURI(uri)
+	if err != nil {
+		err := errors.Join(fmt.Errorf("invalid cc uri %s", uri), err)
+		span.RecordError(err)
+		return "", err
+	}
+
+	if concrnt.IsCCID(parsed.Owner) {
+		entity, err := c.GetEntity(ctx, parsed.Owner, parsed.Hint)
+		if err != nil {
+			err := errors.Join(fmt.Errorf("failed to get entity for ccid %s", parsed.Owner), err)
+			span.RecordError(err)
+			return "", err
+		}
+		return entity.Domain, nil
+	}
+
+	if concrnt.IsCSID(parsed.Owner) {
+		wkc, err := c.GetServer(ctx, parsed.Owner, parsed.Hint)
+		if err != nil {
+			err := errors.Join(fmt.Errorf("failed to get server for csid %s", parsed.Owner), err)
+			span.RecordError(err)
+			return "", err
+		}
+		return wkc.Domain, nil
+	}
+
+	return parsed.Owner, nil
 }
 
 func (c *Client) resolveResolver(ctx context.Context, resolver string) (string, error) {
@@ -446,4 +482,49 @@ func (c *Client) Commit(ctx context.Context, resolver string, sd concrnt.SignedD
 	}
 
 	return nil
+}
+
+func (c *Client) Realtime(ctx context.Context, fqdn string) (*websocket.Conn, error) {
+	_, span := tracer.Start(ctx, "Client.Realtime")
+	defer span.End()
+
+	server, err := c.GetServer(ctx, fqdn, nil)
+	if err != nil {
+		err := errors.Join(fmt.Errorf("failed to get server for realtime connection to %s", fqdn), err)
+		span.RecordError(err)
+		return nil, err
+	}
+
+	desc, ok := server.Endpoints["net.concrnt.core.realtime"]
+	if !ok {
+		err := fmt.Errorf("realtime endpoint not found in server %s", server.Domain)
+		span.RecordError(err)
+		return nil, err
+	}
+
+	path := concrnt.RenderURITemplate(desc, map[string]string{})
+	domain := server.Domain
+
+	/*
+		if !c.IsOnline(domain) {
+			return nil, fmt.Errorf("Domain is offline")
+		}
+	*/
+
+	u := url.URL{Scheme: "wss", Host: domain, Path: path}
+	dialer := websocket.DefaultDialer
+	dialer.HandshakeTimeout = 10 * time.Second
+
+	header := http.Header{}
+	header.Set("User-Agent", c.userAgent)
+
+	conn, _, err := dialer.Dial(u.String(), header)
+	if err != nil {
+		slog.Warn("Failed to connect to websocket. Mark domain "+domain+" as offline", "error", err)
+		//c.lastFailed[domain] = time.Now()
+		span.RecordError(err)
+		return nil, err
+	}
+
+	return conn, nil
 }

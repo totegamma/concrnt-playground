@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"github.com/labstack/echo/v4"
 	echomiddleware "github.com/labstack/echo/v4/middleware"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 	"go.opentelemetry.io/otel/trace"
 	"log"
+	"log/slog"
 	"os"
 
 	"github.com/totegamma/concrnt-playground"
@@ -20,6 +22,7 @@ import (
 	"github.com/totegamma/concrnt-playground/internal/service"
 	"github.com/totegamma/concrnt-playground/internal/usecase"
 	"github.com/totegamma/concrnt-playground/internal/utils"
+	"github.com/totegamma/concrnt-playground/internal/worker"
 )
 
 var (
@@ -29,7 +32,30 @@ var (
 	goVersion    = "unknown"
 )
 
+type CustomHandler struct {
+	slog.Handler
+}
+
+func (h *CustomHandler) Handle(ctx context.Context, r slog.Record) error {
+
+	r.AddAttrs(slog.String("type", "app"))
+
+	span := trace.SpanFromContext(ctx)
+	if span.SpanContext().IsValid() {
+		r.AddAttrs(slog.String("traceID", span.SpanContext().TraceID().String()))
+		r.AddAttrs(slog.String("spanID", span.SpanContext().SpanID().String()))
+	}
+
+	return h.Handler.Handle(ctx, r)
+}
+
 func main() {
+
+	lh := &CustomHandler{Handler: slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	})}
+	slogger := slog.New(lh)
+	slog.SetDefault(slogger)
 
 	fmt.Fprint(os.Stderr, concrnt.Banner)
 
@@ -118,6 +144,9 @@ func main() {
 	chunklineRepo := repository.NewChunklineRepository(db)
 	chunklineGateway := gateway.NewChunklineGateway(cl)
 	chunklineUC := usecase.NewChunklineUsecase(chunklineRepo, chunklineGateway)
+
+	subscriber := worker.NewSubscriber(&globalConfig, cl, signal)
+	subscriber.Start(context.Background())
 
 	authMiddleware := middleware.NewAuthMiddleware(auth, globalConfig, entityRepo)
 

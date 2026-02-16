@@ -472,11 +472,6 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-type Request struct {
-	Type     string   `json:"type"`
-	Prefixes []string `json:"prefixes"`
-}
-
 func (h *Handler) handleRealtime(c echo.Context) error {
 	ws, err := upgrader.Upgrade(c.Response(), c.Request(), nil)
 	if err != nil {
@@ -504,7 +499,7 @@ func (h *Handler) handleRealtime(c echo.Context) error {
 
 	go func() {
 		for {
-			var req Request
+			var req concrnt.RealtimeRequest
 			err := ws.ReadJSON(&req)
 			if err != nil {
 

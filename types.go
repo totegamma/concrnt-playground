@@ -108,3 +108,8 @@ type Event struct {
 	URI        string                    `json:"uri"`
 	References map[string]SignedDocument `json:"documents,omitempty"`
 }
+
+type RealtimeRequest struct {
+	Type     string   `json:"type"`
+	Prefixes []string `json:"prefixes"`
+}
