@@ -41,6 +41,7 @@ type RecordRepository interface {
 
 type RecordUsecase struct {
 	repo   RecordRepository
+	config *domain.Config
 	client *client.Client
 	entity *EntityUsecase
 	signal *service.SignalService
@@ -49,6 +50,7 @@ type RecordUsecase struct {
 
 func NewRecordUsecase(
 	repo RecordRepository,
+	config *domain.Config,
 	client *client.Client,
 	entity *EntityUsecase,
 	signal *service.SignalService,
@@ -56,6 +58,7 @@ func NewRecordUsecase(
 ) *RecordUsecase {
 	return &RecordUsecase{
 		repo:   repo,
+		config: config,
 		client: client,
 		entity: entity,
 		signal: signal,
@@ -110,8 +113,15 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 	copy(hash10[:], hash[:10])
 	documentID := cdid.New(hash10, doc.CreatedAt).String()
 
+	var referrer *string
+	if v := ctx.Value(domain.ReferrerCtxKey); v != nil {
+		if s, ok := v.(string); ok {
+			referrer = &s
+		}
+	}
+
 	requesterID := doc.Author
-	requester, err := uc.entity.Get(ctx, requesterID, nil)
+	requester, err := uc.entity.Get(ctx, requesterID, referrer)
 	if err != nil {
 		span.RecordError(err)
 		return err
@@ -284,7 +294,7 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 				},
 			}
 
-			err = uc.client.Commit(ctx, parsed.Owner, distSD)
+			err = uc.client.Commit(ctx, parsed.Owner, distSD, uc.config.FQDN)
 			if err != nil {
 				fmt.Printf("Error committing memberOf item: %v\n", err)
 				span.RecordError(err)
