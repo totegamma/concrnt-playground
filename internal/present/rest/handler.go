@@ -13,6 +13,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
+	echomiddleware "github.com/labstack/echo/v4/middleware"
 
 	"github.com/totegamma/concrnt-playground"
 	"github.com/totegamma/concrnt-playground/internal/domain"
@@ -53,22 +54,24 @@ func NewHandler(
 }
 
 func (h *Handler) RegisterRoutes(e *echo.Echo) {
-	e.GET("/.well-known/concrnt", h.handleWellKnown)
-	e.POST("/commit", h.handleCommit)
-	e.GET("/resolve", h.handleResource)
-	e.GET("/query", h.handleQuery)
-	e.GET("/chunkline/:owner/:key/:chunk/itr", h.handleChunklineItr)
-	e.GET("/chunkline/:owner/:key/:chunk/body", h.handleChunklineBody)
-	e.POST("/api/v1/register", h.handleRegister)
-	e.GET("/api/v1/timeline/recent", h.handleTimelineRecent)
-	e.GET("/associations", h.handleAssociations)
-	e.GET("/association-counts", h.handleAssociationCounts)
-	e.GET("/known-servers", h.handleKnownServers)
-	e.GET("/realtime", h.handleRealtime)
 
-	e.GET("/internal/signal/subscriptions", h.handleCurrentSubs)
+	api := e.Group("", echomiddleware.CORS())
+	api.GET("/.well-known/concrnt", h.handleWellKnown)
+	api.POST("/commit", h.handleCommit)
+	api.GET("/resolve", h.handleResource)
+	api.GET("/query", h.handleQuery)
+	api.GET("/chunkline/:owner/:key/:chunk/itr", h.handleChunklineItr)
+	api.GET("/chunkline/:owner/:key/:chunk/body", h.handleChunklineBody)
+	api.POST("/api/v1/register", h.handleRegister)
+	api.GET("/api/v1/timeline/recent", h.handleTimelineRecent)
+	api.GET("/associations", h.handleAssociations)
+	api.GET("/association-counts", h.handleAssociationCounts)
+	api.GET("/known-servers", h.handleKnownServers)
+	api.GET("/realtime", h.handleRealtime)
 
-	e.GET("/health", func(c echo.Context) (err error) {
+	api.GET("/internal/signal/subscriptions", h.handleCurrentSubs)
+
+	api.GET("/health", func(c echo.Context) (err error) {
 		// ctx := c.Request().Context()
 
 		/*
@@ -87,12 +90,12 @@ func (h *Handler) RegisterRoutes(e *echo.Echo) {
 	})
 
 	// Legacy endpoints
-	e.GET("/api/v1/domain", h.handleLegacyDomain)
-	e.GET("/api/v1/entity/:id", h.handleLegacyEntity)
-	e.GET("/api/v1/entities", h.handleLegacyEntities)
-	e.GET("/api/v1/timelines", h.handleLegacyTimelines)
-	e.GET("/api/v1/profile/:owner/:semanticid", h.handleLegacyProfile)
-	e.GET("/api/v1/profiles", h.handleLegacyProfiles)
+	api.GET("/api/v1/domain", h.handleLegacyDomain)
+	api.GET("/api/v1/entity/:id", h.handleLegacyEntity)
+	api.GET("/api/v1/entities", h.handleLegacyEntities)
+	api.GET("/api/v1/timelines", h.handleLegacyTimelines)
+	api.GET("/api/v1/profile/:owner/:semanticid", h.handleLegacyProfile)
+	api.GET("/api/v1/profiles", h.handleLegacyProfiles)
 }
 
 func (h *Handler) handleWellKnown(c echo.Context) error {

@@ -80,7 +80,6 @@ func main() {
 	}))
 
 	e.Use(echomiddleware.Recover())
-	e.Use(echomiddleware.CORS())
 
 	if conf.Server.EnableTrace {
 		cleanup, err := utils.SetupTraceProvider(conf.Server.TraceEndpoint, conf.NodeInfo.FQDN+"/ccapi", version)
@@ -154,6 +153,9 @@ func main() {
 
 	handler := rest.NewHandler(globalConfig, softwareInfo, recordUC, chunklineUC, serverUC, entityUC, signal)
 	handler.RegisterRoutes(e)
+
+	proxy := rest.NewProxy(conf.Services)
+	proxy.RegisterRoutes(e)
 
 	e.Logger.Fatal(e.Start(":8000"))
 

@@ -51,3 +51,13 @@ func RequesterTypeString(t int) string {
 		return "Error"
 	}
 }
+
+type Service struct {
+	Name         string `yaml:"name"`
+	Host         string `yaml:"host"`
+	Port         int    `yaml:"port"`
+	Path         string `yaml:"path"`
+	PreservePath bool   `yaml:"preservePath"`
+	InjectCors   bool   `yaml:"injectCors"`
+	Gone         bool   `yaml:"gone"`
+}

@@ -10,9 +10,10 @@ import (
 )
 
 type Config struct {
-	NodeInfo NodeInfo       `yaml:"nodeInfo"`
-	Server   Server         `yaml:"server"`
-	Profile  map[string]any `yaml:"profile"`
+	NodeInfo NodeInfo         `yaml:"nodeInfo"`
+	Server   Server           `yaml:"server"`
+	Profile  map[string]any   `yaml:"profile"`
+	Services []domain.Service `yaml:"services"`
 }
 
 type NodeInfo struct {
