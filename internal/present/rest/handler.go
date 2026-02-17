@@ -25,7 +25,6 @@ import (
 
 type Handler struct {
 	config    domain.Config
-	info      concrnt.SoftwareInfo
 	record    *usecase.RecordUsecase
 	chunkline *usecase.ChunklineUsecase
 	server    *usecase.ServerUsecase
@@ -35,7 +34,6 @@ type Handler struct {
 
 func NewHandler(
 	config domain.Config,
-	info concrnt.SoftwareInfo,
 	record *usecase.RecordUsecase,
 	chunkline *usecase.ChunklineUsecase,
 	server *usecase.ServerUsecase,
@@ -44,7 +42,6 @@ func NewHandler(
 ) *Handler {
 	return &Handler{
 		config:    config,
-		info:      info,
 		record:    record,
 		chunkline: chunkline,
 		server:    server,
@@ -56,7 +53,6 @@ func NewHandler(
 func (h *Handler) RegisterRoutes(e *echo.Echo) {
 
 	api := e.Group("", echomiddleware.CORS())
-	api.GET("/.well-known/concrnt", h.handleWellKnown)
 	api.POST("/commit", h.handleCommit)
 	api.GET("/resolve", h.handleResource)
 	api.GET("/query", h.handleQuery)
@@ -96,62 +92,6 @@ func (h *Handler) RegisterRoutes(e *echo.Echo) {
 	api.GET("/api/v1/timelines", h.handleLegacyTimelines)
 	api.GET("/api/v1/profile/:owner/:semanticid", h.handleLegacyProfile)
 	api.GET("/api/v1/profiles", h.handleLegacyProfiles)
-}
-
-func (h *Handler) handleWellKnown(c echo.Context) error {
-	wellknown := concrnt.WellKnownConcrnt{
-		Version:   "2.0",
-		Domain:    h.config.FQDN,
-		CSID:      h.config.CSID,
-		Layer:     h.config.Layer,
-		Dimension: h.config.Dimension,
-		Endpoints: map[string]concrnt.ConcrntEndpoint{
-			"net.concrnt.core.resolve": {
-				Template: "/resolve",
-				Method:   "GET",
-				Query:    &[]string{"uri"},
-			},
-			"net.concrnt.core.commit": {
-				Template: "/commit",
-				Method:   "POST",
-			},
-			"net.concrnt.core.query": {
-				Template: "/query",
-				Method:   "GET",
-				Query:    &[]string{"prefix", "schema", "since", "until", "limit", "order"},
-			},
-			"net.concrnt.core.associations": {
-				Template: "/associations",
-				Method:   "GET",
-				Query:    &[]string{"uri", "schema", "variant", "author"},
-			},
-			"net.concrnt.core.association-counts": {
-				Template: "/association-counts",
-				Method:   "GET",
-				Query:    &[]string{"uri", "schema"},
-			},
-			"net.concrnt.core.realtime": {
-				Template: "/realtime",
-				Method:   "GET",
-			},
-			"net.concrnt.world.register": {
-				Template: "/api/v1/register",
-				Method:   "POST",
-			},
-			"net.concrnt.world.timeline.recent": {
-				Template: "/api/v1/timeline/recent",
-				Method:   "GET",
-				Query:    &[]string{"uris", "until", "limit"},
-			},
-			"net.concrnt.core.known-servers": {
-				Template: "/known-servers",
-				Method:   "GET",
-			},
-		},
-		SoftwareInfo: h.info,
-		Meta:         h.config.Meta,
-	}
-	return presenter.OK(c, wellknown)
 }
 
 func (h *Handler) handleCommit(c echo.Context) error {

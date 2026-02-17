@@ -151,8 +151,11 @@ func main() {
 
 	e.Use(authMiddleware.IdentifyIdentity)
 
-	handler := rest.NewHandler(globalConfig, softwareInfo, recordUC, chunklineUC, serverUC, entityUC, signal)
-	handler.RegisterRoutes(e)
+	wellKnownHandler := rest.NewWellKnownHandler(&globalConfig, softwareInfo, conf.Services)
+	wellKnownHandler.RegisterRoutes(e)
+
+	apiHandler := rest.NewHandler(globalConfig, recordUC, chunklineUC, serverUC, entityUC, signal)
+	apiHandler.RegisterRoutes(e)
 
 	proxy := rest.NewProxy(conf.Services)
 	proxy.RegisterRoutes(e)
