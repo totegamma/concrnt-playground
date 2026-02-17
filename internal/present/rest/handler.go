@@ -30,6 +30,7 @@ type Handler struct {
 	server    *usecase.ServerUsecase
 	entity    *usecase.EntityUsecase
 	signal    *service.SignalService
+	mm        *service.ModuleManager
 }
 
 func NewHandler(
@@ -39,6 +40,7 @@ func NewHandler(
 	server *usecase.ServerUsecase,
 	entity *usecase.EntityUsecase,
 	signal *service.SignalService,
+	mm *service.ModuleManager,
 ) *Handler {
 	return &Handler{
 		config:    config,
@@ -47,6 +49,7 @@ func NewHandler(
 		server:    server,
 		entity:    entity,
 		signal:    signal,
+		mm:        mm,
 	}
 }
 
@@ -54,7 +57,7 @@ func (h *Handler) RegisterRoutes(e *echo.Echo) {
 
 	api := e.Group("", echomiddleware.CORS())
 	api.POST("/commit", h.handleCommit)
-	api.GET("/resolve", h.handleResource)
+	api.GET("/resolve", h.handleResolve)
 	api.GET("/query", h.handleQuery)
 	api.GET("/chunkline/:owner/:key/:chunk/itr", h.handleChunklineItr)
 	api.GET("/chunkline/:owner/:key/:chunk/body", h.handleChunklineBody)
@@ -114,7 +117,7 @@ func (h *Handler) handleCommit(c echo.Context) error {
 	return presenter.OK(c, echo.Map{"status": "ok"})
 }
 
-func (h *Handler) handleResource(c echo.Context) error {
+func (h *Handler) handleResolve(c echo.Context) error {
 	ctx, span := tracer.Start(c.Request().Context(), "Handler.handleResource")
 	defer span.End()
 
@@ -136,6 +139,22 @@ func (h *Handler) handleResource(c echo.Context) error {
 	parsed, err := concrnt.ParseCCURI(uriString)
 	if err != nil {
 		return presenter.BadRequestMessage(c, "invalid uri")
+	}
+
+	if parsed.Scheme == "ccfs" && strings.HasPrefix(parsed.CDID, "sha256-") {
+		// redirect to
+		endpoints := h.mm.GetEndpoints()
+		storageModule, ok := endpoints["net.concrnt.storage.resolve"]
+		if !ok {
+			return presenter.InternalError(c, errors.New("storage module not found"))
+		}
+
+		path := concrnt.RenderURITemplate(storageModule, map[string]string{
+			"hash": parsed.CDID,
+		})
+
+		c.Response().Header().Set("Location", path)
+		return c.JSON(http.StatusSeeOther, echo.Map{"location": path})
 	}
 
 	if parsed.Key == "" && parsed.CDID == "" {

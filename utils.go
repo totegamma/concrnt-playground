@@ -115,7 +115,7 @@ func RenderURITemplate(desc ConcrntEndpoint, args map[string]string) string {
 		if strings.Contains(desc.Template, placeholder) {
 			endpoint = strings.ReplaceAll(endpoint, placeholder, value)
 		}
-		if slices.Contains(*desc.Query, key) {
+		if desc.Query != nil && slices.Contains(*desc.Query, key) {
 			queries = append(queries, fmt.Sprintf("%s=%s", key, url.QueryEscape(value)))
 		}
 	}

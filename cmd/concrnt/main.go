@@ -151,10 +151,12 @@ func main() {
 
 	e.Use(authMiddleware.IdentifyIdentity)
 
-	wellKnownHandler := rest.NewWellKnownHandler(&globalConfig, softwareInfo, conf.Services)
+	moduleManager := service.NewModuleManager(basicEndpoints, conf.Services)
+
+	wellKnownHandler := rest.NewWellKnownHandler(&globalConfig, softwareInfo, moduleManager)
 	wellKnownHandler.RegisterRoutes(e)
 
-	apiHandler := rest.NewHandler(globalConfig, recordUC, chunklineUC, serverUC, entityUC, signal)
+	apiHandler := rest.NewHandler(globalConfig, recordUC, chunklineUC, serverUC, entityUC, signal, moduleManager)
 	apiHandler.RegisterRoutes(e)
 
 	proxy := rest.NewProxy(conf.Services)
@@ -162,4 +164,48 @@ func main() {
 
 	e.Logger.Fatal(e.Start(":8000"))
 
+}
+
+var basicEndpoints = map[string]concrnt.ConcrntEndpoint{
+	"net.concrnt.core.resolve": {
+		Template: "/resolve",
+		Method:   "GET",
+		Query:    &[]string{"uri"},
+	},
+	"net.concrnt.core.commit": {
+		Template: "/commit",
+		Method:   "POST",
+	},
+	"net.concrnt.core.query": {
+		Template: "/query",
+		Method:   "GET",
+		Query:    &[]string{"prefix", "schema", "since", "until", "limit", "order"},
+	},
+	"net.concrnt.core.associations": {
+		Template: "/associations",
+		Method:   "GET",
+		Query:    &[]string{"uri", "schema", "variant", "author"},
+	},
+	"net.concrnt.core.association-counts": {
+		Template: "/association-counts",
+		Method:   "GET",
+		Query:    &[]string{"uri", "schema"},
+	},
+	"net.concrnt.core.realtime": {
+		Template: "/realtime",
+		Method:   "GET",
+	},
+	"net.concrnt.world.register": {
+		Template: "/api/v1/register",
+		Method:   "POST",
+	},
+	"net.concrnt.world.timeline.recent": {
+		Template: "/api/v1/timeline/recent",
+		Method:   "GET",
+		Query:    &[]string{"uris", "until", "limit"},
+	},
+	"net.concrnt.core.known-servers": {
+		Template: "/known-servers",
+		Method:   "GET",
+	},
 }
