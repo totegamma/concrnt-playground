@@ -14,6 +14,7 @@ import (
 	"github.com/totegamma/concrnt-playground"
 	"github.com/totegamma/concrnt-playground/cdid"
 	"github.com/totegamma/concrnt-playground/client"
+	"github.com/totegamma/concrnt-playground/impl/interop"
 	"github.com/totegamma/concrnt-playground/internal/domain"
 	"github.com/totegamma/concrnt-playground/internal/service"
 	"github.com/totegamma/concrnt-playground/internal/utils"
@@ -114,7 +115,7 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 	documentID := cdid.New(hash10, doc.CreatedAt).String()
 
 	var referrer *string
-	if v := ctx.Value(domain.ReferrerCtxKey); v != nil {
+	if v := ctx.Value(interop.ReferrerCtxKey); v != nil {
 		if s, ok := v.(string); ok {
 			referrer = &s
 		}
@@ -327,7 +328,7 @@ func (uc *RecordUsecase) GetSigned(ctx context.Context, uri string) (*concrnt.Si
 		stack = [][]concrnt.Policy{}
 	}
 
-	requester, ok := ctx.Value(domain.RequesterCtxKey).(concrnt.Entity)
+	requester, ok := ctx.Value(interop.RequesterCtxKey).(concrnt.Entity)
 	if !ok {
 		requester = concrnt.Entity{}
 	}

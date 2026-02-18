@@ -1,4 +1,4 @@
-package domain
+package interop
 
 import (
 	"github.com/totegamma/concrnt-playground"

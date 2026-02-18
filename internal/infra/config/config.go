@@ -6,14 +6,15 @@ import (
 	"github.com/go-yaml/yaml"
 
 	"github.com/totegamma/concrnt-playground"
+	"github.com/totegamma/concrnt-playground/impl/interop"
 	"github.com/totegamma/concrnt-playground/internal/domain"
 )
 
 type Config struct {
-	NodeInfo NodeInfo         `yaml:"nodeInfo"`
-	Server   Server           `yaml:"server"`
-	Profile  map[string]any   `yaml:"profile"`
-	Services []domain.Service `yaml:"services"`
+	NodeInfo NodeInfo          `yaml:"nodeInfo"`
+	Server   Server            `yaml:"server"`
+	Profile  map[string]any    `yaml:"profile"`
+	Services []interop.Service `yaml:"services"`
 }
 
 type NodeInfo struct {

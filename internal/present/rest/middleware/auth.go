@@ -10,6 +10,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 
+	"github.com/totegamma/concrnt-playground/impl/interop"
 	"github.com/totegamma/concrnt-playground/internal/domain"
 	"github.com/totegamma/concrnt-playground/internal/infra/repository"
 	"github.com/totegamma/concrnt-playground/internal/service"
@@ -40,10 +41,10 @@ func (s *AuthMiddleware) IdentifyIdentity(next echo.HandlerFunc) echo.HandlerFun
 		ctx, span := tracer.Start(c.Request().Context(), "Auth.Service.IdentifyIdentity")
 		defer span.End()
 
-		referrer := c.Request().Header.Get(domain.ReferrerHeader)
+		referrer := c.Request().Header.Get(interop.ReferrerHeader)
 		if referrer != "" {
 			span.SetAttributes(attribute.String("Referrer", referrer))
-			ctx = context.WithValue(ctx, domain.ReferrerCtxKey, referrer)
+			ctx = context.WithValue(ctx, interop.ReferrerCtxKey, referrer)
 		}
 
 		// # authtoken
@@ -76,7 +77,7 @@ func (s *AuthMiddleware) IdentifyIdentity(next echo.HandlerFunc) echo.HandlerFun
 				goto skipCheckAuthorization
 			}
 
-			ctx = context.WithValue(ctx, domain.RequesterCtxKey, requester)
+			ctx = context.WithValue(ctx, interop.RequesterCtxKey, requester)
 			span.SetAttributes(attribute.String("RequesterId", result.CCID))
 
 		}

@@ -9,18 +9,18 @@ import (
 	"time"
 
 	"github.com/totegamma/concrnt-playground"
-	"github.com/totegamma/concrnt-playground/internal/domain"
+	"github.com/totegamma/concrnt-playground/impl/interop"
 )
 
 type ModuleManager struct {
 	baseEndpoints map[string]concrnt.ConcrntEndpoint
-	services      []domain.Service
+	services      []interop.Service
 	endpoints     map[string]concrnt.ConcrntEndpoint
 }
 
 func NewModuleManager(
 	baseEndpoints map[string]concrnt.ConcrntEndpoint,
-	services []domain.Service,
+	services []interop.Service,
 ) *ModuleManager {
 
 	manager := ModuleManager{
@@ -69,7 +69,7 @@ func (m *ModuleManager) UpdateEndpointRoutine() {
 			continue
 		}
 
-		var info domain.CCInfo
+		var info interop.CCInfo
 		err = json.NewDecoder(resp.Body).Decode(&info)
 		if err != nil {
 			continue
