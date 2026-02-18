@@ -3,7 +3,7 @@ package interop
 import (
 	"context"
 	"encoding/json"
-	
+
 	"github.com/labstack/echo/v4"
 
 	"github.com/totegamma/concrnt-playground"

@@ -2,6 +2,7 @@ package rest
 
 import (
 	"github.com/labstack/echo/v4"
+	echomiddleware "github.com/labstack/echo/v4/middleware"
 
 	"github.com/totegamma/concrnt-playground"
 	"github.com/totegamma/concrnt-playground/internal/domain"
@@ -29,7 +30,8 @@ func NewWellKnownHandler(
 }
 
 func (p *WellKnownHandler) RegisterRoutes(e *echo.Echo) {
-	e.GET("/.well-known/concrnt", p.handleWellKnown)
+	w := e.Group("", echomiddleware.CORS())
+	w.GET("/.well-known/concrnt", p.handleWellKnown)
 }
 
 func (p *WellKnownHandler) handleWellKnown(c echo.Context) error {
