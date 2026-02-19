@@ -7,6 +7,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/totegamma/concrnt-playground"
+	"github.com/totegamma/concrnt-playground/impl/tags"
 )
 
 func ReceiveGatewayAuthPropagation(next echo.HandlerFunc) echo.HandlerFunc {
@@ -14,14 +15,21 @@ func ReceiveGatewayAuthPropagation(next echo.HandlerFunc) echo.HandlerFunc {
 		ctx, span := tracer.Start(c.Request().Context(), "Auth.Service.ReceiveGatewayAuthPropagation")
 		defer span.End()
 
-		requesterHeader := c.Request().Header.Get(RequesterHeader)
+		header := c.Request().Header
 
+		requesterHeader := header.Get(RequesterHeader)
 		if requesterHeader != "" {
 			var requester concrnt.Entity
 			err := json.Unmarshal([]byte(requesterHeader), &requester)
 			if err == nil {
 				ctx = context.WithValue(ctx, RequesterCtxKey, requester)
 			}
+		}
+
+		tagHeader := header.Get(RequesterTagHeader)
+		if tagHeader != "" {
+			tag := tags.Parse(tagHeader)
+			ctx = context.WithValue(ctx, RequesterTagCtxKey, tag)
 		}
 
 		c.SetRequest(c.Request().WithContext(ctx))

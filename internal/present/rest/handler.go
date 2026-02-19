@@ -159,7 +159,7 @@ func (h *Handler) handleResolve(c echo.Context) error {
 
 	if parsed.Key == "" && parsed.CDID == "" {
 		if concrnt.IsCCID(parsed.Owner) {
-			entity, err := h.entity.Get(ctx, parsed.Owner, parsed.Hint)
+			entity, err := h.entity.GetProper(ctx, parsed.Owner, parsed.Hint)
 			if err != nil {
 				if errors.Is(err, domain.ErrPermissionDenied) {
 					return presenter.Forbidden(c, "permission denied") // TODO: should be return NotFound
@@ -537,7 +537,7 @@ func (h *Handler) handleLegacyEntity(c echo.Context) error {
 	id := c.Param("id")
 	ctx := c.Request().Context()
 
-	entity, err := h.entity.Get(ctx, id, nil)
+	entity, err := h.entity.GetProper(ctx, id, nil)
 	if err != nil {
 		return presenter.InternalError(c, err)
 	}

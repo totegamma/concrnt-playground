@@ -16,6 +16,7 @@ import (
 
 	"github.com/totegamma/concrnt-playground"
 	"github.com/totegamma/concrnt-playground/impl/interop"
+	"github.com/totegamma/concrnt-playground/impl/tags"
 )
 
 type Proxy struct {
@@ -66,6 +67,12 @@ func (p *Proxy) RegisterRoutes(e *echo.Echo) {
 					return err
 				}
 				c.Request().Header.Set(interop.RequesterHeader, string(serialized))
+			}
+
+			tag, ok := ctx.Value(interop.RequesterTagCtxKey).(tags.Tags)
+			if ok {
+				tagStr := tag.ToString()
+				c.Request().Header.Set(interop.RequesterTagHeader, tagStr)
 			}
 
 			proxy.ServeHTTP(c.Response(), c.Request())

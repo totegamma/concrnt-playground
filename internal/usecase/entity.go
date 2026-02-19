@@ -12,7 +12,7 @@ import (
 // EntityRepository defines persistence/lookup for entities.
 type EntityRepository interface {
 	Register(ctx context.Context, entity domain.Entity, meta domain.EntityMeta) error
-	Get(ctx context.Context, ccid string, resolver *string) (concrnt.Entity, error)
+	Get(ctx context.Context, ccid string, resolver *string) (domain.Entity, error)
 	List(ctx context.Context) ([]concrnt.Entity, error)
 }
 
@@ -41,7 +41,21 @@ func (uc *EntityUsecase) Register(ctx context.Context, req concrnt.RegisterReque
 	return uc.repo.Register(ctx, entity, req.Meta)
 }
 
-func (uc *EntityUsecase) Get(ctx context.Context, ccid string, resolver *string) (concrnt.Entity, error) {
+func (uc *EntityUsecase) GetProper(ctx context.Context, ccid string, resolver *string) (concrnt.Entity, error) {
+	domainEntity, err := uc.repo.Get(ctx, ccid, resolver)
+	if err != nil {
+		return concrnt.Entity{}, err
+	}
+
+	return concrnt.Entity{
+		CCID:                 domainEntity.ID,
+		Domain:               domainEntity.Domain,
+		AffiliationDocument:  domainEntity.AffiliationDocument,
+		AffiliationSignature: domainEntity.AffiliationSignature,
+	}, nil
+}
+
+func (uc *EntityUsecase) Get(ctx context.Context, ccid string, resolver *string) (domain.Entity, error) {
 	return uc.repo.Get(ctx, ccid, resolver)
 }
 

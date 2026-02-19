@@ -1,4 +1,4 @@
-package concrnt
+package tags
 
 import (
 	"strconv"
@@ -13,10 +13,10 @@ func NewTags() Tags {
 	return Tags{Body: make(map[string]string)}
 }
 
-func ParseTags(input string) Tags {
+func Parse(input string) Tags {
 	tags := Tags{Body: make(map[string]string)}
-	split := strings.Split(input, ",")
-	for _, tag := range split {
+	split := strings.SplitSeq(input, ",")
+	for tag := range split {
 		pair := strings.Split(tag, ":")
 		if len(pair) == 1 {
 			tags.Body[pair[0]] = ""

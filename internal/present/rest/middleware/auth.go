@@ -10,7 +10,9 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 
+	"github.com/totegamma/concrnt-playground"
 	"github.com/totegamma/concrnt-playground/impl/interop"
+	"github.com/totegamma/concrnt-playground/impl/tags"
 	"github.com/totegamma/concrnt-playground/internal/domain"
 	"github.com/totegamma/concrnt-playground/internal/infra/repository"
 	"github.com/totegamma/concrnt-playground/internal/service"
@@ -71,15 +73,25 @@ func (s *AuthMiddleware) IdentifyIdentity(next echo.HandlerFunc) echo.HandlerFun
 				goto skipCheckAuthorization
 			}
 
-			requester, err := s.entity.Get(ctx, result.CCID, nil) // TODO use passport to get hint
+			dr, err := s.entity.Get(ctx, result.CCID, nil) // TODO use passport to get hint
 			if err != nil {
 				span.RecordError(errors.Wrap(err, "AuthMiddleware.IdentifyIdentity: s.entity.Get failed"))
 				goto skipCheckAuthorization
 			}
 
+			requester := concrnt.Entity{
+				CCID:                 dr.ID,
+				Domain:               dr.Domain,
+				AffiliationDocument:  dr.AffiliationDocument,
+				AffiliationSignature: dr.AffiliationSignature,
+			}
+
 			ctx = context.WithValue(ctx, interop.RequesterCtxKey, requester)
 			span.SetAttributes(attribute.String("RequesterId", result.CCID))
 
+			tag := tags.Parse(dr.Tag)
+			ctx = context.WithValue(ctx, interop.RequesterTagCtxKey, tag)
+			span.SetAttributes(attribute.String("RequesterTag", dr.Tag))
 		}
 
 	skipCheckAuthorization:
