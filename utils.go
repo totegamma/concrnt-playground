@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"slices"
 	"strings"
 
 	"github.com/totegamma/concrnt-playground/cdid"
+	"github.com/yosida95/uritemplate/v3"
 )
 
 func JsonPrint(tag string, v any) {
@@ -101,30 +101,20 @@ func IsCKID(keyID string) bool {
 	return len(keyID) == 42 && keyID[:3] == "cck" && !hasChar(keyID, '.')
 }
 
-func RenderURITemplate(desc ConcrntEndpoint, args map[string]string) string {
+func RenderURITemplate(template string, args map[string]string) (string, error) {
 
-	endpoint := desc.Template
-	queries := []string{}
+	t, err := uritemplate.New(template)
+	if err != nil {
+		return "", err
+	}
 
+	vars := uritemplate.Values{}
 	for key, value := range args {
-		if value == "" {
-			continue
-		}
-		placeholder := "{" + key + "}"
-
-		if strings.Contains(desc.Template, placeholder) {
-			endpoint = strings.ReplaceAll(endpoint, placeholder, value)
-		}
-		if desc.Query != nil && slices.Contains(*desc.Query, key) {
-			queries = append(queries, fmt.Sprintf("%s=%s", key, url.QueryEscape(value)))
-		}
+		vars.Set(key, uritemplate.String(value))
 	}
 
-	if len(queries) > 0 {
-		endpoint += "?" + strings.Join(queries, "&")
-	}
+	return t.Expand(vars)
 
-	return endpoint
 }
 
 func ToLegacyDocument(sd *SignedDocument) (*LegacyDocument, error) {

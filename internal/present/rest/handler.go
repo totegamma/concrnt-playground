@@ -149,9 +149,12 @@ func (h *Handler) handleResolve(c echo.Context) error {
 			return presenter.InternalError(c, errors.New("storage module not found"))
 		}
 
-		path := concrnt.RenderURITemplate(storageModule, map[string]string{
+		path, err := concrnt.RenderURITemplate(storageModule, map[string]string{
 			"hash": parsed.CDID,
 		})
+		if err != nil {
+			return presenter.InternalError(c, err)
+		}
 
 		c.Response().Header().Set("Location", path)
 		return c.JSON(http.StatusSeeOther, echo.Map{"location": path})

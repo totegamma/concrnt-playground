@@ -8,25 +8,24 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/totegamma/concrnt-playground"
 	"github.com/totegamma/concrnt-playground/impl/interop"
 )
 
 type ModuleManager struct {
-	baseEndpoints map[string]concrnt.ConcrntEndpoint
+	baseEndpoints map[string]string
 	services      []interop.Service
-	endpoints     map[string]concrnt.ConcrntEndpoint
+	endpoints     map[string]string
 }
 
 func NewModuleManager(
-	baseEndpoints map[string]concrnt.ConcrntEndpoint,
+	baseEndpoints map[string]string,
 	services []interop.Service,
 ) *ModuleManager {
 
 	manager := ModuleManager{
 		baseEndpoints: baseEndpoints,
 		services:      services,
-		endpoints:     make(map[string]concrnt.ConcrntEndpoint),
+		endpoints:     make(map[string]string),
 	}
 
 	go func() {
@@ -43,7 +42,7 @@ func NewModuleManager(
 
 func (m *ModuleManager) UpdateEndpointRoutine() {
 
-	endpoints := make(map[string]concrnt.ConcrntEndpoint)
+	endpoints := make(map[string]string)
 
 	maps.Copy(endpoints, m.baseEndpoints)
 
@@ -76,7 +75,7 @@ func (m *ModuleManager) UpdateEndpointRoutine() {
 		}
 
 		for key, endpoint := range info.Endpoints {
-			endpoint.Template = path.Join(service.Path, endpoint.Template)
+			endpoint = path.Join(service.Path, endpoint)
 			endpoints[key] = endpoint
 		}
 	}
@@ -84,6 +83,6 @@ func (m *ModuleManager) UpdateEndpointRoutine() {
 	m.endpoints = endpoints
 }
 
-func (m *ModuleManager) GetEndpoints() map[string]concrnt.ConcrntEndpoint {
+func (m *ModuleManager) GetEndpoints() map[string]string {
 	return m.endpoints
 }

@@ -371,11 +371,16 @@ func (c *Client) GetResource(ctx context.Context, uri string, accept string, opt
 		return err
 	}
 
-	path := concrnt.RenderURITemplate(desc, map[string]string{
+	path, err := concrnt.RenderURITemplate(desc, map[string]string{
 		"owner": parsed.Owner,
 		"key":   parsed.Key,
 		"uri":   url.QueryEscape(uri),
 	})
+	if err != nil {
+		err := errors.Join(fmt.Errorf("failed to render resource endpoint template for server %s", info.Domain), err)
+		span.RecordError(err)
+		return err
+	}
 
 	endpoint := "https://" + info.Domain + path
 
@@ -447,7 +452,12 @@ func (c *Client) Commit(ctx context.Context, resolver string, sd concrnt.SignedD
 		return err
 	}
 
-	path := concrnt.RenderURITemplate(desc, map[string]string{})
+	path, err := concrnt.RenderURITemplate(desc, map[string]string{})
+	if err != nil {
+		err := errors.Join(fmt.Errorf("failed to render commit endpoint template for server %s", server.Domain), err)
+		span.RecordError(err)
+		return err
+	}
 	url := "https://" + server.Domain + path
 
 	body, err := json.Marshal(sd)
@@ -502,7 +512,12 @@ func (c *Client) Realtime(ctx context.Context, fqdn string) (*websocket.Conn, er
 		return nil, err
 	}
 
-	path := concrnt.RenderURITemplate(desc, map[string]string{})
+	path, err := concrnt.RenderURITemplate(desc, map[string]string{})
+	if err != nil {
+		err := errors.Join(fmt.Errorf("failed to render realtime endpoint template for server %s", server.Domain), err)
+		span.RecordError(err)
+		return nil, err
+	}
 	domain := server.Domain
 
 	/*
