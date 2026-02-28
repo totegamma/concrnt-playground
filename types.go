@@ -9,12 +9,6 @@ const (
 	ProofTypeDocumentReference = "document-reference"
 )
 
-type ConcrntEndpoint struct {
-	Template string    `json:"template"`
-	Method   string    `json:"method"`
-	Query    *[]string `json:"query,omitempty"`
-}
-
 type SoftwareInfo struct {
 	Version      string `json:"version"`
 	BuildMachine string `json:"buildMachine"`
@@ -23,14 +17,14 @@ type SoftwareInfo struct {
 }
 
 type WellKnownConcrnt struct {
-	Version      string                     `json:"version"`
-	Domain       string                     `json:"domain"`
-	CSID         string                     `json:"csid"`
-	Layer        string                     `json:"layer"`
-	Dimension    string                     `json:"dimension"` // for backwards compatibility
-	Endpoints    map[string]ConcrntEndpoint `json:"endpoints"`
-	SoftwareInfo SoftwareInfo               `json:"softwareInfo"`
-	Meta         map[string]any             `json:"meta,omitempty"`
+	Version      string            `json:"version"`
+	Domain       string            `json:"domain"`
+	CSID         string            `json:"csid"`
+	Layer        string            `json:"layer"`
+	Dimension    string            `json:"dimension"` // for backwards compatibility
+	Endpoints    map[string]string `json:"endpoints"`
+	SoftwareInfo SoftwareInfo      `json:"softwareInfo"`
+	Meta         map[string]any    `json:"meta,omitempty"`
 }
 
 type Policy struct {

@@ -1,9 +1,5 @@
 package interop
 
-import (
-	"github.com/totegamma/concrnt-playground"
-)
-
 type Service struct {
 	Name         string `yaml:"name"`
 	Host         string `yaml:"host"`
@@ -15,7 +11,7 @@ type Service struct {
 }
 
 type CCInfo struct {
-	Name      string                             `json:"name"`
-	Version   string                             `json:"version"`
-	Endpoints map[string]concrnt.ConcrntEndpoint `json:"endpoints"`
+	Name      string            `json:"name"`
+	Version   string            `json:"version"`
+	Endpoints map[string]string `json:"endpoints"`
 }

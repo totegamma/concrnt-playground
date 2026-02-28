@@ -166,46 +166,14 @@ func main() {
 
 }
 
-var basicEndpoints = map[string]concrnt.ConcrntEndpoint{
-	"net.concrnt.core.resolve": {
-		Template: "/resolve",
-		Method:   "GET",
-		Query:    &[]string{"uri"},
-	},
-	"net.concrnt.core.commit": {
-		Template: "/commit",
-		Method:   "POST",
-	},
-	"net.concrnt.core.query": {
-		Template: "/query",
-		Method:   "GET",
-		Query:    &[]string{"prefix", "schema", "since", "until", "limit", "order"},
-	},
-	"net.concrnt.core.associations": {
-		Template: "/associations",
-		Method:   "GET",
-		Query:    &[]string{"uri", "schema", "variant", "author"},
-	},
-	"net.concrnt.core.association-counts": {
-		Template: "/association-counts",
-		Method:   "GET",
-		Query:    &[]string{"uri", "schema"},
-	},
-	"net.concrnt.core.realtime": {
-		Template: "/realtime",
-		Method:   "GET",
-	},
-	"net.concrnt.world.register": {
-		Template: "/api/v1/register",
-		Method:   "POST",
-	},
-	"net.concrnt.world.timeline.recent": {
-		Template: "/api/v1/timeline/recent",
-		Method:   "GET",
-		Query:    &[]string{"uris", "until", "limit"},
-	},
-	"net.concrnt.core.known-servers": {
-		Template: "/known-servers",
-		Method:   "GET",
-	},
+var basicEndpoints = map[string]string{
+	"net.concrnt.core.resolve":            "/resolve?uri={uri}",
+	"net.concrnt.core.commit":             "/commit",
+	"net.concrnt.core.query":              "/query{?prefix,schema,since,until,limit,order}",
+	"net.concrnt.core.associations":       "/associations{?uri,schema,variant,author}",
+	"net.concrnt.core.association-counts": "/association-counts{?uri,schema}",
+	"net.concrnt.core.realtime":           "/realtime",
+	"net.concrnt.world.register":          "/api/v1/register",
+	"net.concrnt.world.timeline.recent":   "/api/v1/timeline/recent{?uris,until,limit}",
+	"net.concrnt.core.known-servers":      "/known-servers",
 }
