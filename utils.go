@@ -130,10 +130,15 @@ func ToLegacyDocument(sd *SignedDocument) (*LegacyDocument, error) {
 	copy(hash10[:], hash[:10])
 	documentID := cdid.New(hash10, doc.CreatedAt).String()
 
+	parsed, err := ParseCCURI(doc.Key)
+	if err != nil {
+		return nil, fmt.Errorf("invalid document key: %v", err)
+	}
+
 	return &LegacyDocument{
 		ID:        documentID,
 		Author:    doc.Author,
-		Owner:     doc.Owner,
+		Owner:     &parsed.Owner,
 		Schema:    doc.Schema,
 		Document:  sd.Document,
 		Signature: *sd.Proof.Signature,

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/zeebo/xxh3"
@@ -39,10 +38,19 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, documentID string, 
 		return "", err
 	}
 
-	owner := doc.Author
-	if doc.Owner != nil {
-		owner = *doc.Owner
+	parsed, err := concrnt.ParseCCURI(doc.Key)
+	if err != nil {
+		span.RecordError(err)
+		return "", err
 	}
+
+	if parsed.Scheme != "cckv" {
+		err := fmt.Errorf("invalid key: document key scheme must be cckv")
+		span.RecordError(err)
+		return "", err
+	}
+
+	owner := parsed.Owner
 
 	var policies *string
 
@@ -69,12 +77,6 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, documentID string, 
 		CDate:         time.Now(),
 	}
 
-	key := doc.Key
-	if strings.Contains(key, "{cdid}") {
-		key = strings.ReplaceAll(key, "{cdid}", documentID)
-	}
-	cckv := concrnt.ComposeCCURI("cckv", owner, key)
-
 	proof, err := json.Marshal(sd.Proof)
 	if err != nil {
 		span.RecordError(err)
@@ -87,12 +89,6 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, documentID string, 
 		Proof:    string(proof),
 	}
 
-	var owners []string
-	owners = append(owners, doc.Author)
-	if doc.Owner != nil && doc.Author != "" {
-		owners = append(owners, *doc.Owner)
-	}
-
 	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 
 		if err := tx.Clauses(clause.OnConflict{
@@ -102,18 +98,16 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, documentID string, 
 			return err
 		}
 
-		for _, owner := range owners {
-			err := tx.Clauses(clause.OnConflict{
-				Columns:   []clause.Column{{Name: "commit_log_id"}, {Name: "owner"}},
-				DoNothing: true,
-			}).Create(&models.CommitOwner{
-				CommitLogID: commitLog.ID,
-				Owner:       owner,
-			}).Error
-			if err != nil {
-				span.RecordError(err)
-				return err
-			}
+		err := tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "commit_log_id"}, {Name: "owner"}},
+			DoNothing: true,
+		}).Create(&models.CommitOwner{
+			CommitLogID: commitLog.ID,
+			Owner:       owner,
+		}).Error
+		if err != nil {
+			span.RecordError(err)
+			return err
 		}
 
 		if err := tx.Clauses(clause.OnConflict{
@@ -126,7 +120,7 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, documentID string, 
 		// update RecordKey
 		var oldRecordKey models.RecordKey
 		err = tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-			Where("uri = ?", cckv).
+			Where("uri = ?", doc.Key).
 			Take(&oldRecordKey).Error
 		if err != nil && err != gorm.ErrRecordNotFound {
 			span.RecordError(err)
@@ -134,7 +128,7 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, documentID string, 
 		}
 
 		// ParentのRecordKeyを探す
-		parentRK, err := getOrCreateParentRecordKey(ctx, tx, cckv)
+		parentRK, err := getOrCreateParentRecordKey(ctx, tx, doc.Key)
 		if err != nil {
 			span.RecordError(err)
 			return err
@@ -147,7 +141,7 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, documentID string, 
 
 		// RecordKeyを作る
 		rk := models.RecordKey{
-			URI:      cckv,
+			URI:      doc.Key,
 			ParentID: pid,
 			RecordID: &documentID,
 		}
@@ -182,7 +176,7 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, documentID string, 
 		return "", err
 	}
 
-	return cckv, nil
+	return doc.Key, nil
 
 }
 
@@ -197,10 +191,19 @@ func (r *RecordRepository) CreateAssociation(ctx context.Context, documentID str
 		return "", "", err
 	}
 
-	owner := doc.Author
-	if doc.Owner != nil {
-		owner = *doc.Owner
+	parsed, err := concrnt.ParseCCURI(*doc.Associate)
+	if err != nil {
+		span.RecordError(err)
+		return "", "", err
 	}
+
+	if parsed.Scheme != "cckv" {
+		err := fmt.Errorf("invalid associate: document associate scheme must be cckv")
+		span.RecordError(err)
+		return "", "", err
+	}
+
+	owner := parsed.Owner
 
 	targetRK, err := GetRecordKeyByURI(ctx, r.db, *doc.Associate)
 	if err != nil {
@@ -238,12 +241,6 @@ func (r *RecordRepository) CreateAssociation(ctx context.Context, documentID str
 		Proof:    string(proof),
 	}
 
-	var owners []string
-	owners = append(owners, doc.Author)
-	if doc.Owner != nil && doc.Author != "" {
-		owners = append(owners, *doc.Owner)
-	}
-
 	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 
 		if err := tx.Clauses(clause.OnConflict{
@@ -253,18 +250,16 @@ func (r *RecordRepository) CreateAssociation(ctx context.Context, documentID str
 			return err
 		}
 
-		for _, owner := range owners {
-			err := tx.Clauses(clause.OnConflict{
-				Columns:   []clause.Column{{Name: "commit_log_id"}, {Name: "owner"}},
-				DoNothing: true,
-			}).Create(&models.CommitOwner{
-				CommitLogID: commitLog.ID,
-				Owner:       owner,
-			}).Error
-			if err != nil {
-				span.RecordError(err)
-				return err
-			}
+		err := tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "commit_log_id"}, {Name: "owner"}},
+			DoNothing: true,
+		}).Create(&models.CommitOwner{
+			CommitLogID: commitLog.ID,
+			Owner:       owner,
+		}).Error
+		if err != nil {
+			span.RecordError(err)
+			return err
 		}
 
 		if err := tx.Create(&association).Error; err != nil {

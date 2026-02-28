@@ -18,6 +18,7 @@ func init() {
 	operators["Not"] = opNot
 	operators["Eq"] = opEq
 	operators["Contains"] = opContains
+	operators["CCUriOwner"] = opCCUriOwner
 	operators["Load"] = opLoad
 }
 
@@ -136,6 +137,74 @@ func opContains(ctx RequestContext, args []any) (EvalResult, error) {
 		Result:   slices.Contains(arg0, arg1),
 	}, nil
 
+}
+
+/*
+func opParseCCURI(ctx RequestContext, args []any) (EvalResult, error) {
+	if len(args) != 1 {
+		err := fmt.Errorf("bad argument length for ParseCCURI. Expected 1 but got %d\n", len(args))
+		return EvalResult{
+			Operator: "ParseCCURI",
+			Error:    err.Error(),
+		}, err
+	}
+
+	arg0, ok := args[0].(string)
+	if !ok {
+		err := fmt.Errorf("bad argument type for ParseCCURI. Expected string but got %s: %v\n", reflect.TypeOf(args[0]), args[0])
+		return EvalResult{
+			Operator: "ParseCCURI",
+			Error:    err.Error(),
+		}, err
+	}
+
+	result, err := concrnt.ParseCCURI(arg0)
+	if err != nil {
+		return EvalResult{
+			Operator: "ParseCCURI",
+			Error:    err.Error(),
+		}, err
+	}
+
+	return EvalResult{
+		Operator: "ParseCCURI",
+		Result:   result,
+	}, nil
+}
+*/
+
+func opCCUriOwner(ctx RequestContext, args []any) (EvalResult, error) {
+	if len(args) != 1 {
+		err := fmt.Errorf("bad argument length for CCIriOwner. Expected 1 but got %d\n", len(args))
+		return EvalResult{
+			Operator: "CCUriOwner",
+			Error:    err.Error(),
+		}, err
+	}
+
+	arg0, ok := args[0].(string)
+	if !ok {
+		err := fmt.Errorf("bad argument type for CCIriOwner. Expected string but got %s: %v\n", reflect.TypeOf(args[0]), args[0])
+		return EvalResult{
+			Operator: "CCUriOwner",
+			Error:    err.Error(),
+		}, err
+	}
+
+	parsed, err := concrnt.ParseCCURI(arg0)
+	if err != nil {
+		return EvalResult{
+			Operator: "CCUriOwner",
+			Error:    err.Error(),
+		}, err
+	}
+
+	result := parsed.Owner
+
+	return EvalResult{
+		Operator: "CCUriOwner",
+		Result:   result,
+	}, nil
 }
 
 func opLoad(ctx RequestContext, args []any) (EvalResult, error) {
