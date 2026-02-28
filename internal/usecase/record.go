@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"path"
 	"time"
 
 	"github.com/pkg/errors"
@@ -270,10 +269,16 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 				span.RecordError(err)
 				continue
 			}
-			path := path.Join(parsed.Key, documentID)
+
+			key, err := url.JoinPath(memberOfURI, documentID)
+			if err != nil {
+				fmt.Printf("Error joining path for distribution: %v\n", err)
+				span.RecordError(err)
+				continue
+			}
 
 			distDoc := concrnt.Document[schemas.Reference]{
-				Key: path,
+				Key: key,
 				Value: schemas.Reference{
 					Href: resultURI,
 				},

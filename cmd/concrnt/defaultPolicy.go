@@ -61,8 +61,13 @@ var globalPolicyJson = `
 									"const": "requester.ccid"
 								},
 								{
-									"op": "Load",
-									"const": "this.owner"
+									"op": "CCUriOwner",
+									"args": [
+										{
+											"op": "Load",
+											"const": "this.key"
+										}
+									]
 								}
 							]
 						}
