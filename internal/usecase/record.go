@@ -278,7 +278,6 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 					Href: resultURI,
 				},
 				Author:    doc.Author,
-				Owner:     &parsed.Owner,
 				Schema:    schemas.ReferenceURL,
 				CreatedAt: time.Now(),
 			}
