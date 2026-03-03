@@ -416,6 +416,28 @@ func (c *Client) GetResource(ctx context.Context, uri string, accept string, opt
 	return nil
 }
 
+func (c *Client) GetRecord(ctx context.Context, uri string, result any) error {
+	ctx, span := tracer.Start(ctx, "Client.GetRecord")
+	defer span.End()
+
+	var sd concrnt.SignedDocument
+	err := c.GetResource(ctx, uri, "application/json", Options{}, &sd)
+	if err != nil {
+		err := errors.Join(fmt.Errorf("failed to get signed document for resource %s", uri), err)
+		span.RecordError(err)
+		return err
+	}
+
+	err = json.Unmarshal([]byte(sd.Document), &result)
+	if err != nil {
+		err := errors.Join(fmt.Errorf("failed to decode document in signed document for resource %s", uri), err)
+		span.RecordError(err)
+		return err
+	}
+
+	return nil
+}
+
 func (c *Client) Commit(ctx context.Context, resolver string, sd concrnt.SignedDocument, committerDomain string) error {
 	ctx, span := tracer.Start(ctx, "Client.Commit")
 	defer span.End()

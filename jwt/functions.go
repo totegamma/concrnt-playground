@@ -39,7 +39,51 @@ func Create(claims Claims, privatekey string) (string, error) {
 }
 
 // Validate checks is jwt signature valid and not expired
-func Validate(jwt string) (*Header, *Claims, error) {
+func Validate(jwt string, expectedSigner string) error {
+
+	header, claims, err := Parse(jwt)
+	if err != nil {
+		return err
+	}
+
+	// check jwt type
+	if header.Type != "JWT" || header.Algorithm != "CONCRNT" {
+		return fmt.Errorf("Unsupported JWT type")
+	}
+
+	// check exp
+	if claims.ExpirationTime != "" {
+		exp, err := strconv.ParseInt(claims.ExpirationTime, 10, 64)
+		if err != nil {
+			return err
+		}
+		now := time.Now().Unix()
+		if exp < now {
+			return fmt.Errorf("jwt is already expired")
+		}
+	}
+
+	split := strings.Split(jwt, ".")
+	if len(split) != 3 {
+		return fmt.Errorf("invalid jwt format")
+	}
+
+	// check signature
+	signatureBytes, err := base64.RawURLEncoding.DecodeString(split[2])
+	if err != nil {
+		return err
+	}
+
+	err = concrnt.VerifySignature([]byte(split[0]+"."+split[1]), signatureBytes, expectedSigner)
+	if err != nil {
+		return err
+	}
+
+	// all checks passed
+	return nil
+}
+
+func Parse(jwt string) (*Header, *Claims, error) {
 
 	split := strings.Split(jwt, ".")
 	if len(split) != 3 {
@@ -56,11 +100,6 @@ func Validate(jwt string) (*Header, *Claims, error) {
 		return nil, nil, err
 	}
 
-	// check jwt type
-	if header.Type != "JWT" || header.Algorithm != "CONCRNT" {
-		return nil, nil, fmt.Errorf("Unsupported JWT type")
-	}
-
 	payloadBytes, err := base64.RawURLEncoding.DecodeString(split[1])
 	if err != nil {
 		return nil, nil, err
@@ -72,34 +111,5 @@ func Validate(jwt string) (*Header, *Claims, error) {
 		return nil, nil, err
 	}
 
-	// check exp
-	if claims.ExpirationTime != "" {
-		exp, err := strconv.ParseInt(claims.ExpirationTime, 10, 64)
-		if err != nil {
-			return nil, nil, err
-		}
-		now := time.Now().Unix()
-		if exp < now {
-			return nil, nil, fmt.Errorf("jwt is already expired")
-		}
-	}
-
-	// check signature
-	signatureBytes, err := base64.RawURLEncoding.DecodeString(split[2])
-	if err != nil {
-		return nil, nil, err
-	}
-
-	keyID := header.KeyID
-	if keyID == "" {
-		keyID = claims.Issuer
-	}
-
-	err = concrnt.VerifySignature([]byte(split[0]+"."+split[1]), signatureBytes, keyID)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// all checks passed
 	return &header, &claims, nil
 }

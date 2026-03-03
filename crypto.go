@@ -38,6 +38,10 @@ func SignBytes(bytes []byte, privatekey string) ([]byte, error) {
 
 func VerifySignature(message []byte, signature []byte, address string) error {
 
+	if len(address) != 42 {
+		return errors.New("invalid address length")
+	}
+
 	hash := sha3.NewLegacyKeccak256()
 	hash.Write(message)
 	hashed := hash.Sum(nil)

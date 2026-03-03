@@ -10,6 +10,7 @@ import (
 	"github.com/totegamma/concrnt-playground/client"
 	"github.com/totegamma/concrnt-playground/internal/domain"
 	"github.com/totegamma/concrnt-playground/jwt"
+	"github.com/totegamma/concrnt-playground/schemas"
 )
 
 type AuthService struct {
@@ -35,7 +36,7 @@ func (s *AuthService) AuthJwt(ctx context.Context, token string) (*AuthResult, e
 	ctx, span := tracer.Start(ctx, "Auth.Service.AuthJwt")
 	defer span.End()
 
-	header, claims, err := jwt.Validate(token)
+	header, claims, err := jwt.Parse(token)
 	if err != nil {
 		span.RecordError(errors.Wrap(err, "jwt validation failed"))
 		return nil, err
@@ -60,16 +61,34 @@ func (s *AuthService) AuthJwt(ctx context.Context, token string) (*AuthResult, e
 
 	var ccid string
 	if concrnt.IsCCID(keyID) {
+
 		ccid = keyID
 
+		err = jwt.Validate(token, ccid)
+		if err != nil {
+			span.RecordError(errors.Wrap(err, "jwt signature validation failed"))
+			return nil, err
+		}
+
 		return &AuthResult{CCID: ccid}, nil
-	} else if concrnt.IsCKID(keyID) {
-		// TODO! not implemented
-		err := fmt.Errorf("ckid not supported yet")
-		span.RecordError(err)
-		return nil, err
+
 	} else {
-		span.RecordError(fmt.Errorf("invalid issuer"))
-		return nil, fmt.Errorf("invalid issuer")
+
+		var subKeyDoc concrnt.Document[schemas.Subkey]
+		err := s.client.GetRecord(ctx, keyID, &subKeyDoc) // TODO strictオプションが必要かも
+		if err != nil {
+			span.RecordError(err)
+			return nil, err
+		}
+
+		ccid = subKeyDoc.Author
+
+		err = jwt.Validate(token, subKeyDoc.Value.CKID)
+		if err != nil {
+			span.RecordError(errors.Wrap(err, "jwt signature validation failed"))
+			return nil, err
+		}
+
+		return &AuthResult{CCID: ccid}, nil
 	}
 }

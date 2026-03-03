@@ -108,12 +108,32 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 			span.RecordError(err)
 			return err
 		}
+
 		if sd.Proof.Key == nil {
 			err := errors.New("[sub] key is required for subkey proof")
 			span.RecordError(err)
 			return err
 		}
-		// TODO: サブキーの検証
+
+		var subKeyDoc concrnt.Document[schemas.Subkey]
+		err := uc.client.GetRecord(ctx, *sd.Proof.Key, &subKeyDoc)
+		if err != nil {
+			span.RecordError(err)
+			return err
+		}
+
+		signatureBytes, err := hex.DecodeString(*sd.Proof.Signature)
+		if err != nil {
+			span.RecordError(err)
+			return err
+		}
+
+		err = concrnt.VerifySignature([]byte(sd.Document), signatureBytes, subKeyDoc.Value.CKID)
+		if err != nil {
+			span.RecordError(err)
+			return err
+		}
+
 	default:
 		err := errors.New("unsupported proof type: " + sd.Proof.Type)
 		span.RecordError(err)
