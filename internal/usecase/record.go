@@ -102,6 +102,18 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 			return err
 		}
 		// TODO: 参照先のドキュメントの検証
+	case concrnt.ProofTypeSubkey:
+		if sd.Proof.Signature == nil {
+			err := errors.New("[sub] signature is required for subkey proof")
+			span.RecordError(err)
+			return err
+		}
+		if sd.Proof.Key == nil {
+			err := errors.New("[sub] key is required for subkey proof")
+			span.RecordError(err)
+			return err
+		}
+		// TODO: サブキーの検証
 	default:
 		err := errors.New("unsupported proof type: " + sd.Proof.Type)
 		span.RecordError(err)

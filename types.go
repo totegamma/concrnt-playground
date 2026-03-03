@@ -7,6 +7,7 @@ import (
 const (
 	ProofTypeEcrecover         = "concrnt-ecrecover-direct"
 	ProofTypeDocumentReference = "document-reference"
+	ProofTypeSubkey            = "concrnt-ecrecover-subkey"
 )
 
 type SoftwareInfo struct {
@@ -71,6 +72,7 @@ type Proof struct {
 	Type      string  `json:"type"`
 	Signature *string `json:"signature,omitempty"`
 	Href      *string `json:"href,omitempty"`
+	Key       *string `json:"key,omitempty"`
 }
 
 type SignedDocument struct {
