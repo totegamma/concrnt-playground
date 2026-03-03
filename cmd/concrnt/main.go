@@ -151,7 +151,7 @@ func main() {
 
 	e.Use(authMiddleware.IdentifyIdentity)
 
-	moduleManager := service.NewModuleManager(basicEndpoints, conf.Services)
+	moduleManager := service.NewModuleManager(rest.Endpoints, conf.Services)
 
 	wellKnownHandler := rest.NewWellKnownHandler(&globalConfig, softwareInfo, moduleManager)
 	wellKnownHandler.RegisterRoutes(e)
@@ -162,18 +162,24 @@ func main() {
 	proxy := rest.NewProxy(conf.Services)
 	proxy.RegisterRoutes(e)
 
+	e.GET("/health", func(c echo.Context) (err error) {
+		// ctx := c.Request().Context()
+
+		/*
+			err = sqlDB.Ping()
+			if err != nil {
+				return c.String(http.StatusInternalServerError, "db error")
+			}
+
+			err = rdb.Ping(ctx).Err()
+			if err != nil {
+				return c.String(http.StatusInternalServerError, "redis error")
+			}
+		*/
+
+		return c.String(200, "ok")
+	})
+
 	e.Logger.Fatal(e.Start(":8000"))
 
-}
-
-var basicEndpoints = map[string]string{
-	"net.concrnt.core.resolve":            "/resolve?uri={uri}",
-	"net.concrnt.core.commit":             "/commit",
-	"net.concrnt.core.query":              "/query{?prefix,schema,since,until,limit,order}",
-	"net.concrnt.core.associations":       "/associations{?uri,schema,variant,author}",
-	"net.concrnt.core.association-counts": "/association-counts{?uri,schema}",
-	"net.concrnt.core.realtime":           "/realtime",
-	"net.concrnt.world.register":          "/api/v1/register",
-	"net.concrnt.world.timeline.recent":   "/api/v1/timeline/recent{?uris,until,limit}",
-	"net.concrnt.core.known-servers":      "/known-servers",
 }

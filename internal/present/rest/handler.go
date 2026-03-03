@@ -53,40 +53,36 @@ func NewHandler(
 	}
 }
 
+var Endpoints = map[string]string{
+	"net.concrnt.core.commit":             "/commit",
+	"net.concrnt.core.resolve":            "/resolve?uri={uri}",
+	"net.concrnt.core.query":              "/query{?prefix,schema,since,until,limit,order}",
+	"net.concrnt.core.associations":       "/associations{?uri,schema,variant,author}",
+	"net.concrnt.core.association-counts": "/association-counts{?uri,schema}",
+	"net.concrnt.core.realtime":           "/realtime",
+	"net.concrnt.world.register":          "/api/v1/register",
+	"net.concrnt.world.timeline.recent":   "/api/v1/timeline/recent{?uris,until,limit}",
+	"net.concrnt.core.known-servers":      "/known-servers",
+}
+
 func (h *Handler) RegisterRoutes(e *echo.Echo) {
 
 	api := e.Group("", echomiddleware.CORS())
 	api.POST("/commit", h.handleCommit)
 	api.GET("/resolve", h.handleResolve)
 	api.GET("/query", h.handleQuery)
-	api.GET("/chunkline/:owner/:key/:chunk/itr", h.handleChunklineItr)
-	api.GET("/chunkline/:owner/:key/:chunk/body", h.handleChunklineBody)
-	api.POST("/api/v1/register", h.handleRegister)
-	api.GET("/api/v1/timeline/recent", h.handleTimelineRecent)
 	api.GET("/associations", h.handleAssociations)
 	api.GET("/association-counts", h.handleAssociationCounts)
-	api.GET("/known-servers", h.handleKnownServers)
 	api.GET("/realtime", h.handleRealtime)
+	api.POST("/api/v1/register", h.handleRegister)
+	api.GET("/api/v1/timeline/recent", h.handleTimelineRecent)
+	api.GET("/known-servers", h.handleKnownServers)
 
+	api.GET("/chunkline/:owner/:key/:chunk/itr", h.handleChunklineItr)
+	api.GET("/chunkline/:owner/:key/:chunk/body", h.handleChunklineBody)
+
+	// internal
 	api.GET("/internal/signal/subscriptions", h.handleCurrentSubs)
-
-	api.GET("/health", func(c echo.Context) (err error) {
-		// ctx := c.Request().Context()
-
-		/*
-			err = sqlDB.Ping()
-			if err != nil {
-				return c.String(http.StatusInternalServerError, "db error")
-			}
-
-			err = rdb.Ping(ctx).Err()
-			if err != nil {
-				return c.String(http.StatusInternalServerError, "redis error")
-			}
-		*/
-
-		return c.String(http.StatusOK, "ok")
-	})
 
 	// Legacy endpoints
 	api.GET("/api/v1/domain", h.handleLegacyDomain)
@@ -95,6 +91,7 @@ func (h *Handler) RegisterRoutes(e *echo.Echo) {
 	api.GET("/api/v1/timelines", h.handleLegacyTimelines)
 	api.GET("/api/v1/profile/:owner/:semanticid", h.handleLegacyProfile)
 	api.GET("/api/v1/profiles", h.handleLegacyProfiles)
+
 }
 
 func (h *Handler) handleCommit(c echo.Context) error {
