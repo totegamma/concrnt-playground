@@ -53,6 +53,10 @@ type Options struct {
 	Resolver string
 }
 
+func (c *Client) GetClient() *http.Client {
+	return c.client
+}
+
 func (c *Client) RoundTrip(req *http.Request) (*http.Response, error) {
 	req.Header.Set("User-Agent", c.userAgent)
 
@@ -130,117 +134,6 @@ func (c *Client) resolveResolver(ctx context.Context, resolver string) (string, 
 	}
 
 	return resolver, nil
-}
-
-func (c *Client) HttpRequest(ctx context.Context, method, resolver, path string, response any) error {
-	ctx, span := tracer.Start(ctx, "Client.HttpRequest")
-	defer span.End()
-
-	if resolver == "" || resolver == c.defaultResolver {
-		resolver = c.defaultResolver
-	} else {
-		domain, err := c.resolveResolver(ctx, resolver)
-		if err != nil {
-			err := errors.Join(fmt.Errorf("failed to resolve resolver %s", resolver), err)
-			span.RecordError(err)
-			return err
-		}
-		resolver = domain
-	}
-
-	if resolver == "" {
-		err := fmt.Errorf("resolver cannot be empty")
-		span.RecordError(err)
-		return err
-	}
-
-	url := "https://" + resolver + path
-	req, err := http.NewRequestWithContext(ctx, method, url, nil)
-	if err != nil {
-		err := errors.Join(fmt.Errorf("failed to create request to %s", url), err)
-		span.RecordError(err)
-		return err
-	}
-
-	resp, err := c.client.Do(req)
-	if err != nil {
-		err := errors.Join(fmt.Errorf("failed to perform request to %s", url), err)
-		span.RecordError(err)
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		err := fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-		span.RecordError(err)
-		return err
-	}
-
-	err = json.NewDecoder(resp.Body).Decode(&response)
-	if err != nil {
-		err := errors.Join(fmt.Errorf("failed to decode response from %s", url), err)
-		span.RecordError(err)
-		return err
-	}
-
-	return nil
-
-}
-
-func (c *Client) HttpRequestText(ctx context.Context, method, resolver, path string) (string, error) {
-	ctx, span := tracer.Start(ctx, "Client.HttpRequestText")
-	defer span.End()
-
-	if resolver == "" || resolver == c.defaultResolver {
-		resolver = c.defaultResolver
-	} else {
-		domain, err := c.resolveResolver(ctx, resolver)
-		if err != nil {
-			err := errors.Join(fmt.Errorf("failed to resolve resolver %s", resolver), err)
-			span.RecordError(err)
-			return "", err
-		}
-		resolver = domain
-	}
-
-	if resolver == "" {
-		err := fmt.Errorf("resolver cannot be empty")
-		span.RecordError(err)
-		return "", err
-	}
-
-	url := "https://" + resolver + path
-	req, err := http.NewRequestWithContext(ctx, method, url, nil)
-	if err != nil {
-		err := errors.Join(fmt.Errorf("failed to create request to %s", url), err)
-		span.RecordError(err)
-		return "", err
-	}
-
-	resp, err := c.client.Do(req)
-	if err != nil {
-		err := errors.Join(fmt.Errorf("failed to perform request to %s", url), err)
-		span.RecordError(err)
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		err := fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-		span.RecordError(err)
-		return "", err
-
-	}
-
-	bytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		err := errors.Join(fmt.Errorf("failed to read response body from %s", url), err)
-		span.RecordError(err)
-		return "", err
-	}
-
-	return string(bytes), nil
-
 }
 
 func (c *Client) GetEntity(ctx context.Context, address string, hint *string) (concrnt.Entity, error) {
@@ -341,48 +234,52 @@ func (c *Client) GetResource(ctx context.Context, uri string, accept string, opt
 		return err
 	}
 
-	var info concrnt.WellKnownConcrnt
-	if opts.Resolver != "" {
-		info, err = c.GetServer(ctx, opts.Resolver, nil)
-		if err != nil {
-			err := errors.Join(fmt.Errorf("failed to get server for resolver %s", opts.Resolver), err)
+	endpoint := uri
+
+	if parsed.Scheme != "http" {
+		var info concrnt.WellKnownConcrnt
+		if opts.Resolver != "" {
+			info, err = c.GetServer(ctx, opts.Resolver, nil)
+			if err != nil {
+				err := errors.Join(fmt.Errorf("failed to get server for resolver %s", opts.Resolver), err)
+				span.RecordError(err)
+				return err
+			}
+		} else {
+			domain, err := c.resolveResolver(ctx, parsed.Owner)
+			if err != nil {
+				err := errors.Join(fmt.Errorf("failed to resolve default resolver for owner %s", parsed.Owner), err)
+				span.RecordError(err)
+				return err
+			}
+			info, err = c.GetServer(ctx, domain, nil)
+			if err != nil {
+				err := errors.Join(fmt.Errorf("failed to get server for default resolver %s", domain), err)
+				span.RecordError(err)
+				return err
+			}
+		}
+
+		desc, ok := info.Endpoints["net.concrnt.core.resolve"]
+		if !ok {
+			err := fmt.Errorf("resource endpoint not found in server %s", info.Domain)
 			span.RecordError(err)
 			return err
 		}
-	} else {
-		domain, err := c.resolveResolver(ctx, parsed.Owner)
+
+		path, err := concrnt.RenderURITemplate(desc, map[string]string{
+			"owner": parsed.Owner,
+			"key":   parsed.Key,
+			"uri":   url.QueryEscape(uri),
+		})
 		if err != nil {
-			err := errors.Join(fmt.Errorf("failed to resolve default resolver for owner %s", parsed.Owner), err)
+			err := errors.Join(fmt.Errorf("failed to render resource endpoint template for server %s", info.Domain), err)
 			span.RecordError(err)
 			return err
 		}
-		info, err = c.GetServer(ctx, domain, nil)
-		if err != nil {
-			err := errors.Join(fmt.Errorf("failed to get server for default resolver %s", domain), err)
-			span.RecordError(err)
-			return err
-		}
-	}
 
-	desc, ok := info.Endpoints["net.concrnt.core.resolve"]
-	if !ok {
-		err := fmt.Errorf("resource endpoint not found in server %s", info.Domain)
-		span.RecordError(err)
-		return err
+		endpoint = "https://" + info.Domain + path
 	}
-
-	path, err := concrnt.RenderURITemplate(desc, map[string]string{
-		"owner": parsed.Owner,
-		"key":   parsed.Key,
-		"uri":   url.QueryEscape(uri),
-	})
-	if err != nil {
-		err := errors.Join(fmt.Errorf("failed to render resource endpoint template for server %s", info.Domain), err)
-		span.RecordError(err)
-		return err
-	}
-
-	endpoint := "https://" + info.Domain + path
 
 	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
 	if err != nil {

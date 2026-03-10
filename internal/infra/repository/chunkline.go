@@ -61,7 +61,7 @@ func (r *ChunklineRepository) GetChunklineManifest(ctx context.Context, uri stri
 	return &chunkline.Manifest{
 		Version:    "1.0",
 		ChunkSize:  600,
-		FirstChunk: firstChunk,
+		FirstChunk: &firstChunk,
 		Descending: &chunkline.Endpoint{
 			Iterator: "/chunkline/" + parsed.Owner + "/" + safekey + "/{chunk}/itr",
 			Body:     "/chunkline/" + parsed.Owner + "/" + safekey + "/{chunk}/body",

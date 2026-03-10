@@ -52,7 +52,7 @@ func ParseCCURI(escaped string) (*CCURI, error) {
 	switch uri.Scheme {
 	case "cckv":
 		return &CCURI{
-			Scheme: uri.Scheme,
+			Scheme: "cckv",
 			Owner:  owner,
 			Key:    key,
 			CDID:   "",
@@ -60,11 +60,15 @@ func ParseCCURI(escaped string) (*CCURI, error) {
 		}, nil
 	case "ccfs":
 		return &CCURI{
-			Scheme: uri.Scheme,
+			Scheme: "ccfs",
 			Owner:  owner,
 			Key:    "",
 			CDID:   key,
 			Hint:   hint,
+		}, nil
+	case "http", "https":
+		return &CCURI{
+			Scheme: "http",
 		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported uri scheme: %s", uri.Scheme)

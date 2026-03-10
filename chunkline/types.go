@@ -14,8 +14,8 @@ type Endpoint struct {
 type Manifest struct {
 	Version    string    `json:"version"`
 	ChunkSize  int64     `json:"chunk_size"`
-	FirstChunk int64     `json:"first_chunk"`
-	LastChunk  int64     `json:"last_chunk"`
+	FirstChunk *int64    `json:"first_chunk"`
+	LastChunk  *int64    `json:"last_chunk"`
 	Ascending  *Endpoint `json:"ascending,omitempty"`
 	Descending *Endpoint `json:"descending,omitempty"`
 	Metadata   any       `json:"metadata"`

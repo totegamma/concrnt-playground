@@ -2,15 +2,18 @@ package gateway
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/patrickmn/go-cache"
 
-	"github.com/totegamma/concrnt-playground"
 	"github.com/totegamma/concrnt-playground/chunkline"
 	"github.com/totegamma/concrnt-playground/client"
 )
@@ -106,24 +109,62 @@ func (r *resolver) LookupChunkItrs(ctx context.Context, timelines []string, unti
 			continue
 		}
 
-		parsed, err := concrnt.ParseCCURI(tl)
+		endpoint := manifest.Descending.Iterator
+		parsed, err := url.Parse(manifest.Descending.Iterator)
 		if err != nil {
+			span.RecordError(fmt.Errorf("invalid iterator URI template for timeline %s: %w", tl, err))
+			continue
+		}
+		if parsed.Scheme == "" { // path-only
+			host, err := url.Parse(tl)
+			if err != nil {
+				span.RecordError(fmt.Errorf("invalid timeline URI %s: %w", tl, err))
+				continue
+			}
+			parsed.Scheme = host.Scheme
+			parsed.Host = host.Host
+			parsed.User = host.User
+			endpoint = parsed.String()
+		}
+
+		queryChunk := manifest.Time2Chunk(until)
+		if manifest.LastChunk != nil && queryChunk > *manifest.LastChunk {
+			queryChunk = *manifest.LastChunk
+		}
+
+		if manifest.FirstChunk != nil && queryChunk < *manifest.FirstChunk {
+			err := fmt.Errorf("query chunk %d is before first chunk %d for timeline %s", queryChunk, *manifest.FirstChunk, tl)
 			span.RecordError(err)
 			continue
 		}
 
-		result, err := r.client.HttpRequestText(
-			ctx,
-			"GET",
-			parsed.Owner,
-			strings.ReplaceAll(manifest.Descending.Iterator, "{chunk}", fmt.Sprintf("%d", manifest.Time2Chunk(until))),
-		)
+		endpoint = strings.ReplaceAll(endpoint, "{chunk}", fmt.Sprintf("%d", queryChunk))
+
+		req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
 		if err != nil {
-			span.RecordError(err)
+			span.RecordError(fmt.Errorf("failed to create request for timeline %s: %w", tl, err))
 			continue
 		}
 
-		results[tl] = result
+		resp, err := r.client.GetClient().Do(req)
+		if err != nil {
+			span.RecordError(fmt.Errorf("HTTP request failed for timeline %s: %w", tl, err))
+			continue
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			span.RecordError(fmt.Errorf("non-200 response for timeline %s: %d", tl, resp.StatusCode))
+			continue
+		}
+
+		bytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			span.RecordError(fmt.Errorf("failed to read response body for timeline %s: %w", tl, err))
+			continue
+		}
+
+		results[tl] = strings.TrimSpace(string(bytes))
 	}
 	return results, nil
 }
@@ -146,30 +187,66 @@ func (r *resolver) LoadChunkBodies(ctx context.Context, query map[string]string)
 	result := make(map[string]chunkline.BodyChunk)
 	for tl, itr := range query {
 
-		manifest := manifests[tl]
-
-		parsed, err := concrnt.ParseCCURI(tl)
-		if err != nil {
+		manifest, ok := manifests[tl]
+		if !ok {
+			err := fmt.Errorf("missing chunkline manifest for timeline %s", tl)
 			span.RecordError(err)
 			continue
 		}
 
-		var items []chunkline.BodyItem
-		err = r.client.HttpRequest(
-			ctx,
-			"GET",
-			parsed.Owner,
-			strings.ReplaceAll(manifest.Descending.Body, "{chunk}", itr),
-			&items,
-		)
-		if err != nil {
+		if manifest.Descending.Body == "" {
+			err := fmt.Errorf("timeline %s does not support descending body retrieval", tl)
 			span.RecordError(err)
+			continue
+		}
+
+		endpoint := manifest.Descending.Body
+		parsed, err := url.Parse(manifest.Descending.Body)
+		if err != nil {
+			span.RecordError(fmt.Errorf("invalid body URI template for timeline %s: %w", tl, err))
+			continue
+		}
+		if parsed.Scheme == "" { // path-only
+			host, err := url.Parse(tl)
+			if err != nil {
+				span.RecordError(fmt.Errorf("invalid timeline URI %s: %w", tl, err))
+				continue
+			}
+			parsed.Scheme = host.Scheme
+			parsed.Host = host.Host
+			parsed.User = host.User
+			endpoint = parsed.String()
+		}
+		endpoint = strings.ReplaceAll(endpoint, "{chunk}", itr)
+
+		req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
+		if err != nil {
+			span.RecordError(fmt.Errorf("failed to create request for timeline %s: %w", tl, err))
+			continue
+		}
+
+		resp, err := r.client.GetClient().Do(req)
+		if err != nil {
+			span.RecordError(fmt.Errorf("HTTP request failed for timeline %s: %w", tl, err))
+			continue
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			span.RecordError(fmt.Errorf("non-200 response for timeline %s: %d", tl, resp.StatusCode))
+			continue
+		}
+
+		var items []chunkline.BodyItem
+		err = json.NewDecoder(resp.Body).Decode(&items)
+		if err != nil {
+			span.RecordError(fmt.Errorf("failed to decode chunk body for timeline %s: %w", tl, err))
 			continue
 		}
 
 		chunkID, err := strconv.ParseInt(itr, 10, 64)
 		if err != nil {
-			span.RecordError(err)
+			span.RecordError(fmt.Errorf("invalid chunk ID %s for timeline %s: %w", itr, tl, err))
 			continue
 		}
 
