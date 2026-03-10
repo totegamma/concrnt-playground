@@ -115,16 +115,23 @@ func (r *resolver) LookupChunkItrs(ctx context.Context, timelines []string, unti
 			span.RecordError(fmt.Errorf("invalid iterator URI template for timeline %s: %w", tl, err))
 			continue
 		}
+
 		if parsed.Scheme == "" { // path-only
-			host, err := url.Parse(tl)
+			origin, err := url.Parse(tl)
 			if err != nil {
 				span.RecordError(fmt.Errorf("invalid timeline URI %s: %w", tl, err))
 				continue
 			}
-			parsed.Scheme = host.Scheme
-			parsed.Host = host.Host
-			parsed.User = host.User
-			endpoint = parsed.String()
+			if origin.Scheme == "http" || origin.Scheme == "https" {
+				endpoint = fmt.Sprintf("%s://%s%s", origin.Scheme, origin.Host, manifest.Descending.Iterator)
+			} else {
+				host, err := r.client.ResolveResourceHost(ctx, tl)
+				if err != nil {
+					span.RecordError(fmt.Errorf("failed to resolve host for timeline %s: %w", tl, err))
+					continue
+				}
+				endpoint = fmt.Sprintf("https://%s%s", host, manifest.Descending.Iterator)
+			}
 		}
 
 		queryChunk := manifest.Time2Chunk(until)
@@ -207,15 +214,21 @@ func (r *resolver) LoadChunkBodies(ctx context.Context, query map[string]string)
 			continue
 		}
 		if parsed.Scheme == "" { // path-only
-			host, err := url.Parse(tl)
+			origin, err := url.Parse(tl)
 			if err != nil {
 				span.RecordError(fmt.Errorf("invalid timeline URI %s: %w", tl, err))
 				continue
 			}
-			parsed.Scheme = host.Scheme
-			parsed.Host = host.Host
-			parsed.User = host.User
-			endpoint = parsed.String()
+			if origin.Scheme == "http" || origin.Scheme == "https" {
+				endpoint = fmt.Sprintf("%s://%s%s", origin.Scheme, origin.Host, manifest.Descending.Body)
+			} else {
+				host, err := r.client.ResolveResourceHost(ctx, tl)
+				if err != nil {
+					span.RecordError(fmt.Errorf("failed to resolve host for timeline %s: %w", tl, err))
+					continue
+				}
+				endpoint = fmt.Sprintf("https://%s%s", host, manifest.Descending.Body)
+			}
 		}
 		endpoint = strings.ReplaceAll(endpoint, "{chunk}", itr)
 

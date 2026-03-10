@@ -42,7 +42,6 @@ services:
       - "POSTGRES_DB=postgres"
     networks:
       - internal
-      - external
 
   redis:
     restart: always
@@ -69,7 +68,6 @@ services:
       - "11211:11211"
     networks:
       - internal
-      - external
 
   grafana:
     image: grafana/grafana:latest
