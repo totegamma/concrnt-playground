@@ -33,6 +33,16 @@ func NewPostgres(dsn string) (*gorm.DB, error) {
 		return nil, err
 	}
 
+	// set connection pool settings
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, err
+	}
+	sqlDB.SetMaxOpenConns(25)
+	sqlDB.SetMaxIdleConns(25)
+	sqlDB.SetConnMaxLifetime(5 * time.Minute)
+	sqlDB.SetConnMaxIdleTime(5 * time.Minute)
+
 	if err = db.Use(tracing.NewPlugin(
 		tracing.WithDBSystem("postgresql"),
 	)); err != nil {
