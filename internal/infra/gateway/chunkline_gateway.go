@@ -109,31 +109,6 @@ func (r *resolver) LookupChunkItrs(ctx context.Context, timelines []string, unti
 			continue
 		}
 
-		endpoint := manifest.Descending.Iterator
-		parsed, err := url.Parse(manifest.Descending.Iterator)
-		if err != nil {
-			span.RecordError(fmt.Errorf("invalid iterator URI template for timeline %s: %w", tl, err))
-			continue
-		}
-
-		if parsed.Scheme == "" { // path-only
-			origin, err := url.Parse(tl)
-			if err != nil {
-				span.RecordError(fmt.Errorf("invalid timeline URI %s: %w", tl, err))
-				continue
-			}
-			if origin.Scheme == "http" || origin.Scheme == "https" {
-				endpoint = fmt.Sprintf("%s://%s%s", origin.Scheme, origin.Host, manifest.Descending.Iterator)
-			} else {
-				host, err := r.client.ResolveResourceHost(ctx, tl)
-				if err != nil {
-					span.RecordError(fmt.Errorf("failed to resolve host for timeline %s: %w", tl, err))
-					continue
-				}
-				endpoint = fmt.Sprintf("https://%s%s", host, manifest.Descending.Iterator)
-			}
-		}
-
 		queryChunk := manifest.Time2Chunk(until)
 		if manifest.LastChunk != nil && queryChunk > *manifest.LastChunk {
 			queryChunk = *manifest.LastChunk
@@ -145,9 +120,32 @@ func (r *resolver) LookupChunkItrs(ctx context.Context, timelines []string, unti
 			continue
 		}
 
-		endpoint = strings.ReplaceAll(endpoint, "{chunk}", fmt.Sprintf("%d", queryChunk))
+		refPath := strings.ReplaceAll(manifest.Descending.Iterator, "{chunk}", fmt.Sprintf("%d", queryChunk))
 
-		req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
+		ref, err := url.Parse(refPath)
+		if err != nil {
+			span.RecordError(fmt.Errorf("invalid iterator URI template for timeline %s: %w", tl, err))
+			continue
+		}
+
+		base, err := url.Parse(tl)
+		if err != nil {
+			span.RecordError(fmt.Errorf("invalid timeline URI %s: %w", tl, err))
+			continue
+		}
+
+		endpoint := base.ResolveReference(ref)
+		if endpoint.Scheme != "http" && endpoint.Scheme != "https" {
+			host, err := r.client.ResolveResourceHost(ctx, tl)
+			if err != nil {
+				span.RecordError(fmt.Errorf("failed to resolve host for timeline %s: %w", tl, err))
+				continue
+			}
+			endpoint.Scheme = "https"
+			endpoint.Host = host
+		}
+
+		req, err := http.NewRequestWithContext(ctx, "GET", endpoint.String(), nil)
 		if err != nil {
 			span.RecordError(fmt.Errorf("failed to create request for timeline %s: %w", tl, err))
 			continue
@@ -207,32 +205,31 @@ func (r *resolver) LoadChunkBodies(ctx context.Context, query map[string]string)
 			continue
 		}
 
-		endpoint := manifest.Descending.Body
-		parsed, err := url.Parse(manifest.Descending.Body)
+		refPath := strings.ReplaceAll(manifest.Descending.Body, "{chunk}", itr)
+		ref, err := url.Parse(refPath)
 		if err != nil {
 			span.RecordError(fmt.Errorf("invalid body URI template for timeline %s: %w", tl, err))
 			continue
 		}
-		if parsed.Scheme == "" { // path-only
-			origin, err := url.Parse(tl)
+
+		base, err := url.Parse(tl)
+		if err != nil {
+			span.RecordError(fmt.Errorf("invalid timeline URI %s: %w", tl, err))
+			continue
+		}
+
+		endpoint := base.ResolveReference(ref)
+		if endpoint.Scheme != "http" && endpoint.Scheme != "https" {
+			host, err := r.client.ResolveResourceHost(ctx, tl)
 			if err != nil {
-				span.RecordError(fmt.Errorf("invalid timeline URI %s: %w", tl, err))
+				span.RecordError(fmt.Errorf("failed to resolve host for timeline %s: %w", tl, err))
 				continue
 			}
-			if origin.Scheme == "http" || origin.Scheme == "https" {
-				endpoint = fmt.Sprintf("%s://%s%s", origin.Scheme, origin.Host, manifest.Descending.Body)
-			} else {
-				host, err := r.client.ResolveResourceHost(ctx, tl)
-				if err != nil {
-					span.RecordError(fmt.Errorf("failed to resolve host for timeline %s: %w", tl, err))
-					continue
-				}
-				endpoint = fmt.Sprintf("https://%s%s", host, manifest.Descending.Body)
-			}
+			endpoint.Scheme = "https"
+			endpoint.Host = host
 		}
-		endpoint = strings.ReplaceAll(endpoint, "{chunk}", itr)
 
-		req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
+		req, err := http.NewRequestWithContext(ctx, "GET", endpoint.String(), nil)
 		if err != nil {
 			span.RecordError(fmt.Errorf("failed to create request for timeline %s: %w", tl, err))
 			continue
