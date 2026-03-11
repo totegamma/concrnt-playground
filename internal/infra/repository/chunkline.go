@@ -36,12 +36,6 @@ func (r *ChunklineRepository) GetChunklineManifest(ctx context.Context, uri stri
 		return nil, err
 	}
 
-	parsed, err := concrnt.ParseCCURI(uri)
-	if err != nil {
-		span.RecordError(err)
-		return nil, err
-	}
-
 	firstChunk := int64(0)
 	firstCollectionMember := models.RecordKey{}
 	err = r.db.WithContext(ctx).
@@ -56,15 +50,15 @@ func (r *ChunklineRepository) GetChunklineManifest(ctx context.Context, uri stri
 		firstChunk = firstCollectionMember.Record.CDate.Unix() / 600
 	}
 
-	safekey := url.PathEscape(parsed.Key)
+	safeURI := url.QueryEscape(uri)
 
 	return &chunkline.Manifest{
 		Version:    "1.0",
 		ChunkSize:  600,
 		FirstChunk: &firstChunk,
 		Descending: &chunkline.Endpoint{
-			Iterator: "/chunkline/" + parsed.Owner + "/" + safekey + "/{chunk}/itr",
-			Body:     "/chunkline/" + parsed.Owner + "/" + safekey + "/{chunk}/body",
+			Iterator: "/chunkline/itr/{chunk}?uri=" + safeURI,
+			Body:     "/chunkline/body/{chunk}?uri=" + safeURI,
 		},
 		// Metadata: recordKey.Record.Value,
 	}, nil

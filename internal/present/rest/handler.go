@@ -78,8 +78,8 @@ func (h *Handler) RegisterRoutes(e *echo.Echo) {
 	api.GET("/api/v1/timeline/recent", h.handleTimelineRecent)
 	api.GET("/known-servers", h.handleKnownServers)
 
-	api.GET("/chunkline/:owner/:key/:chunk/itr", h.handleChunklineItr)
-	api.GET("/chunkline/:owner/:key/:chunk/body", h.handleChunklineBody)
+	api.GET("/chunkline/itr/:chunk", h.handleChunklineItr)
+	api.GET("/chunkline/body/:chunk", h.handleChunklineBody)
 
 	// internal
 	api.GET("/internal/signal/subscriptions", h.handleCurrentSubs)
@@ -284,11 +284,7 @@ func (h *Handler) handleQuery(c echo.Context) error {
 
 func (h *Handler) handleChunklineItr(c echo.Context) error {
 	ctx := c.Request().Context()
-	key, err := url.PathUnescape(c.Param("key"))
-	if err != nil {
-		return presenter.BadRequestMessage(c, "invalid key")
-	}
-	uri := concrnt.ComposeCCURI("cckv", c.Param("owner"), key)
+	uri := c.QueryParam("uri")
 
 	chunkID, err := strconv.ParseInt(c.Param("chunk"), 10, 64)
 	if err != nil {
@@ -305,11 +301,7 @@ func (h *Handler) handleChunklineItr(c echo.Context) error {
 
 func (h *Handler) handleChunklineBody(c echo.Context) error {
 	ctx := c.Request().Context()
-	key, err := url.PathUnescape(c.Param("key"))
-	if err != nil {
-		return presenter.BadRequestMessage(c, "invalid key")
-	}
-	uri := concrnt.ComposeCCURI("cckv", c.Param("owner"), key)
+	uri := c.QueryParam("uri")
 
 	chunkID, err := strconv.ParseInt(c.Param("chunk"), 10, 64)
 	if err != nil {
