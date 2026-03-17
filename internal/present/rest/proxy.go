@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"path"
 	"strconv"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 	echomiddleware "github.com/labstack/echo/v4/middleware"
@@ -42,7 +43,11 @@ func (p *Proxy) RegisterRoutes(e *echo.Echo) {
 		proxy.Director = func(req *http.Request) {
 			req.URL.Scheme = targetUrl.Scheme
 			req.URL.Host = targetUrl.Host
-			req.URL.Path = path.Join(targetUrl.Path, req.URL.Path)
+			if service.PreservePath {
+				req.URL.Path = path.Join(targetUrl.Path, req.URL.Path)
+			} else {
+				req.URL.Path = path.Join(targetUrl.Path, strings.TrimPrefix(req.URL.Path, service.Path))
+			}
 
 			otel.GetTextMapPropagator().Inject(req.Context(), propagation.HeaderCarrier(req.Header))
 		}
