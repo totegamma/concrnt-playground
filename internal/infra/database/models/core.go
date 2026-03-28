@@ -38,3 +38,14 @@ type Record struct {
 	Distributions pq.StringArray `json:"distributions" gorm:"type:text[]"`
 	CDate         time.Time      `json:"cdate" gorm:"->;<-:create;type:timestamp with time zone;not null;default:clock_timestamp()"`
 }
+
+type Ack struct {
+	From   string `json:"from" gorm:"type:text;index"`
+	To     string `json:"to" gorm:"type:text;index"`
+	Schema string `json:"schema" gorm:"type:text;index"`
+
+	DocumentID string    `json:"id" gorm:"primaryKey;type:text"`
+	Document   CommitLog `json:"-" gorm:"foreignKey:DocumentID;references:ID;constraint:OnDelete:CASCADE;"`
+
+	CDate time.Time `json:"cdate" gorm:"->;<-:create;type:timestamp with time zone;not null;default:clock_timestamp()"`
+}

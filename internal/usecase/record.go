@@ -25,7 +25,7 @@ import (
 type RecordRepository interface {
 	CreateRecord(ctx context.Context, documentID string, sd concrnt.SignedDocument) (string, error)
 	CreateAssociation(ctx context.Context, documentID string, sd concrnt.SignedDocument) (string, string, error)
-	CreateAck(ctx context.Context, sd concrnt.SignedDocument) error
+	CreateAck(ctx context.Context, documentID string, sd concrnt.SignedDocument) (string, string, error)
 	Delete(ctx context.Context, sd concrnt.SignedDocument) (string, error)
 
 	GetSignedDocument(ctx context.Context, uri string) (*concrnt.SignedDocument, error)
@@ -231,7 +231,7 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 			}
 			// uriがentityであればAck、そうでなければAssociation
 			if path.Path == "" { // ack
-				err := uc.repo.CreateAck(ctx, sd)
+				_, resultURI, err = uc.repo.CreateAck(ctx, documentID, sd)
 				if err != nil {
 					span.RecordError(err)
 					return err

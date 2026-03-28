@@ -59,6 +59,7 @@ func MigratePostgres(db *gorm.DB) error {
 		&models.Record{},
 		&models.RecordKey{},
 		&models.Association{},
+		&models.Ack{},
 		&models.Server{},
 		&models.Entity{},
 		&models.EntityMeta{},

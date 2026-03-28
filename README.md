@@ -12,9 +12,9 @@
 
 ## TODO
 - ackの実装
-- subkeyの実装・検証
-- policyの評価
-  - そもそもpolicy自体の仮実装はしたものの全くテストされてない
+- [x] subkeyの実装・検証
+- [x] proxy実装
+- [x] policyの評価
 - 他サーバーとのrealtime通信
   - 横に並べても問題が起きないようにしたい
     - リーダーインスタンスを決めてそこから受信するとか
@@ -24,7 +24,6 @@
 - batchエンドポイント
 - passportの発行
 - timeline読み込みをキャッシュに載せる
-- proxy実装
 - 通知周り
   - webpushはともかくiOSやAndroidのpushはどうする？
 

@@ -275,8 +275,94 @@ func (r *RecordRepository) CreateAssociation(ctx context.Context, documentID str
 	return *doc.Associate, ccfs, err
 }
 
-func (r *RecordRepository) CreateAck(ctx context.Context, sd concrnt.SignedDocument) error {
-	return fmt.Errorf("not implemented")
+func (r *RecordRepository) CreateAck(ctx context.Context, documentID string, sd concrnt.SignedDocument) (string, string, error) {
+	ctx, span := tracer.Start(ctx, "Repository.Record.CreateAck")
+	defer span.End()
+
+	var doc concrnt.Document[any]
+	err := json.Unmarshal([]byte(sd.Document), &doc)
+	if err != nil {
+		span.RecordError(err)
+		return "", "", err
+	}
+
+	parsed, err := concrnt.ParseCCURI(*doc.Associate)
+	if err != nil {
+		span.RecordError(err)
+		return "", "", err
+	}
+
+	if parsed.Scheme != "cckv" {
+		err := fmt.Errorf("invalid associate: document associate scheme must be cckv")
+		span.RecordError(err)
+		return "", "", err
+	}
+
+	to := parsed.Owner
+	from := doc.Author
+
+	ack := models.Ack{
+		From:       from,
+		To:         to,
+		Schema:     doc.Schema,
+		DocumentID: documentID,
+	}
+
+	proof, err := json.Marshal(sd.Proof)
+	if err != nil {
+		span.RecordError(err)
+		return "", "", err
+	}
+
+	commitLog := models.CommitLog{
+		ID:       documentID,
+		Document: sd.Document,
+		Proof:    string(proof),
+	}
+
+	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+
+		if err := tx.Clauses(clause.OnConflict{
+			DoNothing: true,
+		}).Create(&commitLog).Error; err != nil {
+			span.RecordError(err)
+			return err
+		}
+
+		err := tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "commit_log_id"}, {Name: "owner"}},
+			DoNothing: true,
+		}).Create(&models.CommitOwner{
+			CommitLogID: commitLog.ID,
+			Owner:       from,
+		}).Error
+		if err != nil {
+			span.RecordError(err)
+			return err
+		}
+		err = tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "commit_log_id"}, {Name: "owner"}},
+			DoNothing: true,
+		}).Create(&models.CommitOwner{
+			CommitLogID: commitLog.ID,
+			Owner:       to,
+		}).Error
+		if err != nil {
+			span.RecordError(err)
+			return err
+		}
+
+		if err := tx.Create(&ack).Error; err != nil {
+			span.RecordError(err)
+			return err
+		}
+
+		return nil
+	})
+
+	ccfs := concrnt.ComposeCCURI("ccfs", to, documentID)
+
+	return *doc.Associate, ccfs, err
 }
 
 func (r *RecordRepository) GetHierarchicalRecordPolicies(ctx context.Context, uri string) ([][]concrnt.Policy, error) {
@@ -621,62 +707,119 @@ func (r *RecordRepository) GetAssociatedRecords(
 	ctx, span := tracer.Start(ctx, "Repository.Record.GetAssociatedRecords")
 	defer span.End()
 
-	var associations []models.Association
-
-	query := r.db.WithContext(ctx).
-		Model(&models.Association{}).
-		Preload("Document").
-		Joins("JOIN record_keys rk ON rk.id = associations.target_id").
-		Where("rk.uri = ?", targetURI)
-
-	if schema != "" {
-		query = query.Where("associations.schema = ?", schema)
-	}
-	if variant != "" {
-		query = query.Where("associations.variant = ?", variant)
-	}
-	if author != "" {
-		query = query.Where("associations.author = ?", author)
-	}
-
-	if err := query.Find(&associations).Error; err != nil {
+	path, err := url.Parse(targetURI)
+	if err != nil {
+		span.RecordError(err)
 		return nil, err
 	}
 
-	documents := make([]concrnt.Document[any], 0, len(associations))
-	for _, assoc := range associations {
-		var doc concrnt.Document[any]
-		err := json.Unmarshal([]byte(assoc.Document.Document), &doc)
-		if err != nil {
-			span.RecordError(err)
+	if path.Path == "" { // ack
+		var acks []models.Ack
+
+		query := r.db.WithContext(ctx).
+			Model(&models.Ack{}).
+			Preload("Document").
+			Where("to = ?", targetURI)
+
+		if schema != "" {
+			query = query.Where("schema = ?", schema)
+		}
+
+		if err := query.Find(&acks).Error; err != nil {
 			return nil, err
 		}
-		documents = append(documents, doc)
-	}
 
-	return documents, nil
+		documents := make([]concrnt.Document[any], 0, len(acks))
+		for _, ack := range acks {
+			var doc concrnt.Document[any]
+			err := json.Unmarshal([]byte(ack.Document.Document), &doc)
+			if err != nil {
+				span.RecordError(err)
+				return nil, err
+			}
+			documents = append(documents, doc)
+		}
+
+		return documents, nil
+
+	} else {
+		var associations []models.Association
+
+		query := r.db.WithContext(ctx).
+			Model(&models.Association{}).
+			Preload("Document").
+			Joins("JOIN record_keys rk ON rk.id = associations.target_id").
+			Where("rk.uri = ?", targetURI)
+
+		if schema != "" {
+			query = query.Where("associations.schema = ?", schema)
+		}
+		if variant != "" {
+			query = query.Where("associations.variant = ?", variant)
+		}
+		if author != "" {
+			query = query.Where("associations.author = ?", author)
+		}
+
+		if err := query.Find(&associations).Error; err != nil {
+			return nil, err
+		}
+
+		documents := make([]concrnt.Document[any], 0, len(associations))
+		for _, assoc := range associations {
+			var doc concrnt.Document[any]
+			err := json.Unmarshal([]byte(assoc.Document.Document), &doc)
+			if err != nil {
+				span.RecordError(err)
+				return nil, err
+			}
+			documents = append(documents, doc)
+		}
+
+		return documents, nil
+	}
 }
 
 func (r *RecordRepository) GetAssociatedRecordCountsBySchema(ctx context.Context, targetURI string) (map[string]int64, error) {
 	ctx, span := tracer.Start(ctx, "Repository.Record.GetAssociatedRecordCountsBySchema")
 	defer span.End()
 
+	path, err := url.Parse(targetURI)
+	if err != nil {
+		span.RecordError(err)
+		return nil, err
+	}
+
 	var counts []struct {
 		Schema string
 		Count  int64
 	}
 
-	err := r.db.WithContext(ctx).
-		Model(&models.Association{}).
-		Select("schema, COUNT(*) AS count").
-		Joins("JOIN record_keys rk ON rk.id = associations.target_id").
-		Where("rk.uri = ?", targetURI).
-		Group("schema").
-		Scan(&counts).Error
+	if path.Path == "" { // ack
+		err := r.db.WithContext(ctx).
+			Model(&models.Ack{}).
+			Select("schema, COUNT(*) AS count").
+			Where("to = ?", targetURI).
+			Group("schema").
+			Scan(&counts).Error
 
-	if err != nil {
-		span.RecordError(err)
-		return nil, err
+		if err != nil {
+			span.RecordError(err)
+			return nil, err
+		}
+	} else {
+		err := r.db.WithContext(ctx).
+			Model(&models.Association{}).
+			Select("schema, COUNT(*) AS count").
+			Joins("JOIN record_keys rk ON rk.id = associations.target_id").
+			Where("rk.uri = ?", targetURI).
+			Group("schema").
+			Scan(&counts).Error
+
+		if err != nil {
+			span.RecordError(err)
+			return nil, err
+		}
 	}
 
 	result := make(map[string]int64)
@@ -685,7 +828,6 @@ func (r *RecordRepository) GetAssociatedRecordCountsBySchema(ctx context.Context
 	}
 
 	return result, nil
-
 }
 
 func (r *RecordRepository) GetAssociatedRecordCountsByVariant(ctx context.Context, targetURI, schema string) (*utils.OrderedKVMap[int64], error) {
