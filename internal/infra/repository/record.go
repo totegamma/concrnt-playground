@@ -279,7 +279,7 @@ func (r *RecordRepository) CreateAck(ctx context.Context, documentID string, sd 
 	ctx, span := tracer.Start(ctx, "Repository.Record.CreateAck")
 	defer span.End()
 
-	var doc concrnt.Document[any]
+	var doc concrnt.Document[schemas.Acknowledge]
 	err := json.Unmarshal([]byte(sd.Document), &doc)
 	if err != nil {
 		span.RecordError(err)
@@ -304,7 +304,7 @@ func (r *RecordRepository) CreateAck(ctx context.Context, documentID string, sd 
 	ack := models.Ack{
 		From:       from,
 		To:         to,
-		Schema:     doc.Schema,
+		Context:    doc.Value.Context,
 		DocumentID: documentID,
 	}
 
@@ -707,119 +707,62 @@ func (r *RecordRepository) GetAssociatedRecords(
 	ctx, span := tracer.Start(ctx, "Repository.Record.GetAssociatedRecords")
 	defer span.End()
 
-	path, err := url.Parse(targetURI)
-	if err != nil {
-		span.RecordError(err)
+	var associations []models.Association
+
+	query := r.db.WithContext(ctx).
+		Model(&models.Association{}).
+		Preload("Document").
+		Joins("JOIN record_keys rk ON rk.id = associations.target_id").
+		Where("rk.uri = ?", targetURI)
+
+	if schema != "" {
+		query = query.Where("associations.schema = ?", schema)
+	}
+	if variant != "" {
+		query = query.Where("associations.variant = ?", variant)
+	}
+	if author != "" {
+		query = query.Where("associations.author = ?", author)
+	}
+
+	if err := query.Find(&associations).Error; err != nil {
 		return nil, err
 	}
 
-	if path.Path == "" { // ack
-		var acks []models.Ack
-
-		query := r.db.WithContext(ctx).
-			Model(&models.Ack{}).
-			Preload("Document").
-			Where("to = ?", targetURI)
-
-		if schema != "" {
-			query = query.Where("schema = ?", schema)
-		}
-
-		if err := query.Find(&acks).Error; err != nil {
+	documents := make([]concrnt.Document[any], 0, len(associations))
+	for _, assoc := range associations {
+		var doc concrnt.Document[any]
+		err := json.Unmarshal([]byte(assoc.Document.Document), &doc)
+		if err != nil {
+			span.RecordError(err)
 			return nil, err
 		}
-
-		documents := make([]concrnt.Document[any], 0, len(acks))
-		for _, ack := range acks {
-			var doc concrnt.Document[any]
-			err := json.Unmarshal([]byte(ack.Document.Document), &doc)
-			if err != nil {
-				span.RecordError(err)
-				return nil, err
-			}
-			documents = append(documents, doc)
-		}
-
-		return documents, nil
-
-	} else {
-		var associations []models.Association
-
-		query := r.db.WithContext(ctx).
-			Model(&models.Association{}).
-			Preload("Document").
-			Joins("JOIN record_keys rk ON rk.id = associations.target_id").
-			Where("rk.uri = ?", targetURI)
-
-		if schema != "" {
-			query = query.Where("associations.schema = ?", schema)
-		}
-		if variant != "" {
-			query = query.Where("associations.variant = ?", variant)
-		}
-		if author != "" {
-			query = query.Where("associations.author = ?", author)
-		}
-
-		if err := query.Find(&associations).Error; err != nil {
-			return nil, err
-		}
-
-		documents := make([]concrnt.Document[any], 0, len(associations))
-		for _, assoc := range associations {
-			var doc concrnt.Document[any]
-			err := json.Unmarshal([]byte(assoc.Document.Document), &doc)
-			if err != nil {
-				span.RecordError(err)
-				return nil, err
-			}
-			documents = append(documents, doc)
-		}
-
-		return documents, nil
+		documents = append(documents, doc)
 	}
+
+	return documents, nil
 }
 
 func (r *RecordRepository) GetAssociatedRecordCountsBySchema(ctx context.Context, targetURI string) (map[string]int64, error) {
 	ctx, span := tracer.Start(ctx, "Repository.Record.GetAssociatedRecordCountsBySchema")
 	defer span.End()
 
-	path, err := url.Parse(targetURI)
-	if err != nil {
-		span.RecordError(err)
-		return nil, err
-	}
-
 	var counts []struct {
 		Schema string
 		Count  int64
 	}
 
-	if path.Path == "" { // ack
-		err := r.db.WithContext(ctx).
-			Model(&models.Ack{}).
-			Select("schema, COUNT(*) AS count").
-			Where("to = ?", targetURI).
-			Group("schema").
-			Scan(&counts).Error
+	err := r.db.WithContext(ctx).
+		Model(&models.Association{}).
+		Select("schema, COUNT(*) AS count").
+		Joins("JOIN record_keys rk ON rk.id = associations.target_id").
+		Where("rk.uri = ?", targetURI).
+		Group("schema").
+		Scan(&counts).Error
 
-		if err != nil {
-			span.RecordError(err)
-			return nil, err
-		}
-	} else {
-		err := r.db.WithContext(ctx).
-			Model(&models.Association{}).
-			Select("schema, COUNT(*) AS count").
-			Joins("JOIN record_keys rk ON rk.id = associations.target_id").
-			Where("rk.uri = ?", targetURI).
-			Group("schema").
-			Scan(&counts).Error
-
-		if err != nil {
-			span.RecordError(err)
-			return nil, err
-		}
+	if err != nil {
+		span.RecordError(err)
+		return nil, err
 	}
 
 	result := make(map[string]int64)
@@ -926,4 +869,83 @@ func (r *RecordRepository) Query(
 	}
 
 	return sds, nil
+}
+
+func (r *RecordRepository) GetAcknowledgeRecords(ctx context.Context, from, to, context string) ([][]concrnt.Document[schemas.Acknowledge], error) {
+	ctx, span := tracer.Start(ctx, "Repository.Record.GetAcknowledgeRecords")
+	defer span.End()
+
+	var commits []models.CommitLog
+	query := r.db.WithContext(ctx).
+		Model(&models.Ack{}).
+		Select("commit_logs.*").
+		Joins("JOIN commit_logs ON commit_logs.id = acks.document_id")
+
+	if from != "" {
+		query = query.Where("acks.from = ?", from)
+	}
+	if to != "" {
+		query = query.Where("acks.to = ?", to)
+	}
+	if context != "" {
+		query = query.Where("acks.context = ?", context)
+	}
+
+	err := query.Order("acks.c_date ASC").Find(&commits).Error
+	if err != nil {
+		span.RecordError(err)
+		return nil, err
+	}
+
+	result := make([][]concrnt.Document[schemas.Acknowledge], len(commits))
+	for i, commit := range commits {
+		var doc concrnt.Document[schemas.Acknowledge]
+		err := json.Unmarshal([]byte(commit.Document), &doc)
+		if err != nil {
+			span.RecordError(err)
+			return nil, err
+		}
+		result[i] = append(result[i], doc)
+	}
+
+	return result, nil
+}
+
+func (r *RecordRepository) GetAcknowledgeRecordCounts(ctx context.Context, from, to, context string) (map[string]int64, error) {
+	ctx, span := tracer.Start(ctx, "Repository.Record.GetAcknowledgeRecordCounts")
+	defer span.End()
+
+	type result struct {
+		Context string
+		Count   int64
+	}
+
+	var results []result
+
+	query := r.db.WithContext(ctx).
+		Model(&models.Ack{}).
+		Select("context, COUNT(*) AS count")
+
+	if from != "" {
+		query = query.Where("from = ?", from)
+	}
+	if to != "" {
+		query = query.Where("to = ?", to)
+	}
+	if context != "" {
+		query = query.Where("context = ?", context)
+	}
+
+	err := query.Group("context").Scan(&results).Error
+	if err != nil {
+		span.RecordError(err)
+		return nil, err
+	}
+
+	counts := make(map[string]int64)
+	for _, r := range results {
+		counts[r.Context] = r.Count
+	}
+
+	return counts, nil
 }

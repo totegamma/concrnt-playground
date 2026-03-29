@@ -1,6 +1,7 @@
 package schemas
 
 const (
+	AckURL          string = "https://schema.concrnt.net/ack.json"
 	DeleteURL       string = "https://schema.concrnt.net/delete.json"
 	AffiliationURL  string = "https://schema.concrnt.net/affiliation.json"
 	EnactSubkeyURL  string = "https://schema.concrnt.net/subkey-enact.json"

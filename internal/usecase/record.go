@@ -33,6 +33,8 @@ type RecordRepository interface {
 
 	GetDistributions(ctx context.Context, uri string) ([]string, error)
 
+	GetAcknowledgeRecords(ctx context.Context, from, to, context string) ([][]concrnt.Document[schemas.Acknowledge], error)
+	GetAcknowledgeRecordCounts(ctx context.Context, from, to, context string) (map[string]int64, error)
 	GetAssociatedRecords(ctx context.Context, targetURI, schema, variant, author string) ([]concrnt.Document[any], error)
 	GetAssociatedRecordCountsBySchema(ctx context.Context, targetURI string) (map[string]int64, error)
 	GetAssociatedRecordCountsByVariant(ctx context.Context, targetURI, schema string) (*utils.OrderedKVMap[int64], error)
@@ -221,50 +223,42 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 			span.RecordError(err)
 			return err
 		}
+	case schemas.AckURL:
+		_, resultURI, err = uc.repo.CreateAck(ctx, documentID, sd)
+		if err != nil {
+			span.RecordError(err)
+			return err
+		}
 	default:
 		// Associateフィールドがあれば通常Recordではない
 		if doc.Associate != nil {
-			path, err := url.Parse(*doc.Associate)
+			var targetURI string
+			targetURI, resultURI, err = uc.repo.CreateAssociation(ctx, documentID, sd)
 			if err != nil {
 				span.RecordError(err)
 				return err
 			}
-			// uriがentityであればAck、そうでなければAssociation
-			if path.Path == "" { // ack
-				_, resultURI, err = uc.repo.CreateAck(ctx, documentID, sd)
-				if err != nil {
-					span.RecordError(err)
-					return err
-				}
-			} else { // association
-				var targetURI string
-				targetURI, resultURI, err = uc.repo.CreateAssociation(ctx, documentID, sd)
-				if err != nil {
-					span.RecordError(err)
-					return err
-				}
 
-				// signal
-				distributions, err := uc.repo.GetDistributions(ctx, targetURI)
+			// signal
+			distributions, err := uc.repo.GetDistributions(ctx, targetURI)
+			if err != nil {
+				span.RecordError(err)
+				return err
+			}
+
+			notificationChannels := append(distributions, targetURI)
+			for _, channel := range notificationChannels {
+				err = uc.signal.Publish(ctx, channel, concrnt.Event{
+					Type: "associated",
+					URI:  targetURI,
+					References: map[string]concrnt.SignedDocument{
+						resultURI: sd,
+					},
+				})
 				if err != nil {
+					fmt.Printf("Error publishing signal for association: %v\n", err)
 					span.RecordError(err)
 					return err
-				}
-
-				notificationChannels := append(distributions, targetURI)
-				for _, channel := range notificationChannels {
-					err = uc.signal.Publish(ctx, channel, concrnt.Event{
-						Type: "associated",
-						URI:  targetURI,
-						References: map[string]concrnt.SignedDocument{
-							resultURI: sd,
-						},
-					})
-					if err != nil {
-						fmt.Printf("Error publishing signal for association: %v\n", err)
-						span.RecordError(err)
-						return err
-					}
 				}
 			}
 		} else { // 通常Record
@@ -384,6 +378,14 @@ func (uc *RecordUsecase) GetSigned(ctx context.Context, uri string) (*concrnt.Si
 	}
 
 	return sd, nil
+}
+
+func (uc *RecordUsecase) GetAcknowledgeRecords(ctx context.Context, from, to, context string) ([][]concrnt.Document[schemas.Acknowledge], error) {
+	return uc.repo.GetAcknowledgeRecords(ctx, from, to, context)
+}
+
+func (uc *RecordUsecase) GetAcknowledgeRecordCounts(ctx context.Context, from, to, context string) (map[string]int64, error) {
+	return uc.repo.GetAcknowledgeRecordCounts(ctx, from, to, context)
 }
 
 func (uc *RecordUsecase) GetAssociatedRecords(ctx context.Context, targetURI, schema, variant, author string) ([]concrnt.Document[any], error) {

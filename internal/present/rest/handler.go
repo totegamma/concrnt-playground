@@ -59,6 +59,8 @@ var Endpoints = map[string]string{
 	"net.concrnt.core.query":              "/query{?prefix,schema,since,until,limit,order}",
 	"net.concrnt.core.associations":       "/associations{?uri,schema,variant,author}",
 	"net.concrnt.core.association-counts": "/association-counts{?uri,schema}",
+	"net.concrnt.core.acknowledges":       "/acknowledges{?from,to,context}",
+	"net.concrnt.core.acknowledge-counts": "/acknowledge-counts{?from,to,context}",
 	"net.concrnt.core.realtime":           "/realtime",
 	"net.concrnt.world.register":          "/api/v1/register",
 	"net.concrnt.world.timeline.recent":   "/api/v1/timeline/recent{?uris,until,limit}",
@@ -73,6 +75,8 @@ func (h *Handler) RegisterRoutes(e *echo.Echo) {
 	api.GET("/query", h.handleQuery)
 	api.GET("/associations", h.handleAssociations)
 	api.GET("/association-counts", h.handleAssociationCounts)
+	api.GET("/acknowledges", h.handleAcknowledges)
+	api.GET("/acknowledge-counts", h.handleAcknowledgeCounts)
 	api.GET("/realtime", h.handleRealtime)
 	api.POST("/api/v1/register", h.handleRegister)
 	api.GET("/api/v1/timeline/recent", h.handleTimelineRecent)
@@ -616,4 +620,40 @@ func (h *Handler) handleKnownServers(c echo.Context) error {
 		return presenter.InternalError(c, err)
 	}
 	return presenter.OK(c, servers)
+}
+
+func (h *Handler) handleAcknowledges(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	from := c.QueryParam("from")
+	to := c.QueryParam("to")
+	context := c.QueryParam("context")
+
+	if from == "" && to == "" {
+		return presenter.BadRequestMessage(c, "from and to parameters are required")
+	}
+
+	records, err := h.record.GetAcknowledgeRecords(ctx, from, to, context)
+	if err != nil {
+		return presenter.InternalError(c, err)
+	}
+	return presenter.OK(c, records)
+}
+
+func (h *Handler) handleAcknowledgeCounts(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	from := c.QueryParam("from")
+	to := c.QueryParam("to")
+	context := c.QueryParam("context")
+
+	if from == "" && to == "" {
+		return presenter.BadRequestMessage(c, "from and to parameters are required")
+	}
+
+	counts, err := h.record.GetAcknowledgeRecordCounts(ctx, from, to, context)
+	if err != nil {
+		return presenter.InternalError(c, err)
+	}
+	return presenter.OK(c, counts)
 }
