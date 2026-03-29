@@ -40,9 +40,9 @@ type Record struct {
 }
 
 type Ack struct {
-	From    string `json:"from" gorm:"type:text;index"`
-	To      string `json:"to" gorm:"type:text;index"`
-	Context string `json:"schema" gorm:"type:text;index"`
+	From    string `json:"from" gorm:"type:text;unique"`
+	To      string `json:"to" gorm:"type:text;unique"`
+	Context string `json:"schema" gorm:"type:text;unique"`
 
 	DocumentID string    `json:"id" gorm:"primaryKey;type:text"`
 	Document   CommitLog `json:"-" gorm:"foreignKey:DocumentID;references:ID;constraint:OnDelete:CASCADE;"`
