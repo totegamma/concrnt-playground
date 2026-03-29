@@ -275,27 +275,27 @@ func (r *RecordRepository) CreateAssociation(ctx context.Context, documentID str
 	return *doc.Associate, ccfs, err
 }
 
-func (r *RecordRepository) CreateAck(ctx context.Context, documentID string, sd concrnt.SignedDocument) (string, string, error) {
-	ctx, span := tracer.Start(ctx, "Repository.Record.CreateAck")
+func (r *RecordRepository) Acknowledge(ctx context.Context, documentID string, sd concrnt.SignedDocument) (string, error) {
+	ctx, span := tracer.Start(ctx, "Repository.Record.Acknowledge")
 	defer span.End()
 
 	var doc concrnt.Document[schemas.Acknowledge]
 	err := json.Unmarshal([]byte(sd.Document), &doc)
 	if err != nil {
 		span.RecordError(err)
-		return "", "", err
+		return "", err
 	}
 
 	parsed, err := concrnt.ParseCCURI(*doc.Associate)
 	if err != nil {
 		span.RecordError(err)
-		return "", "", err
+		return "", err
 	}
 
 	if parsed.Scheme != "cckv" {
 		err := fmt.Errorf("invalid associate: document associate scheme must be cckv")
 		span.RecordError(err)
-		return "", "", err
+		return "", err
 	}
 
 	to := parsed.Owner
@@ -311,7 +311,7 @@ func (r *RecordRepository) CreateAck(ctx context.Context, documentID string, sd 
 	proof, err := json.Marshal(sd.Proof)
 	if err != nil {
 		span.RecordError(err)
-		return "", "", err
+		return "", err
 	}
 
 	commitLog := models.CommitLog{
@@ -362,7 +362,93 @@ func (r *RecordRepository) CreateAck(ctx context.Context, documentID string, sd 
 
 	ccfs := concrnt.ComposeCCURI("ccfs", to, documentID)
 
-	return *doc.Associate, ccfs, err
+	return ccfs, err
+}
+
+func (r *RecordRepository) UnAcknowledge(ctx context.Context, documentID string, sd concrnt.SignedDocument) error {
+	ctx, span := tracer.Start(ctx, "Repository.Record.Unacknowledge")
+	defer span.End()
+
+	var doc concrnt.Document[schemas.Acknowledge]
+	err := json.Unmarshal([]byte(sd.Document), &doc)
+	if err != nil {
+		span.RecordError(err)
+		return err
+	}
+
+	parsed, err := concrnt.ParseCCURI(*doc.Associate)
+	if err != nil {
+		span.RecordError(err)
+		return err
+	}
+
+	if parsed.Scheme != "cckv" {
+		err := fmt.Errorf("invalid associate: document associate scheme must be cckv")
+		span.RecordError(err)
+		return err
+	}
+
+	to := parsed.Owner
+	from := doc.Author
+
+	proof, err := json.Marshal(sd.Proof)
+	if err != nil {
+		span.RecordError(err)
+		return err
+	}
+
+	commitLog := models.CommitLog{
+		ID:       documentID,
+		Document: sd.Document,
+		Proof:    string(proof),
+	}
+
+	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+
+		if err := tx.Clauses(clause.OnConflict{
+			DoNothing: true,
+		}).Create(&commitLog).Error; err != nil {
+			span.RecordError(err)
+			return err
+		}
+
+		err := tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "commit_log_id"}, {Name: "owner"}},
+			DoNothing: true,
+		}).Create(&models.CommitOwner{
+			CommitLogID: commitLog.ID,
+			Owner:       from,
+		}).Error
+		if err != nil {
+			span.RecordError(err)
+			return err
+		}
+		err = tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "commit_log_id"}, {Name: "owner"}},
+			DoNothing: true,
+		}).Create(&models.CommitOwner{
+			CommitLogID: commitLog.ID,
+			Owner:       to,
+		}).Error
+		if err != nil {
+			span.RecordError(err)
+			return err
+		}
+
+		err = tx.Model(&models.Ack{}).
+			Where("acks.from = ? AND acks.to = ? AND acks.context = ?", from, to, doc.Value.Context).
+			Update("valid", false).
+			Update("document_id", documentID).
+			Error
+		if err != nil {
+			span.RecordError(err)
+			return err
+		}
+
+		return nil
+	})
+
+	return err
 }
 
 func (r *RecordRepository) GetHierarchicalRecordPolicies(ctx context.Context, uri string) ([][]concrnt.Policy, error) {

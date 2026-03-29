@@ -25,7 +25,8 @@ import (
 type RecordRepository interface {
 	CreateRecord(ctx context.Context, documentID string, sd concrnt.SignedDocument) (string, error)
 	CreateAssociation(ctx context.Context, documentID string, sd concrnt.SignedDocument) (string, string, error)
-	CreateAck(ctx context.Context, documentID string, sd concrnt.SignedDocument) (string, string, error)
+	Acknowledge(ctx context.Context, documentID string, sd concrnt.SignedDocument) (string, error)
+	UnAcknowledge(ctx context.Context, documentID string, sd concrnt.SignedDocument) error
 	Delete(ctx context.Context, sd concrnt.SignedDocument) (string, error)
 
 	GetSignedDocument(ctx context.Context, uri string) (*concrnt.SignedDocument, error)
@@ -223,8 +224,14 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 			span.RecordError(err)
 			return err
 		}
-	case schemas.AckURL:
-		_, resultURI, err = uc.repo.CreateAck(ctx, documentID, sd)
+	case schemas.AcknowledgeURL:
+		resultURI, err = uc.repo.Acknowledge(ctx, documentID, sd)
+		if err != nil {
+			span.RecordError(err)
+			return err
+		}
+	case schemas.UnAcknowledgeURL:
+		err = uc.repo.UnAcknowledge(ctx, documentID, sd)
 		if err != nil {
 			span.RecordError(err)
 			return err
