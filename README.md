@@ -10,22 +10,30 @@
     - 書き換え時だけ動的に動いてs3とかに書き込むようなやつでもいいね
       - lambdaとかで動けるとすごい
 
-## TODO
-- ackの実装
+## リリースまでのTODO
+- [x] ackの実装
+  - [ ] 対象ユーザーが外部ドメインユーザーだった場合に転送する
 - [x] subkeyの実装・検証
 - [x] proxy実装
 - [x] policyの評価
-- 他サーバーとのrealtime通信
+- [ ] 他サーバーとのrealtime通信
   - 横に並べても問題が起きないようにしたい
     - リーダーインスタンスを決めてそこから受信するとか
       - k8sだったらleaseが使える
-- NATSとredis pubsubを切り替えられるように
-- valkey対応？
-- batchエンドポイント
-- passportの発行
-- timeline読み込みをキャッシュに載せる
-- 通知周り
+- [ ] timeline読み込みをキャッシュに載せる
+- [ ] 通知周り
   - webpushはともかくiOSやAndroidのpushはどうする？
+  - -> webpushだけにして、iosやandroidへはリレーサーバーを利用するようにする
+    - https://github.com/mastodon/webpush-apn-relay
+- [ ] 引っ越し機能の実装
+  - [ ] 自分のログの出力API
+  - [ ] 引っ越し先のサーバーへのインポートAPI
+- [ ] alias機能の実装
+
+## リリース後
+- [ ] NATSとredis pubsubを切り替えられるように
+- [ ] valkey対応？
+- [ ] batchエンドポイント
 
 ## まだ考え中なこと
 - マイグレーションとか
