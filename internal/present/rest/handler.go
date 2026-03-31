@@ -96,6 +96,18 @@ func (h *Handler) RegisterRoutes(e *echo.Echo) {
 	api.GET("/api/v1/profile/:owner/:semanticid", h.handleLegacyProfile)
 	api.GET("/api/v1/profiles", h.handleLegacyProfiles)
 
+	api.GET("/tos", func(c echo.Context) (err error) {
+		return c.File("/etc/concrnt/static/tos.txt")
+	})
+
+	api.GET("/code-of-conduct", func(c echo.Context) (err error) {
+		return c.File("/etc/concrnt/static/code-of-conduct.txt")
+	})
+
+	api.GET("/register-template", func(c echo.Context) (err error) {
+		return c.File("/etc/concrnt/static/register-template.json")
+	})
+
 }
 
 func (h *Handler) handleCommit(c echo.Context) error {
