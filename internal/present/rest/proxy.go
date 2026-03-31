@@ -84,7 +84,12 @@ func (p *Proxy) RegisterRoutes(e *echo.Echo) {
 			return nil
 		}
 
-		e.Any(service.Path, handler, middlewares...)
-		e.Any(service.Path+"/*", handler, middlewares...)
+		if service.Path == "/" {
+			e.Any("/", handler, middlewares...)
+			e.Any("/*", handler, middlewares...)
+		} else {
+			e.Any(service.Path, handler, middlewares...)
+			e.Any(service.Path+"/*", handler, middlewares...)
+		}
 	}
 }
