@@ -71,43 +71,70 @@ func (h *Handler) RegisterRoutes(e *echo.Echo) {
 
 	api := e.Group("", echomiddleware.CORS())
 	api.POST("/commit", h.handleCommit)
+	api.OPTIONS("/commit", h.handleNop)
 	api.GET("/resolve", h.handleResolve)
+	api.OPTIONS("/resolve", h.handleNop)
 	api.GET("/query", h.handleQuery)
+	api.OPTIONS("/query", h.handleNop)
 	api.GET("/associations", h.handleAssociations)
+	api.OPTIONS("/associations", h.handleNop)
 	api.GET("/association-counts", h.handleAssociationCounts)
+	api.OPTIONS("/association-counts", h.handleNop)
 	api.GET("/acknowledges", h.handleAcknowledges)
+	api.OPTIONS("/acknowledges", h.handleNop)
 	api.GET("/acknowledge-counts", h.handleAcknowledgeCounts)
+	api.OPTIONS("/acknowledge-counts", h.handleNop)
 	api.GET("/realtime", h.handleRealtime)
+	api.OPTIONS("/realtime", h.handleNop)
 	api.POST("/api/v1/register", h.handleRegister)
+	api.OPTIONS("/api/v1/register", h.handleNop)
 	api.GET("/api/v1/timeline/recent", h.handleTimelineRecent)
+	api.OPTIONS("/api/v1/timeline/recent", h.handleNop)
 	api.GET("/known-servers", h.handleKnownServers)
+	api.OPTIONS("/known-servers", h.handleNop)
 
 	api.GET("/chunkline/itr/:chunk", h.handleChunklineItr)
+	api.OPTIONS("/chunkline/itr/:chunk", h.handleNop)
 	api.GET("/chunkline/body/:chunk", h.handleChunklineBody)
+	api.OPTIONS("/chunkline/body/:chunk", h.handleNop)
 
 	// internal
 	api.GET("/internal/signal/subscriptions", h.handleCurrentSubs)
+	api.OPTIONS("/internal/signal/subscriptions", h.handleNop)
 
 	// Legacy endpoints
 	api.GET("/api/v1/domain", h.handleLegacyDomain)
+	api.OPTIONS("/api/v1/domain", h.handleNop)
 	api.GET("/api/v1/entity/:id", h.handleLegacyEntity)
+	api.OPTIONS("/api/v1/entity/:id", h.handleNop)
 	api.GET("/api/v1/entities", h.handleLegacyEntities)
+	api.OPTIONS("/api/v1/entities", h.handleNop)
 	api.GET("/api/v1/timelines", h.handleLegacyTimelines)
+	api.OPTIONS("/api/v1/timelines", h.handleNop)
 	api.GET("/api/v1/profile/:owner/:semanticid", h.handleLegacyProfile)
+	api.OPTIONS("/api/v1/profile/:owner/:semanticid", h.handleNop)
 	api.GET("/api/v1/profiles", h.handleLegacyProfiles)
+	api.OPTIONS("/api/v1/profiles", h.handleNop)
 
 	api.GET("/tos", func(c echo.Context) (err error) {
 		return c.File("/etc/concrnt/static/tos.txt")
 	})
+	api.OPTIONS("/tos", h.handleNop)
 
 	api.GET("/code-of-conduct", func(c echo.Context) (err error) {
 		return c.File("/etc/concrnt/static/code-of-conduct.txt")
 	})
+	api.OPTIONS("/code-of-conduct", h.handleNop)
 
 	api.GET("/register-template", func(c echo.Context) (err error) {
 		return c.File("/etc/concrnt/static/register-template.json")
 	})
+	api.OPTIONS("/register-template", h.handleNop)
 
+}
+
+func (h *Handler) handleNop(c echo.Context) error {
+	return c.NoContent(http.StatusOK)
 }
 
 func (h *Handler) handleCommit(c echo.Context) error {
