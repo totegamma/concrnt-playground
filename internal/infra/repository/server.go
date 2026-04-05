@@ -27,7 +27,18 @@ func NewServerRepository(config *domain.Config, db *gorm.DB, cl *client.Client) 
 	}
 }
 
-func (r *ServerRepository) Resolve(ctx context.Context, identifier string, hint *string) (*concrnt.WellKnownConcrnt, error) {
+func modelToDomainServer(m *models.Server) (*domain.Server, error) {
+	var wkc concrnt.WellKnownConcrnt
+	if err := json.Unmarshal([]byte(m.WellKnown), &wkc); err != nil {
+		return nil, err
+	}
+	return &domain.Server{
+		TagString: m.Tag,
+		WellKnown: wkc,
+	}, nil
+}
+
+func (r *ServerRepository) Resolve(ctx context.Context, identifier string, hint *string) (*domain.Server, error) {
 	ctx, span := tracer.Start(ctx, "ServerRepository.Resolve")
 	defer span.End()
 
@@ -38,7 +49,7 @@ func (r *ServerRepository) Resolve(ctx context.Context, identifier string, hint 
 	}
 }
 
-func (r *ServerRepository) GetAndCacheByCSID(ctx context.Context, csid string, hint *string) (*concrnt.WellKnownConcrnt, error) {
+func (r *ServerRepository) GetAndCacheByCSID(ctx context.Context, csid string, hint *string) (*domain.Server, error) {
 	ctx, span := tracer.Start(ctx, "ServerRepository.GetAndCacheByCSID")
 	defer span.End()
 
@@ -47,10 +58,7 @@ func (r *ServerRepository) GetAndCacheByCSID(ctx context.Context, csid string, h
 		Where("cs_id = ?", csid).
 		Take(&server).Error
 	if err == nil && server.WellKnown != "" {
-		var wkc concrnt.WellKnownConcrnt
-		if err := json.Unmarshal([]byte(server.WellKnown), &wkc); err == nil {
-			return &wkc, nil
-		}
+		return modelToDomainServer(&server)
 	}
 
 	if hint == nil {
@@ -85,10 +93,10 @@ func (r *ServerRepository) GetAndCacheByCSID(ctx context.Context, csid string, h
 		return nil, err
 	}
 
-	return &wkc, nil
+	return modelToDomainServer(&newServer)
 }
 
-func (r *ServerRepository) GetAndCacheByFQDN(ctx context.Context, fqdn string) (*concrnt.WellKnownConcrnt, error) {
+func (r *ServerRepository) GetAndCacheByFQDN(ctx context.Context, fqdn string) (*domain.Server, error) {
 	ctx, span := tracer.Start(ctx, "ServerRepository.GetAndCacheByFQDN")
 	defer span.End()
 
@@ -97,10 +105,7 @@ func (r *ServerRepository) GetAndCacheByFQDN(ctx context.Context, fqdn string) (
 		Where("id = ?", fqdn).
 		Take(&server).Error
 	if err == nil && server.WellKnown != "" {
-		var wkc concrnt.WellKnownConcrnt
-		if err := json.Unmarshal([]byte(server.WellKnown), &wkc); err == nil {
-			return &wkc, nil
-		}
+		return modelToDomainServer(&server)
 	}
 
 	wkc, err := r.client.GetServer(ctx, fqdn, nil)
@@ -131,7 +136,7 @@ func (r *ServerRepository) GetAndCacheByFQDN(ctx context.Context, fqdn string) (
 		return nil, err
 	}
 
-	return &wkc, nil
+	return modelToDomainServer(&newServer)
 }
 
 func (r *ServerRepository) List(ctx context.Context) ([]*concrnt.WellKnownConcrnt, error) {

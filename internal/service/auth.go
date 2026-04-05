@@ -30,6 +30,7 @@ func NewAuthService(
 
 type AuthResult struct {
 	CCID string
+	Hint *string
 }
 
 func (s *AuthService) AuthJwt(ctx context.Context, token string) (*AuthResult, error) {
@@ -59,10 +60,15 @@ func (s *AuthService) AuthJwt(ctx context.Context, token string) (*AuthResult, e
 		keyID = claims.Issuer
 	}
 
-	var ccid string
-	if concrnt.IsCCID(keyID) {
+	parsed, err := concrnt.ParseCCURI(keyID)
+	if err != nil {
+		span.RecordError(errors.Wrap(err, "failed to parse issuer as CCURI"))
+		return nil, err
+	}
+	hint := parsed.Hint
+	ccid := parsed.Owner
 
-		ccid = keyID
+	if parsed.Key == "" { // login as raw key
 
 		err = jwt.Validate(token, ccid)
 		if err != nil {
@@ -70,18 +76,21 @@ func (s *AuthService) AuthJwt(ctx context.Context, token string) (*AuthResult, e
 			return nil, err
 		}
 
-		return &AuthResult{CCID: ccid}, nil
+		return &AuthResult{
+			CCID: ccid,
+			Hint: hint,
+		}, nil
 
-	} else {
+	} else { // login as subkey
 
 		var subKeyDoc concrnt.Document[schemas.Subkey]
-		err := s.client.GetRecord(ctx, keyID, &subKeyDoc) // TODO strictオプションが必要かも
+		// TODO 署名を確認するstrictオプションが必要
+		// TODO キーのキャッシュが必須
+		err := s.client.GetRecord(ctx, keyID, &subKeyDoc)
 		if err != nil {
 			span.RecordError(err)
 			return nil, err
 		}
-
-		ccid = subKeyDoc.Author
 
 		err = jwt.Validate(token, subKeyDoc.Value.CKID)
 		if err != nil {

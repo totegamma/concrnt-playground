@@ -28,7 +28,7 @@ func (r *EntityRepository) Register(ctx context.Context, entity domain.Entity, m
 			ID:                   entity.ID,
 			Alias:                entity.Alias,
 			Domain:               entity.Domain,
-			Tag:                  entity.Tag,
+			Tag:                  entity.TagString,
 			AffiliationDocument:  entity.AffiliationDocument,
 			AffiliationSignature: entity.AffiliationSignature,
 		}
@@ -66,7 +66,7 @@ func (r *EntityRepository) Get(ctx context.Context, ccid string, hint *string) (
 			ID:                   entity.ID,
 			Alias:                entity.Alias,
 			Domain:               entity.Domain,
-			Tag:                  entity.Tag,
+			TagString:            entity.Tag,
 			AffiliationDocument:  entity.AffiliationDocument,
 			AffiliationSignature: entity.AffiliationSignature,
 		}, nil
@@ -99,7 +99,7 @@ func (r *EntityRepository) Get(ctx context.Context, ccid string, hint *string) (
 		ID:                   newEntity.ID,
 		Alias:                newEntity.Alias,
 		Domain:               newEntity.Domain,
-		Tag:                  newEntity.Tag,
+		TagString:            newEntity.Tag,
 		AffiliationDocument:  newEntity.AffiliationDocument,
 		AffiliationSignature: newEntity.AffiliationSignature,
 	}, nil

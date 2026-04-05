@@ -147,7 +147,7 @@ func main() {
 	subscriber := worker.NewSubscriber(&globalConfig, cl, signal)
 	subscriber.Start(context.Background())
 
-	authMiddleware := middleware.NewAuthMiddleware(auth, globalConfig, entityRepo)
+	authMiddleware := middleware.NewAuthMiddleware(auth, globalConfig, serverRepo, entityRepo)
 
 	e.Use(authMiddleware.IdentifyIdentity)
 

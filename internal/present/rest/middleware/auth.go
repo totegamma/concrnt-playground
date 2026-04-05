@@ -12,7 +12,6 @@ import (
 
 	"github.com/totegamma/concrnt-playground"
 	"github.com/totegamma/concrnt-playground/impl/interop"
-	"github.com/totegamma/concrnt-playground/impl/tags"
 	"github.com/totegamma/concrnt-playground/internal/domain"
 	"github.com/totegamma/concrnt-playground/internal/infra/repository"
 	"github.com/totegamma/concrnt-playground/internal/service"
@@ -23,17 +22,20 @@ var tracer = otel.Tracer("auth")
 type AuthMiddleware struct {
 	auth   *service.AuthService
 	config domain.Config
+	server *repository.ServerRepository
 	entity *repository.EntityRepository
 }
 
 func NewAuthMiddleware(
 	auth *service.AuthService,
 	config domain.Config,
+	server *repository.ServerRepository,
 	entity *repository.EntityRepository,
 ) *AuthMiddleware {
 	return &AuthMiddleware{
 		auth:   auth,
 		config: config,
+		server: server,
 		entity: entity,
 	}
 }
@@ -73,25 +75,42 @@ func (s *AuthMiddleware) IdentifyIdentity(next echo.HandlerFunc) echo.HandlerFun
 				goto skipCheckAuthorization
 			}
 
-			dr, err := s.entity.Get(ctx, result.CCID, nil) // TODO use passport to get hint
+			ent, err := s.entity.Get(ctx, result.CCID, result.Hint)
 			if err != nil {
 				span.RecordError(errors.Wrap(err, "AuthMiddleware.IdentifyIdentity: s.entity.Get failed"))
 				goto skipCheckAuthorization
 			}
+			entityTag := ent.Tag()
+
+			if entityTag.Has("_blocked") {
+				err := fmt.Errorf("entity is blocked")
+				return echo.NewHTTPError(403, err.Error())
+			}
+
+			srv, err := s.server.GetAndCacheByFQDN(ctx, ent.Domain)
+			if err != nil {
+				span.RecordError(errors.Wrap(err, "AuthMiddleware.IdentifyIdentity: s.server.GetAndCacheByFQDN failed"))
+				goto skipCheckAuthorization
+			}
+			srvTag := srv.Tag()
+
+			if srvTag.Has("_blocked") {
+				err := fmt.Errorf("server is blocked")
+				return echo.NewHTTPError(403, err.Error())
+			}
 
 			requester := concrnt.Entity{
-				CCID:                 dr.ID,
-				Domain:               dr.Domain,
-				AffiliationDocument:  dr.AffiliationDocument,
-				AffiliationSignature: dr.AffiliationSignature,
+				CCID:                 ent.ID,
+				Domain:               ent.Domain,
+				AffiliationDocument:  ent.AffiliationDocument,
+				AffiliationSignature: ent.AffiliationSignature,
 			}
 
 			ctx = context.WithValue(ctx, interop.RequesterCtxKey, requester)
 			span.SetAttributes(attribute.String("RequesterId", result.CCID))
 
-			tag := tags.Parse(dr.Tag)
-			ctx = context.WithValue(ctx, interop.RequesterTagCtxKey, tag)
-			span.SetAttributes(attribute.String("RequesterTag", dr.Tag))
+			ctx = context.WithValue(ctx, interop.RequesterTagCtxKey, entityTag)
+			span.SetAttributes(attribute.String("RequesterTag", entityTag.ToString()))
 		}
 
 	skipCheckAuthorization:
