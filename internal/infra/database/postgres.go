@@ -6,6 +6,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/XSAM/otelsql"
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -15,6 +17,7 @@ import (
 )
 
 func NewPostgres(dsn string) (*gorm.DB, error) {
+
 	gormLogger := logger.New(
 		log.New(os.Stdout, "\r\n", log.LstdFlags), // io writer
 		logger.Config{
@@ -25,23 +28,40 @@ func NewPostgres(dsn string) (*gorm.DB, error) {
 		},
 	)
 
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
-		TranslateError: true,
-		Logger:         gormLogger,
-	})
+	sqlDB, err := otelsql.Open("pgx", dsn,
+		otelsql.WithAttributes(semconv.DBSystemPostgreSQL),
+		otelsql.WithSpanOptions(otelsql.SpanOptions{
+			OmitConnResetSession: false,
+			OmitConnPrepare:      false,
+			OmitRows:             true,
+		}),
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	// set connection pool settings
-	sqlDB, err := db.DB()
-	if err != nil {
+	// DBStatsをメトリクスとして記録（コネクションプール待ちを可視化）
+	if _, err = otelsql.RegisterDBStatsMetrics(sqlDB,
+		otelsql.WithAttributes(semconv.DBSystemPostgreSQL),
+	); err != nil {
 		return nil, err
 	}
+
 	sqlDB.SetMaxOpenConns(25)
 	sqlDB.SetMaxIdleConns(25)
 	sqlDB.SetConnMaxLifetime(30 * time.Minute)
 	sqlDB.SetConnMaxIdleTime(0)
+
+	db, err := gorm.Open(
+		postgres.New(postgres.Config{Conn: sqlDB}),
+		&gorm.Config{
+			TranslateError: true,
+			Logger:         gormLogger,
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
 
 	if err = db.Use(tracing.NewPlugin(
 		tracing.WithDBSystem("postgresql"),
@@ -49,7 +69,7 @@ func NewPostgres(dsn string) (*gorm.DB, error) {
 		slog.Error("failed to enable tracing plugin for postgres", slog.String("error", err.Error()))
 	}
 
-	return db, err
+	return db, nil
 }
 
 func MigratePostgres(db *gorm.DB) error {
