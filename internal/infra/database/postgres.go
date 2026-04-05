@@ -40,8 +40,8 @@ func NewPostgres(dsn string) (*gorm.DB, error) {
 	}
 	sqlDB.SetMaxOpenConns(25)
 	sqlDB.SetMaxIdleConns(25)
-	sqlDB.SetConnMaxLifetime(5 * time.Minute)
-	sqlDB.SetConnMaxIdleTime(5 * time.Minute)
+	sqlDB.SetConnMaxLifetime(30 * time.Minute)
+	sqlDB.SetConnMaxIdleTime(0)
 
 	if err = db.Use(tracing.NewPlugin(
 		tracing.WithDBSystem("postgresql"),

@@ -51,6 +51,7 @@ func New(defaultResolver string) *Client {
 
 type Options struct {
 	Resolver string
+	NoCache  bool
 }
 
 func (c *Client) GetClient() *http.Client {
@@ -212,6 +213,23 @@ func (c *Client) GetResource(ctx context.Context, uri string, accept string, opt
 	ctx, span := tracer.Start(ctx, "Client.GetResource")
 	defer span.End()
 
+	// ==== cache check =============
+	cacheKey := "resource:" + uri
+	if !opts.NoCache {
+		x, found := c.cache.Get(cacheKey)
+		if found {
+			resultBytes := x.([]byte)
+			err := json.Unmarshal(resultBytes, &result)
+			if err != nil {
+				err := errors.Join(fmt.Errorf("failed to unmarshal cached resource for uri %s", uri), err)
+				span.RecordError(err)
+				return err
+			}
+			return nil
+		}
+	}
+	// ==============================
+
 	parsed, err := concrnt.ParseCCURI(uri)
 	if err != nil {
 		err := errors.Join(fmt.Errorf("invalid cc uri %s", uri), err)
@@ -293,6 +311,16 @@ func (c *Client) GetResource(ctx context.Context, uri string, accept string, opt
 		err := errors.Join(fmt.Errorf("failed to decode resource %s", uri), err)
 		span.RecordError(err)
 		return err
+	}
+
+	if !opts.NoCache {
+		bytes, err := json.Marshal(result)
+		if err != nil {
+			err := errors.Join(fmt.Errorf("failed to marshal resource for caching for uri %s", uri), err)
+			span.RecordError(err)
+			return err
+		}
+		c.cache.Set(cacheKey, bytes, cache.DefaultExpiration)
 	}
 
 	return nil
