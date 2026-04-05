@@ -207,6 +207,10 @@ func (h *Handler) handleResolve(c echo.Context) error {
 				if errors.Is(err, domain.ErrPermissionDenied) {
 					return presenter.Forbidden(c, "permission denied") // TODO: should be return NotFound
 				}
+				if errors.Is(err, domain.ErrNotFound) {
+					return presenter.NotFound(c, "resource not found")
+				}
+				return presenter.InternalError(c, err)
 			}
 			return presenter.OK(c, entity)
 		}

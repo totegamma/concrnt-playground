@@ -71,43 +71,11 @@ func (c *Client) RoundTrip(req *http.Request) (*http.Response, error) {
 	return http.DefaultTransport.RoundTrip(req)
 }
 
-func (c *Client) ResolveResourceHost(ctx context.Context, uri string) (string, error) {
-	ctx, span := tracer.Start(ctx, "Client.ResolveResourceHost")
-	defer span.End()
-
-	parsed, err := concrnt.ParseCCURI(uri)
-	if err != nil {
-		err := errors.Join(fmt.Errorf("invalid cc uri %s", uri), err)
-		span.RecordError(err)
-		return "", err
-	}
-
-	if concrnt.IsCCID(parsed.Owner) {
-		entity, err := c.GetEntity(ctx, parsed.Owner, parsed.Hint)
-		if err != nil {
-			err := errors.Join(fmt.Errorf("failed to get entity for ccid %s", parsed.Owner), err)
-			span.RecordError(err)
-			return "", err
-		}
-		return entity.Domain, nil
-	}
-
-	if concrnt.IsCSID(parsed.Owner) {
-		wkc, err := c.GetServer(ctx, parsed.Owner, parsed.Hint)
-		if err != nil {
-			err := errors.Join(fmt.Errorf("failed to get server for csid %s", parsed.Owner), err)
-			span.RecordError(err)
-			return "", err
-		}
-		return wkc.Domain, nil
-	}
-
-	return parsed.Owner, nil
-}
-
 func (c *Client) resolveResolver(ctx context.Context, resolver string) (string, error) {
 	ctx, span := tracer.Start(ctx, "Client.resolveResolver")
 	defer span.End()
+
+	span.SetAttributes(attribute.String("resolver", resolver))
 
 	if resolver == "" {
 		return c.defaultResolver, nil
@@ -120,6 +88,7 @@ func (c *Client) resolveResolver(ctx context.Context, resolver string) (string, 
 			span.RecordError(err)
 			return "", err
 		}
+		span.SetAttributes(attribute.String("entity_domain", entity.Domain))
 		return entity.Domain, nil
 	}
 
@@ -130,10 +99,25 @@ func (c *Client) resolveResolver(ctx context.Context, resolver string) (string, 
 			span.RecordError(err)
 			return "", err
 		}
+		span.SetAttributes(attribute.String("server_domain", wkc.Domain))
 		return wkc.Domain, nil
 	}
 
 	return resolver, nil
+}
+
+func (c *Client) ResolveResourceHost(ctx context.Context, uri string) (string, error) {
+	ctx, span := tracer.Start(ctx, "Client.ResolveResourceHost")
+	defer span.End()
+
+	parsed, err := concrnt.ParseCCURI(uri)
+	if err != nil {
+		err := errors.Join(fmt.Errorf("invalid cc uri %s", uri), err)
+		span.RecordError(err)
+		return "", err
+	}
+
+	return c.resolveResolver(ctx, parsed.Owner)
 }
 
 func (c *Client) GetEntity(ctx context.Context, address string, hint *string) (concrnt.Entity, error) {
@@ -177,9 +161,13 @@ func (c *Client) GetServer(ctx context.Context, domainOrCSID string, hint *strin
 
 	if concrnt.IsCSID(domainOrCSID) {
 		var wkc concrnt.WellKnownConcrnt
-		err := c.GetResource(ctx, "cckv://"+domainOrCSID, "application/json", Options{Resolver: c.defaultResolver}, &wkc)
+		resolver := c.defaultResolver
+		if hint != nil {
+			resolver = *hint
+		}
+		err := c.GetResource(ctx, "cckv://"+domainOrCSID, "application/json", Options{Resolver: resolver}, &wkc)
 		if err != nil {
-			err := errors.Join(fmt.Errorf("failed to get well-known concrnt for csid %s", domainOrCSID), err)
+			err := errors.Join(fmt.Errorf("failed to get well-known concrnt for csid %s. resolver: %s", domainOrCSID, resolver), err)
 			span.RecordError(err)
 			return concrnt.WellKnownConcrnt{}, err
 		}
@@ -188,9 +176,6 @@ func (c *Client) GetServer(ctx context.Context, domainOrCSID string, hint *strin
 	} else {
 
 		domain := domainOrCSID
-		if hint != nil {
-			domain = *hint
-		}
 
 		url := "https://" + domain + "/.well-known/concrnt"
 		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)

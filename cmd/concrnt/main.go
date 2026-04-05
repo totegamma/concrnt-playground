@@ -128,7 +128,6 @@ func main() {
 
 	cl := client.New(conf.Server.GatewayAddr)
 	signal := service.NewSignalService(redis)
-	auth := service.NewAuthService(&globalConfig, cl)
 	policy := service.NewPolicyService(GetGlobalPolicy())
 
 	serverRepo := repository.NewServerRepository(&globalConfig, db, cl)
@@ -147,7 +146,7 @@ func main() {
 	subscriber := worker.NewSubscriber(&globalConfig, cl, signal)
 	subscriber.Start(context.Background())
 
-	authMiddleware := middleware.NewAuthMiddleware(auth, globalConfig, serverRepo, entityRepo)
+	authMiddleware := middleware.NewAuthMiddleware(globalConfig, cl, serverRepo, entityRepo)
 
 	e.Use(authMiddleware.IdentifyIdentity)
 

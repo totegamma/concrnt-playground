@@ -59,8 +59,7 @@ func (r *EntityRepository) Register(ctx context.Context, entity domain.Entity, m
 
 func (r *EntityRepository) Get(ctx context.Context, ccid string, hint *string) (domain.Entity, error) {
 
-	var entity models.Entity
-	err := r.db.WithContext(ctx).First(&entity, "id = ?", ccid).Error
+	entity, err := gorm.G[models.Entity](r.db).Where("id = ?", ccid).Take(ctx)
 	if err == nil {
 		return domain.Entity{
 			ID:                   entity.ID,
@@ -73,7 +72,7 @@ func (r *EntityRepository) Get(ctx context.Context, ccid string, hint *string) (
 	}
 
 	if hint == nil || *hint == r.config.FQDN {
-		return domain.Entity{}, err
+		return domain.Entity{}, domain.NotFoundError{Resource: ccid}
 	}
 
 	remote, err := r.client.GetEntity(ctx, ccid, hint)

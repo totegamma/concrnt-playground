@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -140,8 +141,10 @@ func (r *ServerRepository) GetAndCacheByFQDN(ctx context.Context, fqdn string) (
 }
 
 func (r *ServerRepository) List(ctx context.Context) ([]*concrnt.WellKnownConcrnt, error) {
-	var servers []models.Server
-	err := r.db.WithContext(ctx).Find(&servers).Error
+	ctx, span := tracer.Start(ctx, "ServerRepository.List")
+	defer span.End()
+
+	servers, err := gorm.G[models.Server](r.db).Find(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -149,12 +152,16 @@ func (r *ServerRepository) List(ctx context.Context) ([]*concrnt.WellKnownConcrn
 	result := make([]*concrnt.WellKnownConcrnt, 0, len(servers))
 	for _, server := range servers {
 		if server.WellKnown == "" {
+			span.RecordError(fmt.Errorf("server with empty well-known: %s", server.ID))
 			continue
 		}
 		var wkc concrnt.WellKnownConcrnt
-		if err := json.Unmarshal([]byte(server.WellKnown), &wkc); err == nil {
-			result = append(result, &wkc)
+		err := json.Unmarshal([]byte(server.WellKnown), &wkc)
+		if err != nil {
+			span.RecordError(err)
+			continue
 		}
+		result = append(result, &wkc)
 	}
 
 	return result, nil

@@ -11,30 +11,32 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/totegamma/concrnt-playground"
+	"github.com/totegamma/concrnt-playground/client"
 	"github.com/totegamma/concrnt-playground/impl/interop"
 	"github.com/totegamma/concrnt-playground/internal/domain"
 	"github.com/totegamma/concrnt-playground/internal/infra/repository"
-	"github.com/totegamma/concrnt-playground/internal/service"
+	"github.com/totegamma/concrnt-playground/jwt"
+	"github.com/totegamma/concrnt-playground/schemas"
 )
 
 var tracer = otel.Tracer("auth")
 
 type AuthMiddleware struct {
-	auth   *service.AuthService
 	config domain.Config
+	client *client.Client
 	server *repository.ServerRepository
 	entity *repository.EntityRepository
 }
 
 func NewAuthMiddleware(
-	auth *service.AuthService,
 	config domain.Config,
+	client *client.Client,
 	server *repository.ServerRepository,
 	entity *repository.EntityRepository,
 ) *AuthMiddleware {
 	return &AuthMiddleware{
-		auth:   auth,
 		config: config,
+		client: client,
 		server: server,
 		entity: entity,
 	}
@@ -69,13 +71,31 @@ func (s *AuthMiddleware) IdentifyIdentity(next echo.HandlerFunc) echo.HandlerFun
 				goto skipCheckAuthorization
 			}
 
-			result, err := s.auth.AuthJwt(ctx, token)
+			header, claims, err := jwt.Parse(token)
 			if err != nil {
-				span.RecordError(errors.Wrap(err, "AuthMiddleware.IdentifyIdentity: s.auth.AuthJwt failed"))
+				span.RecordError(errors.Wrap(err, "jwt validation failed"))
 				goto skipCheckAuthorization
 			}
 
-			ent, err := s.entity.Get(ctx, result.CCID, result.Hint)
+			if claims.Audience != s.config.FQDN {
+				err := fmt.Errorf("jwt audience mismatch: expected %s, got %s", s.config.FQDN, claims.Audience)
+				span.RecordError(err)
+				goto skipCheckAuthorization
+			}
+
+			if claims.Subject != "concrnt" {
+				err := fmt.Errorf("invalid subject")
+				span.RecordError(err)
+				goto skipCheckAuthorization
+			}
+
+			issParsed, err := concrnt.ParseCCURI(claims.Issuer)
+			if err != nil {
+				span.RecordError(errors.Wrap(err, "failed to parse issuer as CCURI"))
+				goto skipCheckAuthorization
+			}
+
+			ent, err := s.entity.Get(ctx, issParsed.Owner, issParsed.Hint)
 			if err != nil {
 				span.RecordError(errors.Wrap(err, "AuthMiddleware.IdentifyIdentity: s.entity.Get failed"))
 				goto skipCheckAuthorization
@@ -99,6 +119,44 @@ func (s *AuthMiddleware) IdentifyIdentity(next echo.HandlerFunc) echo.HandlerFun
 				return echo.NewHTTPError(403, err.Error())
 			}
 
+			keyID := header.KeyID
+			if keyID == "" {
+				keyID = claims.Issuer
+			}
+
+			parsed, err := concrnt.ParseCCURI(keyID)
+			if err != nil {
+				span.RecordError(errors.Wrap(err, "failed to parse issuer as CCURI"))
+				goto skipCheckAuthorization
+			}
+			ccid := parsed.Owner
+
+			if parsed.Key == "" { // login as raw key
+
+				err = jwt.Validate(token, ccid)
+				if err != nil {
+					span.RecordError(errors.Wrap(err, "jwt signature validation failed"))
+					goto skipCheckAuthorization
+				}
+
+			} else { // login as subkey
+
+				var subKeyDoc concrnt.Document[schemas.Subkey]
+				// TODO 署名を確認するstrictオプションが必要
+				// TODO キーのキャッシュが必須
+				err := s.client.GetRecord(ctx, keyID, &subKeyDoc)
+				if err != nil {
+					span.RecordError(err)
+					goto skipCheckAuthorization
+				}
+
+				err = jwt.Validate(token, subKeyDoc.Value.CKID)
+				if err != nil {
+					span.RecordError(errors.Wrap(err, "jwt signature validation failed"))
+					goto skipCheckAuthorization
+				}
+			}
+
 			requester := concrnt.Entity{
 				CCID:                 ent.ID,
 				Domain:               ent.Domain,
@@ -107,7 +165,7 @@ func (s *AuthMiddleware) IdentifyIdentity(next echo.HandlerFunc) echo.HandlerFun
 			}
 
 			ctx = context.WithValue(ctx, interop.RequesterCtxKey, requester)
-			span.SetAttributes(attribute.String("RequesterId", result.CCID))
+			span.SetAttributes(attribute.String("RequesterId", ccid))
 
 			ctx = context.WithValue(ctx, interop.RequesterTagCtxKey, entityTag)
 			span.SetAttributes(attribute.String("RequesterTag", entityTag.ToString()))
