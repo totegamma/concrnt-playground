@@ -33,7 +33,9 @@ func NewPostgres(dsn string) (*gorm.DB, error) {
 		otelsql.WithSpanOptions(otelsql.SpanOptions{
 			OmitConnResetSession: false,
 			OmitConnPrepare:      false,
-			OmitRows:             true,
+			OmitConnQuery:        false,
+			OmitRows:             false,
+			OmitConnectorConnect: false,
 		}),
 	)
 	if err != nil {
