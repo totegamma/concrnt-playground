@@ -161,22 +161,22 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 	switch doc.Schema {
 	// 特殊なスキーマの場合の処理
 	case schemas.DeleteURL:
-		return uc.Delete(ctx, requester, sd)
+		return uc.deleteRecord(ctx, requester, sd)
 	case schemas.AcknowledgeURL:
-		return uc.Acknowledge(ctx, requester, doc, sd)
+		return uc.acknowledge(ctx, requester, doc, sd)
 	case schemas.UnAcknowledgeURL:
-		return uc.UnAcknowledge(ctx, requester, doc, sd)
+		return uc.unacknowledge(ctx, requester, doc, sd)
 	default:
 		// Associateフィールドがあれば通常Recordではない
 		if doc.Associate != nil {
-			return uc.CreateAssociation(ctx, doc, sd)
+			return uc.createAssociation(ctx, doc, sd)
 		} else { // 通常Record
-			return uc.CreateRecord(ctx, doc, sd)
+			return uc.createRecord(ctx, doc, sd)
 		}
 	}
 }
 
-func (uc *RecordUsecase) Delete(ctx context.Context, requester domain.Entity, sd concrnt.SignedDocument) (*concrnt.SignedDocument, error) {
+func (uc *RecordUsecase) deleteRecord(ctx context.Context, requester domain.Entity, sd concrnt.SignedDocument) (*concrnt.SignedDocument, error) {
 	ctx, span := tracer.Start(ctx, "Usecase.Record.Delete")
 	defer span.End()
 
@@ -239,7 +239,7 @@ func (uc *RecordUsecase) Delete(ctx context.Context, requester domain.Entity, sd
 	return target, nil
 }
 
-func (uc *RecordUsecase) CreateRecord(ctx context.Context, parsed concrnt.Document[any], sd concrnt.SignedDocument) (*concrnt.SignedDocument, error) {
+func (uc *RecordUsecase) createRecord(ctx context.Context, parsed concrnt.Document[any], sd concrnt.SignedDocument) (*concrnt.SignedDocument, error) {
 	ctx, span := tracer.Start(ctx, "Usecase.Record.CreateRecord")
 	defer span.End()
 
@@ -313,7 +313,7 @@ func (uc *RecordUsecase) CreateRecord(ctx context.Context, parsed concrnt.Docume
 	return &sd, nil
 }
 
-func (uc *RecordUsecase) CreateAssociation(ctx context.Context, parsed concrnt.Document[any], sd concrnt.SignedDocument) (*concrnt.SignedDocument, error) {
+func (uc *RecordUsecase) createAssociation(ctx context.Context, parsed concrnt.Document[any], sd concrnt.SignedDocument) (*concrnt.SignedDocument, error) {
 	ctx, span := tracer.Start(ctx, "Usecase.Record.CreateAssociation")
 	defer span.End()
 
@@ -400,7 +400,7 @@ func (uc *RecordUsecase) CreateAssociation(ctx context.Context, parsed concrnt.D
 	return &sd, nil
 }
 
-func (uc *RecordUsecase) Acknowledge(ctx context.Context, requester domain.Entity, parsed concrnt.Document[any], sd concrnt.SignedDocument) (*concrnt.SignedDocument, error) {
+func (uc *RecordUsecase) acknowledge(ctx context.Context, requester domain.Entity, parsed concrnt.Document[any], sd concrnt.SignedDocument) (*concrnt.SignedDocument, error) {
 	ctx, span := tracer.Start(ctx, "Usecase.Record.Acknowledge")
 	defer span.End()
 
@@ -418,7 +418,7 @@ func (uc *RecordUsecase) Acknowledge(ctx context.Context, requester domain.Entit
 	return &sd, nil
 }
 
-func (uc *RecordUsecase) UnAcknowledge(ctx context.Context, requester domain.Entity, parsed concrnt.Document[any], sd concrnt.SignedDocument) (*concrnt.SignedDocument, error) {
+func (uc *RecordUsecase) unacknowledge(ctx context.Context, requester domain.Entity, parsed concrnt.Document[any], sd concrnt.SignedDocument) (*concrnt.SignedDocument, error) {
 	ctx, span := tracer.Start(ctx, "Usecase.Record.UnAcknowledge")
 
 	hash := concrnt.GetHash([]byte(sd.Document))
