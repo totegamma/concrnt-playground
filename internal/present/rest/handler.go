@@ -146,7 +146,7 @@ func (h *Handler) handleCommit(c echo.Context) error {
 		return presenter.BadRequest(c, err)
 	}
 
-	err = h.record.Commit(ctx, sd)
+	result, err := h.record.Commit(ctx, sd)
 	if err != nil {
 		if errors.Is(err, domain.ErrPermissionDenied) {
 			return presenter.Forbidden(c, "permission denied")
@@ -154,7 +154,7 @@ func (h *Handler) handleCommit(c echo.Context) error {
 		return presenter.InternalError(c, err)
 	}
 
-	return presenter.OK(c, echo.Map{"status": "ok"})
+	return presenter.OK(c, result)
 }
 
 func (h *Handler) handleResolve(c echo.Context) error {
