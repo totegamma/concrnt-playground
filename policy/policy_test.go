@@ -1,7 +1,7 @@
 package policy
 
 import (
-	"fmt"
+	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
@@ -19,25 +19,17 @@ func TestPolicy(t *testing.T) {
 		Args: []Expr{
 			{
 				Operator: "Load",
-				Args: []Expr{
-					{
-						Const: "params.role",
-					},
-				},
+				Const:    "params.role",
 			},
 			{
-				Const: "admin",
+				Operator: "Const",
+				Const:    "admin",
 			},
 		},
 	}
 
 	result, err := Eval(ctx, expr)
-	if err != nil {
-		fmt.Println("Eval error:", err)
-		t.Fatalf("Eval failed: %v", err)
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, true, result.Result)
 
-	fmt.Println("Eval result:", result.Result)
-
-	t.Fail()
 }
