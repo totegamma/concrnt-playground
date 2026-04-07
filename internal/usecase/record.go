@@ -264,51 +264,53 @@ func (uc *RecordUsecase) createRecord(ctx context.Context, requester domain.Enti
 		return nil, err
 	}
 
-	for _, destURI := range *parsed.Distributes {
-		dest, err := concrnt.ParseCCURI(destURI)
-		if err != nil {
-			fmt.Printf("Error parsing memberOf URI: %v\n", err)
-			span.RecordError(err)
-			continue
-		}
+	if parsed.Distributes != nil {
+		for _, destURI := range *parsed.Distributes {
+			dest, err := concrnt.ParseCCURI(destURI)
+			if err != nil {
+				fmt.Printf("Error parsing memberOf URI: %v\n", err)
+				span.RecordError(err)
+				continue
+			}
 
-		key, err := url.JoinPath(destURI, documentID)
-		if err != nil {
-			fmt.Printf("Error joining path for distribution: %v\n", err)
-			span.RecordError(err)
-			continue
-		}
+			key, err := url.JoinPath(destURI, documentID)
+			if err != nil {
+				fmt.Printf("Error joining path for distribution: %v\n", err)
+				span.RecordError(err)
+				continue
+			}
 
-		distDoc := concrnt.Document[schemas.Reference]{
-			Key: key,
-			Value: schemas.Reference{
-				Href: resultURI,
-			},
-			Author:    parsed.Author,
-			Schema:    schemas.ReferenceURL,
-			CreatedAt: time.Now(),
-		}
-		docBytes, err := json.Marshal(distDoc)
-		if err != nil {
-			span.RecordError(err)
-			return nil, err
-		}
-		distSD := concrnt.SignedDocument{
-			Document: string(docBytes),
-			Proof: concrnt.Proof{
-				Type: "document-reference",
-				Href: &resultURI,
-			},
-			References: map[string]any{
-				requester.CCKV(): requester.Native(),
-			},
-		}
+			distDoc := concrnt.Document[schemas.Reference]{
+				Key: key,
+				Value: schemas.Reference{
+					Href: resultURI,
+				},
+				Author:    parsed.Author,
+				Schema:    schemas.ReferenceURL,
+				CreatedAt: time.Now(),
+			}
+			docBytes, err := json.Marshal(distDoc)
+			if err != nil {
+				span.RecordError(err)
+				return nil, err
+			}
+			distSD := concrnt.SignedDocument{
+				Document: string(docBytes),
+				Proof: concrnt.Proof{
+					Type: "document-reference",
+					Href: &resultURI,
+				},
+				References: map[string]any{
+					requester.CCKV(): requester.Native(),
+				},
+			}
 
-		err = uc.client.Commit(ctx, dest.Owner, distSD)
-		if err != nil {
-			fmt.Printf("Error committing memberOf item: %v\n", err)
-			span.RecordError(err)
-			continue
+			err = uc.client.Commit(ctx, dest.Owner, distSD)
+			if err != nil {
+				fmt.Printf("Error committing memberOf item: %v\n", err)
+				span.RecordError(err)
+				continue
+			}
 		}
 	}
 
@@ -404,13 +406,25 @@ func (uc *RecordUsecase) createAssociation(ctx context.Context, requester domain
 
 	targetSD, err := uc.repo.GetSignedDocument(ctx, target)
 	if err != nil { // ないとき
-		sd, ok := sd.References[target].(concrnt.SignedDocument)
+		sd, ok := sd.References[target]
 		if !ok {
 			span.RecordError(err)
 			return nil, errors.New("target document not found in references")
 		}
+
+		// HACK: marshal/unmarshalしてany -> SignedDocumentに変換
+		sdBytes, err := json.Marshal(sd)
+		if err != nil {
+			span.RecordError(err)
+			return nil, err
+		}
+		err = json.Unmarshal(sdBytes, &targetSD)
+		if err != nil {
+			span.RecordError(err)
+			return nil, err
+		}
+
 		// TODO: 署名検証
-		targetSD = &sd
 
 		var targetDoc concrnt.Document[any]
 		err = json.Unmarshal([]byte(targetSD.Document), &targetDoc)
@@ -433,7 +447,6 @@ func (uc *RecordUsecase) createAssociation(ctx context.Context, requester domain
 
 		host, err := uc.client.ResolveResourceHost(ctx, channel)
 		if err != nil {
-			fmt.Printf("Error resolving resource host for channel %s: %v\n", channel, err)
 			span.RecordError(err)
 			continue
 		}
@@ -447,7 +460,6 @@ func (uc *RecordUsecase) createAssociation(ctx context.Context, requester domain
 				},
 			})
 			if err != nil {
-				fmt.Printf("Error publishing signal for association: %v\n", err)
 				span.RecordError(err)
 				return nil, err
 			}
