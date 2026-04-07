@@ -144,9 +144,11 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 	}
 
 	var referrer *string
-	entityRef, ok := ctx.Value(interop.RequesterCtxKey).(concrnt.Entity)
+	entityRef, ok := ctx.Value(interop.RequesterCtxKey).(map[string]any)
 	if ok {
-		referrer = &entityRef.CCID
+		if ccid, ok := entityRef["ccid"].(string); ok {
+			referrer = &ccid
+		}
 	}
 
 	requesterID := doc.Author
@@ -162,9 +164,9 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 	case schemas.DeleteURL:
 		return uc.deleteRecord(ctx, requester, sd)
 	case schemas.AcknowledgeURL:
-		return uc.acknowledge(ctx, requester, doc, sd)
+		return uc.acknowledge(ctx, requester, sd)
 	case schemas.UnAcknowledgeURL:
-		return uc.unacknowledge(ctx, requester, doc, sd)
+		return uc.unacknowledge(ctx, requester, sd)
 	default:
 		// Associateフィールドがあれば通常Recordではない
 		if doc.Associate != nil {
@@ -484,36 +486,105 @@ func (uc *RecordUsecase) createAssociation(ctx context.Context, requester domain
 	return &sd, nil
 }
 
-func (uc *RecordUsecase) acknowledge(ctx context.Context, requester domain.Entity, parsed concrnt.Document[any], sd concrnt.SignedDocument) (*concrnt.SignedDocument, error) {
+func (uc *RecordUsecase) acknowledge(ctx context.Context, requester domain.Entity, sd concrnt.SignedDocument) (*concrnt.SignedDocument, error) {
 	ctx, span := tracer.Start(ctx, "Usecase.Record.Acknowledge")
 	defer span.End()
 
-	hash := concrnt.GetHash([]byte(sd.Document))
-	hash10 := [10]byte{}
-	copy(hash10[:], hash[:10])
-	documentID := cdid.New(hash10, parsed.CreatedAt).String()
-
-	_, err := uc.repo.Acknowledge(ctx, documentID, sd)
+	var doc concrnt.Document[schemas.Acknowledge]
+	err := json.Unmarshal([]byte(sd.Document), &doc)
 	if err != nil {
 		span.RecordError(err)
 		return nil, err
 	}
 
+	hash := concrnt.GetHash([]byte(sd.Document))
+	hash10 := [10]byte{}
+	copy(hash10[:], hash[:10])
+	documentID := cdid.New(hash10, doc.CreatedAt).String()
+
+	var referrer *string
+	entityRef, ok := ctx.Value(*doc.Associate).(map[string]any)
+	if ok {
+		if ccid, ok := entityRef["ccid"].(string); ok {
+			referrer = &ccid
+		}
+	}
+
+	targetUser, err := uc.entity.Get(ctx, *doc.Associate, referrer)
+	if err != nil {
+		span.RecordError(err)
+		return nil, err
+	}
+
+	if uc.entity.IsLocal(ctx, requester) || uc.entity.IsLocal(ctx, targetUser) {
+		_, err := uc.repo.Acknowledge(ctx, documentID, sd)
+		if err != nil {
+			span.RecordError(err)
+			return nil, err
+		}
+	}
+
+	if !uc.entity.IsLocal(ctx, targetUser) {
+		distSD := concrnt.SignedDocument{
+			Document: sd.Document,
+			Proof:    sd.Proof,
+			References: map[string]any{
+				requester.CCKV(): requester.Native(),
+			},
+		}
+		err = uc.client.Commit(ctx, targetUser.Domain, distSD)
+		if err != nil {
+			span.RecordError(err)
+			return nil, err
+		}
+	}
+
 	return &sd, nil
 }
 
-func (uc *RecordUsecase) unacknowledge(ctx context.Context, requester domain.Entity, parsed concrnt.Document[any], sd concrnt.SignedDocument) (*concrnt.SignedDocument, error) {
+func (uc *RecordUsecase) unacknowledge(ctx context.Context, requester domain.Entity, sd concrnt.SignedDocument) (*concrnt.SignedDocument, error) {
 	ctx, span := tracer.Start(ctx, "Usecase.Record.UnAcknowledge")
+	defer span.End()
+
+	var doc concrnt.Document[schemas.Acknowledge]
+	err := json.Unmarshal([]byte(sd.Document), &doc)
+	if err != nil {
+		span.RecordError(err)
+		return nil, err
+	}
 
 	hash := concrnt.GetHash([]byte(sd.Document))
 	hash10 := [10]byte{}
 	copy(hash10[:], hash[:10])
-	documentID := cdid.New(hash10, parsed.CreatedAt).String()
+	documentID := cdid.New(hash10, doc.CreatedAt).String()
 
-	err := uc.repo.UnAcknowledge(ctx, documentID, sd)
+	targetUser, err := uc.entity.Get(ctx, *doc.Associate, nil)
 	if err != nil {
 		span.RecordError(err)
 		return nil, err
+	}
+
+	if uc.entity.IsLocal(ctx, requester) || uc.entity.IsLocal(ctx, targetUser) {
+		err := uc.repo.UnAcknowledge(ctx, documentID, sd)
+		if err != nil {
+			span.RecordError(err)
+			return nil, err
+		}
+	}
+
+	if !uc.entity.IsLocal(ctx, targetUser) {
+		distSD := concrnt.SignedDocument{
+			Document: sd.Document,
+			Proof:    sd.Proof,
+			References: map[string]any{
+				requester.CCKV(): requester.Native(),
+			},
+		}
+		err = uc.client.Commit(ctx, targetUser.Domain, distSD)
+		if err != nil {
+			span.RecordError(err)
+			return nil, err
+		}
 	}
 
 	return &sd, nil

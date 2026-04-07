@@ -80,6 +80,8 @@ func (r *EntityRepository) Get(ctx context.Context, ccid string, hint *string) (
 		return domain.Entity{}, err
 	}
 
+	// TODO: 署名検証
+
 	newEntity := models.Entity{
 		ID:                   remote.CCID,
 		Domain:               remote.Domain,
