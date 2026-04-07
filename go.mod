@@ -3,6 +3,7 @@ module github.com/totegamma/concrnt-playground
 go 1.25.1
 
 require (
+	github.com/SherClockHolmes/webpush-go v1.3.0
 	github.com/XSAM/otelsql v0.42.0
 	github.com/bradfitz/gomemcache v0.0.0-20250403215159-8d39553ac7cf
 	github.com/cosmos/cosmos-sdk v0.50.7
@@ -80,6 +81,7 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-sql-driver/mysql v1.7.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
+	github.com/golang-jwt/jwt v3.2.2+incompatible // indirect
 	github.com/golang/glog v1.2.5 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/golang/snappy v0.0.5-0.20220116011046-fa5810519dcb // indirect

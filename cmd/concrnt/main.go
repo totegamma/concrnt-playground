@@ -3,13 +3,15 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
+	"log/slog"
+	"os"
+
+	"github.com/SherClockHolmes/webpush-go"
 	"github.com/labstack/echo/v4"
 	echomiddleware "github.com/labstack/echo/v4/middleware"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 	"go.opentelemetry.io/otel/trace"
-	"log"
-	"log/slog"
-	"os"
 
 	"github.com/totegamma/concrnt-playground"
 	"github.com/totegamma/concrnt-playground/client"
@@ -143,8 +145,21 @@ func main() {
 	chunklineGateway := gateway.NewChunklineGateway(cl)
 	chunklineUC := usecase.NewChunklineUsecase(chunklineRepo, chunklineGateway)
 
+	notificationRepo := repository.NewNotificationRepository(db)
+	notificationUC := usecase.NewNotificationUsecase(notificationRepo)
+
 	subscriber := worker.NewSubscriber(&globalConfig, cl, signal)
 	subscriber.Start(context.Background())
+
+	if conf.Server.VapidPublicKey != "" && conf.Server.VapidPrivateKey != "" {
+		notificationReactor := worker.NewNotificationReactor(notificationUC, signal, webpush.Options{
+			Subscriber:      "mailto:admin@" + globalConfig.FQDN,
+			VAPIDPublicKey:  conf.Server.VapidPublicKey,
+			VAPIDPrivateKey: conf.Server.VapidPrivateKey,
+			TTL:             30,
+		})
+		notificationReactor.Start(context.Background())
+	}
 
 	authMiddleware := middleware.NewAuthMiddleware(globalConfig, cl, serverRepo, entityRepo)
 
@@ -155,7 +170,7 @@ func main() {
 	wellKnownHandler := rest.NewWellKnownHandler(&globalConfig, softwareInfo, moduleManager)
 	wellKnownHandler.RegisterRoutes(e)
 
-	apiHandler := rest.NewHandler(globalConfig, recordUC, chunklineUC, serverUC, entityUC, signal, moduleManager)
+	apiHandler := rest.NewHandler(globalConfig, recordUC, chunklineUC, serverUC, entityUC, notificationUC, signal, moduleManager)
 	apiHandler.RegisterRoutes(e)
 
 	proxy := rest.NewProxy(conf.Services)

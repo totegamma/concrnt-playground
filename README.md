@@ -11,14 +11,14 @@
       - lambdaとかで動けるとすごい
 
 ## リリースまでのTODO
-- [x] ackの実装
+- [x] ackの実装 (テストしてない)
   - [x] 対象ユーザーが外部ドメインユーザーだった場合に転送する
 - [x] subkeyの実装・検証
 - [x] proxy実装
   - [x] webクライアント向け
 - [x] policyの評価
 - [x] 他サーバーとのrealtime通信
-- [ ] 通知周り
+- [x] 通知周り(テストしてない)
   - webpushはともかくiOSやAndroidのpushはどうする？
   - -> webpushだけにして、iosやandroidへはリレーサーバーを利用するようにする
     - https://github.com/mastodon/webpush-apn-relay

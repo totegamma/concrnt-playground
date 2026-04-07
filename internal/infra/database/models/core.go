@@ -96,4 +96,3 @@ type EntityMeta struct {
 	Inviter *string `json:"inviter" gorm:"type:text"`
 	Info    string  `json:"info" gorm:"type:jsonb;default:'null'"`
 }
-

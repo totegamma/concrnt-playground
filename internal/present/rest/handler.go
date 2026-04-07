@@ -1,6 +1,7 @@
 package rest
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +17,7 @@ import (
 	echomiddleware "github.com/labstack/echo/v4/middleware"
 
 	"github.com/totegamma/concrnt-playground"
+	"github.com/totegamma/concrnt-playground/impl/interop"
 	"github.com/totegamma/concrnt-playground/internal/domain"
 	"github.com/totegamma/concrnt-playground/internal/present/rest/presenter"
 	"github.com/totegamma/concrnt-playground/internal/service"
@@ -29,6 +31,7 @@ type Handler struct {
 	chunkline *usecase.ChunklineUsecase
 	server    *usecase.ServerUsecase
 	entity    *usecase.EntityUsecase
+	notify    *usecase.NotificationUsecase
 	signal    *service.SignalService
 	mm        *service.ModuleManager
 }
@@ -39,6 +42,7 @@ func NewHandler(
 	chunkline *usecase.ChunklineUsecase,
 	server *usecase.ServerUsecase,
 	entity *usecase.EntityUsecase,
+	notify *usecase.NotificationUsecase,
 	signal *service.SignalService,
 	mm *service.ModuleManager,
 ) *Handler {
@@ -48,6 +52,7 @@ func NewHandler(
 		chunkline: chunkline,
 		server:    server,
 		entity:    entity,
+		notify:    notify,
 		signal:    signal,
 		mm:        mm,
 	}
@@ -91,6 +96,10 @@ func (h *Handler) RegisterRoutes(e *echo.Echo) {
 	api.OPTIONS("/api/v1/register", h.handleNop)
 	api.GET("/api/v1/timeline/recent", h.handleTimelineRecent)
 	api.OPTIONS("/api/v1/timeline/recent", h.handleNop)
+	api.POST("/subscribe/:owner/:vendor_id", h.handleSubscribeNotification)
+	api.OPTIONS("/subscribe/:owner/:vendor_id", h.handleNop)
+	api.GET("/subscribe/:owner/:vendor_id", h.handleGetNotification)
+	api.DELETE("/subscribe/:owner/:vendor_id", h.handleDeleteNotification)
 	api.GET("/known-servers", h.handleKnownServers)
 	api.OPTIONS("/known-servers", h.handleNop)
 
@@ -413,6 +422,107 @@ func (h *Handler) handleTimelineRecent(c echo.Context) error {
 		return presenter.InternalError(c, err)
 	}
 	return presenter.OK(c, results)
+}
+
+func (h *Handler) handleSubscribeNotification(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	owner, err := url.PathUnescape(c.Param("owner"))
+	if err != nil {
+		return presenter.BadRequestMessage(c, "invalid owner")
+	}
+	vendorID, err := url.PathUnescape(c.Param("vendor_id"))
+	if err != nil {
+		return presenter.BadRequestMessage(c, "invalid vendor_id")
+	}
+
+	if err := requireNotificationOwner(ctx, owner); err != nil {
+		return presenter.Forbidden(c, err.Error())
+	}
+
+	var subscription domain.NotificationSubscription
+	if err := c.Bind(&subscription); err != nil {
+		return presenter.BadRequest(c, err)
+	}
+
+	subscription.Owner = owner
+	subscription.VendorID = vendorID
+
+	if len(subscription.Prefixes) == 0 {
+		return presenter.BadRequestMessage(c, "prefixes must not be empty")
+	}
+	if subscription.Subscription == "" {
+		return presenter.BadRequestMessage(c, "subscription must not be empty")
+	}
+
+	subscription, err = h.notify.Subscribe(ctx, subscription)
+	if err != nil {
+		return presenter.InternalError(c, err)
+	}
+
+	return c.JSON(http.StatusCreated, echo.Map{"status": "ok", "content": subscription})
+}
+
+func (h *Handler) handleGetNotification(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	owner, err := url.PathUnescape(c.Param("owner"))
+	if err != nil {
+		return presenter.BadRequestMessage(c, "invalid owner")
+	}
+	vendorID, err := url.PathUnescape(c.Param("vendor_id"))
+	if err != nil {
+		return presenter.BadRequestMessage(c, "invalid vendor_id")
+	}
+
+	if err := requireNotificationOwner(ctx, owner); err != nil {
+		return presenter.Forbidden(c, err.Error())
+	}
+
+	subscription, err := h.notify.Get(ctx, vendorID, owner)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return presenter.NotFound(c, "notification subscription not found")
+		}
+		return presenter.InternalError(c, err)
+	}
+
+	return presenter.OK(c, echo.Map{"status": "ok", "content": subscription})
+}
+
+func (h *Handler) handleDeleteNotification(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	owner, err := url.PathUnescape(c.Param("owner"))
+	if err != nil {
+		return presenter.BadRequestMessage(c, "invalid owner")
+	}
+	vendorID, err := url.PathUnescape(c.Param("vendor_id"))
+	if err != nil {
+		return presenter.BadRequestMessage(c, "invalid vendor_id")
+	}
+
+	if err := requireNotificationOwner(ctx, owner); err != nil {
+		return presenter.Forbidden(c, err.Error())
+	}
+
+	err = h.notify.Delete(ctx, vendorID, owner)
+	if err != nil {
+		return presenter.InternalError(c, err)
+	}
+
+	return c.NoContent(http.StatusNoContent)
+}
+
+func requireNotificationOwner(ctx context.Context, owner string) error {
+	requester, ok := ctx.Value(interop.RequesterCtxKey).(concrnt.Entity)
+	if !ok {
+		return domain.PermissionError{Reason: "authentication required"}
+	}
+	if requester.CCID != owner {
+		return domain.PermissionError{Reason: "owner mismatch"}
+	}
+	return nil
 }
 
 func (h *Handler) handleAssociations(c echo.Context) error {
