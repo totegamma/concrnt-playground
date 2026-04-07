@@ -1,6 +1,9 @@
 package domain
 
-import "github.com/totegamma/concrnt-playground/impl/tags"
+import (
+	"github.com/totegamma/concrnt-playground"
+	"github.com/totegamma/concrnt-playground/impl/tags"
+)
 
 // Entity represents the core user/server identity without persistence concerns.
 type Entity struct {
@@ -14,6 +17,19 @@ type Entity struct {
 
 func (e *Entity) Tag() tags.Tags {
 	return tags.Parse(e.TagString)
+}
+
+func (e *Entity) CCKV() string {
+	return concrnt.ComposeCCURI("cckv", e.ID, "")
+}
+
+func (e *Entity) Native() concrnt.Entity {
+	return concrnt.Entity{
+		CCID:                 e.ID,
+		Domain:               e.Domain,
+		AffiliationDocument:  e.AffiliationDocument,
+		AffiliationSignature: e.AffiliationSignature,
+	}
 }
 
 // EntityMeta is auxiliary metadata associated with an Entity.

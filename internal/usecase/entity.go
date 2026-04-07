@@ -17,11 +17,18 @@ type EntityRepository interface {
 }
 
 type EntityUsecase struct {
-	repo EntityRepository
+	repo   EntityRepository
+	config *domain.Config
 }
 
-func NewEntityUsecase(repo EntityRepository) *EntityUsecase {
-	return &EntityUsecase{repo: repo}
+func NewEntityUsecase(
+	repo EntityRepository,
+	config *domain.Config,
+) *EntityUsecase {
+	return &EntityUsecase{
+		repo:   repo,
+		config: config,
+	}
 }
 
 func (uc *EntityUsecase) Register(ctx context.Context, req concrnt.RegisterRequest[domain.EntityMeta]) error {
@@ -61,4 +68,17 @@ func (uc *EntityUsecase) Get(ctx context.Context, ccid string, resolver *string)
 
 func (uc *EntityUsecase) List(ctx context.Context) ([]concrnt.Entity, error) {
 	return uc.repo.List(ctx)
+}
+
+func (uc *EntityUsecase) IsLocal(ctx context.Context, entity domain.Entity) bool {
+	return entity.Domain == uc.config.FQDN
+}
+
+func (uc *EntityUsecase) IsLocalByCCID(ctx context.Context, ccid string) (bool, error) {
+	entity, err := uc.repo.Get(ctx, ccid, nil)
+	if err != nil {
+		return false, err
+	}
+
+	return uc.IsLocal(ctx, entity), nil
 }

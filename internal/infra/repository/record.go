@@ -180,40 +180,33 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, documentID string, 
 
 }
 
-func (r *RecordRepository) CreateAssociation(ctx context.Context, documentID string, sd concrnt.SignedDocument) (string, string, error) {
+func (r *RecordRepository) CreateAssociation(ctx context.Context, documentID string, parsed concrnt.Document[any], sd concrnt.SignedDocument) error {
 	ctx, span := tracer.Start(ctx, "Repository.Record.CreateAssociation")
 	defer span.End()
 
-	var doc concrnt.Document[any]
-	err := json.Unmarshal([]byte(sd.Document), &doc)
+	targetURI, err := concrnt.ParseCCURI(*parsed.Associate)
 	if err != nil {
 		span.RecordError(err)
-		return "", "", err
+		return err
 	}
 
-	parsed, err := concrnt.ParseCCURI(*doc.Associate)
-	if err != nil {
-		span.RecordError(err)
-		return "", "", err
-	}
-
-	if parsed.Scheme != "cckv" {
+	if targetURI.Scheme != "cckv" {
 		err := fmt.Errorf("invalid associate: document associate scheme must be cckv")
 		span.RecordError(err)
-		return "", "", err
+		return err
 	}
 
-	owner := parsed.Owner
+	owner := targetURI.Owner
 
-	targetRK, err := GetRecordKeyByURI(ctx, r.db, *doc.Associate)
+	targetRK, err := GetRecordKeyByURI(ctx, r.db, *parsed.Associate)
 	if err != nil {
 		span.RecordError(err)
-		return "", "", err
+		return err
 	}
 
-	uniqueKey := owner + doc.Author + *doc.Associate
-	if doc.AssociationVariant != nil {
-		uniqueKey += *doc.AssociationVariant
+	uniqueKey := owner + parsed.Author + *parsed.Associate
+	if parsed.AssociationVariant != nil {
+		uniqueKey += *parsed.AssociationVariant
 	}
 	uniqueHash := xxh3.HashString(uniqueKey)
 
@@ -223,16 +216,16 @@ func (r *RecordRepository) CreateAssociation(ctx context.Context, documentID str
 		Unique:     fmt.Sprintf("%x", uniqueHash),
 
 		Owner:   owner,
-		Author:  doc.Author,
-		Variant: doc.AssociationVariant,
-		Schema:  doc.Schema,
+		Author:  parsed.Author,
+		Variant: parsed.AssociationVariant,
+		Schema:  parsed.Schema,
 		CDate:   time.Now(),
 	}
 
 	proof, err := json.Marshal(sd.Proof)
 	if err != nil {
 		span.RecordError(err)
-		return "", "", err
+		return err
 	}
 
 	commitLog := models.CommitLog{
@@ -270,9 +263,7 @@ func (r *RecordRepository) CreateAssociation(ctx context.Context, documentID str
 		return nil
 	})
 
-	ccfs := concrnt.ComposeCCURI("ccfs", owner, documentID)
-
-	return *doc.Associate, ccfs, err
+	return err
 }
 
 func (r *RecordRepository) Acknowledge(ctx context.Context, documentID string, sd concrnt.SignedDocument) (string, error) {

@@ -47,12 +47,6 @@ func (s *AuthMiddleware) IdentifyIdentity(next echo.HandlerFunc) echo.HandlerFun
 		ctx, span := tracer.Start(c.Request().Context(), "Auth.Service.IdentifyIdentity")
 		defer span.End()
 
-		referrer := c.Request().Header.Get(interop.ReferrerHeader)
-		if referrer != "" {
-			span.SetAttributes(attribute.String("Referrer", referrer))
-			ctx = context.WithValue(ctx, interop.ReferrerCtxKey, referrer)
-		}
-
 		// # authtoken
 		// 実体はjwtトークン
 		// requesterが本人であることを証明するのに使う。

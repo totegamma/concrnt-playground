@@ -348,7 +348,7 @@ func (c *Client) GetRecord(ctx context.Context, uri string, result any) error {
 	return nil
 }
 
-func (c *Client) Commit(ctx context.Context, resolver string, sd concrnt.SignedDocument, committerDomain string) error {
+func (c *Client) Commit(ctx context.Context, resolver string, sd concrnt.SignedDocument) error {
 	ctx, span := tracer.Start(ctx, "Client.Commit")
 	defer span.End()
 
@@ -405,9 +405,6 @@ func (c *Client) Commit(ctx context.Context, resolver string, sd concrnt.SignedD
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if committerDomain != "" {
-		req.Header.Set("cc-referrer", committerDomain)
-	}
 
 	resp, err := c.client.Do(req)
 	if err != nil {

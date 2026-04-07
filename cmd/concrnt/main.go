@@ -134,7 +134,7 @@ func main() {
 	serverUC := usecase.NewServerUsecase(serverRepo)
 
 	entityRepo := repository.NewEntityRepository(db, cl, globalConfig)
-	entityUC := usecase.NewEntityUsecase(entityRepo)
+	entityUC := usecase.NewEntityUsecase(entityRepo, &globalConfig)
 
 	recordRepo := repository.NewRecordRepository(db)
 	recordUC := usecase.NewRecordUsecase(recordRepo, &globalConfig, cl, entityUC, signal, policy)

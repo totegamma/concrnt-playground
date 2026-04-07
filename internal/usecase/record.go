@@ -24,7 +24,7 @@ import (
 // RecordRepository defines storage operations for records/commits.
 type RecordRepository interface {
 	CreateRecord(ctx context.Context, documentID string, sd concrnt.SignedDocument) (string, error)
-	CreateAssociation(ctx context.Context, documentID string, sd concrnt.SignedDocument) (string, string, error)
+	CreateAssociation(ctx context.Context, documentID string, parsed concrnt.Document[any], sd concrnt.SignedDocument) error
 	Acknowledge(ctx context.Context, documentID string, sd concrnt.SignedDocument) (string, error)
 	UnAcknowledge(ctx context.Context, documentID string, sd concrnt.SignedDocument) error
 	Delete(ctx context.Context, sd concrnt.SignedDocument) (string, error)
@@ -144,10 +144,9 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 	}
 
 	var referrer *string
-	if v := ctx.Value(interop.ReferrerCtxKey); v != nil {
-		if s, ok := v.(string); ok {
-			referrer = &s
-		}
+	entityRef, ok := ctx.Value(interop.RequesterCtxKey).(concrnt.Entity)
+	if ok {
+		referrer = &entityRef.CCID
 	}
 
 	requesterID := doc.Author
@@ -169,9 +168,9 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 	default:
 		// Associateフィールドがあれば通常Recordではない
 		if doc.Associate != nil {
-			return uc.createAssociation(ctx, doc, sd)
+			return uc.createAssociation(ctx, requester, doc, sd)
 		} else { // 通常Record
-			return uc.createRecord(ctx, doc, sd)
+			return uc.createRecord(ctx, requester, doc, sd)
 		}
 	}
 }
@@ -239,7 +238,7 @@ func (uc *RecordUsecase) deleteRecord(ctx context.Context, requester domain.Enti
 	return target, nil
 }
 
-func (uc *RecordUsecase) createRecord(ctx context.Context, parsed concrnt.Document[any], sd concrnt.SignedDocument) (*concrnt.SignedDocument, error) {
+func (uc *RecordUsecase) createRecord(ctx context.Context, requester domain.Entity, parsed concrnt.Document[any], sd concrnt.SignedDocument) (*concrnt.SignedDocument, error) {
 	ctx, span := tracer.Start(ctx, "Usecase.Record.CreateRecord")
 	defer span.End()
 
@@ -300,9 +299,12 @@ func (uc *RecordUsecase) createRecord(ctx context.Context, parsed concrnt.Docume
 				Type: "document-reference",
 				Href: &resultURI,
 			},
+			References: map[string]any{
+				requester.CCKV(): requester.Native(),
+			},
 		}
 
-		err = uc.client.Commit(ctx, dest.Owner, distSD, uc.config.FQDN)
+		err = uc.client.Commit(ctx, dest.Owner, distSD)
 		if err != nil {
 			fmt.Printf("Error committing memberOf item: %v\n", err)
 			span.RecordError(err)
@@ -313,7 +315,7 @@ func (uc *RecordUsecase) createRecord(ctx context.Context, parsed concrnt.Docume
 	return &sd, nil
 }
 
-func (uc *RecordUsecase) createAssociation(ctx context.Context, parsed concrnt.Document[any], sd concrnt.SignedDocument) (*concrnt.SignedDocument, error) {
+func (uc *RecordUsecase) createAssociation(ctx context.Context, requester domain.Entity, parsed concrnt.Document[any], sd concrnt.SignedDocument) (*concrnt.SignedDocument, error) {
 	ctx, span := tracer.Start(ctx, "Usecase.Record.CreateAssociation")
 	defer span.End()
 
@@ -322,78 +324,137 @@ func (uc *RecordUsecase) createAssociation(ctx context.Context, parsed concrnt.D
 	copy(hash10[:], hash[:10])
 	documentID := cdid.New(hash10, parsed.CreatedAt).String()
 
-	var targetURI string
-	targetURI, resultURI, err := uc.repo.CreateAssociation(ctx, documentID, sd)
+	target := *parsed.Associate
+	targetURI, err := concrnt.ParseCCURI(*parsed.Associate)
 	if err != nil {
 		span.RecordError(err)
 		return nil, err
+	}
+
+	ccfs := concrnt.ComposeCCURI("ccfs", targetURI.Owner, documentID)
+
+	isLocal, err := uc.entity.IsLocalByCCID(ctx, targetURI.Owner)
+	if err != nil {
+		span.RecordError(err)
+		return nil, err
+	}
+
+	created := false
+
+	if isLocal {
+		err := uc.repo.CreateAssociation(ctx, documentID, parsed, sd)
+		if err != nil {
+			span.RecordError(err)
+			return nil, err
+		}
+
+		created = true
+
+		for _, destURI := range *parsed.Distributes {
+			dest, err := concrnt.ParseCCURI(destURI)
+			if err != nil {
+				fmt.Printf("Error parsing memberOf URI: %v\n", err)
+				span.RecordError(err)
+				continue
+			}
+
+			key, err := url.JoinPath(destURI, documentID)
+			if err != nil {
+				fmt.Printf("Error joining path for distribution: %v\n", err)
+				span.RecordError(err)
+				continue
+			}
+
+			distDoc := concrnt.Document[schemas.Reference]{
+				Key: key,
+				Value: schemas.Reference{
+					Href: ccfs,
+				},
+				Author:    parsed.Author,
+				Schema:    schemas.ReferenceURL,
+				CreatedAt: time.Now(),
+			}
+			docBytes, err := json.Marshal(distDoc)
+			if err != nil {
+				span.RecordError(err)
+				return nil, err
+			}
+			distSD := concrnt.SignedDocument{
+				Document: string(docBytes),
+				Proof: concrnt.Proof{
+					Type: "document-reference",
+					Href: &ccfs,
+				},
+				References: map[string]any{
+					requester.CCKV(): requester.Native(),
+				},
+			}
+
+			err = uc.client.Commit(ctx, dest.Owner, distSD)
+			if err != nil {
+				fmt.Printf("Error committing memberOf item: %v\n", err)
+				span.RecordError(err)
+				continue
+			}
+		}
 	}
 
 	// signal
-	distributions, err := uc.repo.GetDistributions(ctx, targetURI)
+	distributions, err := uc.repo.GetDistributions(ctx, target)
 	if err != nil {
 		span.RecordError(err)
 		return nil, err
 	}
 
-	notificationChannels := append(distributions, targetURI)
-	for _, channel := range notificationChannels {
-		err = uc.signal.Publish(ctx, channel, concrnt.Event{
-			Type: "associated",
-			URI:  targetURI,
-			References: map[string]concrnt.SignedDocument{
-				resultURI: sd,
-			},
-		})
+	targetSD, ok := sd.References[target].(concrnt.SignedDocument)
+	// TODO: add signature validation
+	if !ok {
+		targetSDr, err := uc.repo.GetSignedDocument(ctx, target)
 		if err != nil {
-			fmt.Printf("Error publishing signal for association: %v\n", err)
 			span.RecordError(err)
 			return nil, err
 		}
+		targetSD = *targetSDr
 	}
 
-	for _, destURI := range *parsed.Distributes {
-		dest, err := concrnt.ParseCCURI(destURI)
+	notificationChannels := append(distributions, target)
+	for _, channel := range notificationChannels {
+
+		host, err := uc.client.ResolveResourceHost(ctx, channel)
 		if err != nil {
-			fmt.Printf("Error parsing memberOf URI: %v\n", err)
+			fmt.Printf("Error resolving resource host for channel %s: %v\n", channel, err)
 			span.RecordError(err)
 			continue
 		}
 
-		key, err := url.JoinPath(destURI, documentID)
-		if err != nil {
-			fmt.Printf("Error joining path for distribution: %v\n", err)
-			span.RecordError(err)
-			continue
-		}
+		if host == uc.config.FQDN { // local
+			err = uc.signal.Publish(ctx, channel, concrnt.Event{
+				Type: "associated",
+				URI:  target,
+				References: map[string]concrnt.SignedDocument{
+					ccfs: sd,
+				},
+			})
+			if err != nil {
+				fmt.Printf("Error publishing signal for association: %v\n", err)
+				span.RecordError(err)
+				return nil, err
+			}
+		} else { // remote
+			if !created {
+				continue
+			}
 
-		distDoc := concrnt.Document[schemas.Reference]{
-			Key: key,
-			Value: schemas.Reference{
-				Href: resultURI,
-			},
-			Author:    parsed.Author,
-			Schema:    schemas.ReferenceURL,
-			CreatedAt: time.Now(),
-		}
-		docBytes, err := json.Marshal(distDoc)
-		if err != nil {
-			span.RecordError(err)
-			return nil, err
-		}
-		distSD := concrnt.SignedDocument{
-			Document: string(docBytes),
-			Proof: concrnt.Proof{
-				Type: "document-reference",
-				Href: &resultURI,
-			},
-		}
+			sd := concrnt.SignedDocument{
+				Document: sd.Document,
+				Proof:    sd.Proof,
+				References: map[string]any{
+					requester.CCKV(): requester.Native(),
+					target:           targetSD,
+				},
+			}
 
-		err = uc.client.Commit(ctx, dest.Owner, distSD, uc.config.FQDN)
-		if err != nil {
-			fmt.Printf("Error committing memberOf item: %v\n", err)
-			span.RecordError(err)
-			continue
+			uc.client.Commit(ctx, host, sd)
 		}
 	}
 
