@@ -739,7 +739,7 @@ func GetRecordKeyByURI(ctx context.Context, db *gorm.DB, uri string) (*models.Re
 }
 
 func (r *RecordRepository) GetDistributions(ctx context.Context, uri string) ([]string, error) {
-	ctx, span := tracer.Start(ctx, "Repository.Record.GetRecord")
+	ctx, span := tracer.Start(ctx, "Repository.Record.GetDistributions")
 	defer span.End()
 
 	parsed, err := concrnt.ParseCCURI(uri)

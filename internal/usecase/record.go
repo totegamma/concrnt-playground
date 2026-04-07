@@ -400,25 +400,36 @@ func (uc *RecordUsecase) createAssociation(ctx context.Context, requester domain
 	}
 
 	// signal
-	distributions, err := uc.repo.GetDistributions(ctx, target)
-	if err != nil {
-		span.RecordError(err)
-		return nil, err
-	}
+	distributions := []string{target}
 
-	targetSD, ok := sd.References[target].(concrnt.SignedDocument)
-	// TODO: add signature validation
-	if !ok {
-		targetSDr, err := uc.repo.GetSignedDocument(ctx, target)
+	targetSD, err := uc.repo.GetSignedDocument(ctx, target)
+	if err != nil { // ないとき
+		sd, ok := sd.References[target].(concrnt.SignedDocument)
+		if !ok {
+			span.RecordError(err)
+			return nil, errors.New("target document not found in references")
+		}
+		// TODO: 署名検証
+		targetSD = &sd
+
+		var targetDoc concrnt.Document[any]
+		err = json.Unmarshal([]byte(targetSD.Document), &targetDoc)
 		if err != nil {
 			span.RecordError(err)
 			return nil, err
 		}
-		targetSD = *targetSDr
+
+		distributions = append(distributions, *targetDoc.Distributes...)
+	} else { // あるとき
+		dists, err := uc.repo.GetDistributions(ctx, target)
+		if err != nil {
+			span.RecordError(err)
+			return nil, err
+		}
+		distributions = append(distributions, dists...)
 	}
 
-	notificationChannels := append(distributions, target)
-	for _, channel := range notificationChannels {
+	for _, channel := range distributions {
 
 		host, err := uc.client.ResolveResourceHost(ctx, channel)
 		if err != nil {
