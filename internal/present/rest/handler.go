@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -103,7 +104,8 @@ func (h *Handler) RegisterRoutes(e *echo.Echo) {
 	api.DELETE("/subscribe/:owner/:vendor_id", h.handleDeleteNotification)
 	api.GET("/known-servers", h.handleKnownServers)
 	api.OPTIONS("/known-servers", h.handleNop)
-	api.GET("/repository", h.handleRepository)
+	api.GET("/repository", h.handleDumpRepository)
+	api.POST("/repository", h.handleImportRepository)
 	api.OPTIONS("/repository", h.handleNop)
 
 	api.GET("/chunkline/itr/:chunk", h.handleChunklineItr)
@@ -815,12 +817,26 @@ func (h *Handler) handleAcknowledgeCounts(c echo.Context) error {
 	return presenter.OK(c, counts)
 }
 
-func (h *Handler) handleRepository(c echo.Context) error {
+func (h *Handler) handleDumpRepository(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	dump, err := h.record.GetCommitlog(ctx)
+	dump, err := h.record.DumpCommitLogs(ctx)
 	if err != nil {
 		return presenter.InternalError(c, err)
 	}
 	return c.String(http.StatusOK, dump)
+}
+
+func (h *Handler) handleImportRepository(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	var dump string
+	dumpBytes, err := io.ReadAll(c.Request().Body)
+	if err != nil {
+		return presenter.BadRequest(c, err)
+	}
+	dump = string(dumpBytes)
+
+	results := h.record.ImportCommitLogs(ctx, dump)
+	return presenter.OK(c, results)
 }

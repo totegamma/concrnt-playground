@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -664,7 +665,7 @@ func (uc *RecordUsecase) Query(
 	return uc.repo.Query(ctx, prefix, schema, since, until, limit, order)
 }
 
-func (uc *RecordUsecase) GetCommitlog(ctx context.Context) (string, error) {
+func (uc *RecordUsecase) DumpCommitLogs(ctx context.Context) (string, error) {
 	ctx, span := tracer.Start(ctx, "Usecase.Record.GetCommitlog")
 	defer span.End()
 
@@ -692,4 +693,47 @@ func (uc *RecordUsecase) GetCommitlog(ctx context.Context) (string, error) {
 	}
 
 	return result, nil
+}
+
+type ImportResult struct {
+	Document string `json:"document,omitempty"`
+	Error    string `json:"error,omitempty"`
+}
+
+func (uc *RecordUsecase) ImportCommitLogs(ctx context.Context, jsonl string) []ImportResult {
+	ctx, span := tracer.Start(ctx, "Usecase.Record.ImportCommitLogs")
+	defer span.End()
+
+	results := []ImportResult{}
+
+	lines := strings.SplitSeq(jsonl, "\n")
+	for line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		var sd concrnt.SignedDocument
+		err := json.Unmarshal([]byte(line), &sd)
+		if err != nil {
+			span.RecordError(err)
+			result := ImportResult{
+				Document: line,
+				Error:    fmt.Sprintf("failed to parse line as SignedDocument: %v", err),
+			}
+			results = append(results, result)
+			continue
+		}
+
+		_, err = uc.Commit(ctx, sd)
+		if err != nil {
+			span.RecordError(err)
+			result := ImportResult{
+				Document: line,
+				Error:    fmt.Sprintf("failed to commit document: %v", err),
+			}
+			results = append(results, result)
+			continue
+		}
+	}
+
+	return results
 }

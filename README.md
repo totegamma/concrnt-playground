@@ -22,9 +22,10 @@
   - webpushはともかくiOSやAndroidのpushはどうする？
   - -> webpushだけにして、iosやandroidへはリレーサーバーを利用するようにする
     - https://github.com/mastodon/webpush-apn-relay
-- [ ] 引っ越し機能の実装
-  - [ ] 自分のログの出力API
-  - [ ] 引っ越し先のサーバーへのインポートAPI
+- [x] 引っ越し機能の実装
+  - [x] 自分のログの出力API
+  - [x] 引っ越し先のサーバーへのインポートAPI
+  - [ ] commitモードの追加(インポート時に外に配送しないように)
 - [ ] alias機能の実装
 
 ## リリース後
