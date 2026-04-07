@@ -85,5 +85,6 @@ func MigratePostgres(db *gorm.DB) error {
 		&models.Server{},
 		&models.Entity{},
 		&models.EntityMeta{},
+		&models.Subscription{},
 	)
 }

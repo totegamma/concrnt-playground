@@ -64,6 +64,7 @@ var Endpoints = map[string]string{
 	"net.concrnt.core.realtime":           "/realtime",
 	"net.concrnt.world.register":          "/api/v1/register",
 	"net.concrnt.world.timeline.recent":   "/api/v1/timeline/recent{?uris,until,limit}",
+	"net.concrnt.world.subscribe":         "/subscribe/{owner}/{vendor_id}",
 	"net.concrnt.core.known-servers":      "/known-servers",
 }
 

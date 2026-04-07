@@ -51,3 +51,49 @@ type Ack struct {
 
 	CDate time.Time `json:"cdate" gorm:"->;<-:create;type:timestamp with time zone;not null;default:clock_timestamp()"`
 }
+
+type Association struct {
+	TargetID int64     `json:"targetID" gorm:"type:text"`
+	Target   RecordKey `json:"-" gorm:"foreignKey:TargetID;references:ID;constraint:OnDelete:CASCADE;"`
+
+	DocumentID string    `json:"id" gorm:"primaryKey;type:text"`
+	Document   CommitLog `json:"-" gorm:"foreignKey:DocumentID;references:ID;constraint:OnDelete:CASCADE;"`
+
+	Owner  string `json:"owner" gorm:"type:text"`
+	Author string `json:"author" gorm:"type:text"`
+
+	Schema  string  `json:"schema" gorm:"type:text"`
+	Variant *string `json:"variant" gorm:"type:text"`
+	Unique  string  `json:"unique" gorm:"type:text;unique"`
+
+	CDate time.Time `json:"cdate" gorm:"->;<-:create;type:timestamp with time zone;not null;default:clock_timestamp()"`
+}
+
+type Server struct {
+	ID          string    `json:"fqdn" gorm:"type:text"` // FQDN
+	CSID        string    `json:"csid" gorm:"type:text"`
+	Tag         string    `json:"tag" gorm:"type:text"`
+	Layer       string    `json:"layer" gorm:"type:text"`
+	WellKnown   string    `json:"wellKnown" gorm:"type:jsonb"`
+	CDate       time.Time `json:"cdate" gorm:"->;<-:create;type:timestamp with time zone;not null;default:clock_timestamp()"`
+	MDate       time.Time `json:"mdate" gorm:"autoUpdateTime"`
+	LastScraped time.Time `json:"lastScraped" gorm:"type:timestamp with time zone"`
+}
+
+type Entity struct {
+	ID                   string    `json:"ccid" gorm:"type:text"`
+	Alias                *string   `json:"alias,omitempty" gorm:"type:text"`
+	Domain               string    `json:"domain" gorm:"type:text"`
+	Tag                  string    `json:"tag" gorm:"type:text;"`
+	AffiliationDocument  string    `json:"affiliationDocument" gorm:"type:text"`
+	AffiliationSignature string    `json:"affiliationSignature" gorm:"type:text"`
+	CDate                time.Time `json:"cdate" gorm:"->;<-:create;type:timestamp with time zone;not null;default:clock_timestamp()"`
+	MDate                time.Time `json:"mdate" gorm:"autoUpdateTime"`
+}
+
+type EntityMeta struct {
+	ID      string  `json:"ccid" gorm:"type:text"`
+	Inviter *string `json:"inviter" gorm:"type:text"`
+	Info    string  `json:"info" gorm:"type:jsonb;default:'null'"`
+}
+
