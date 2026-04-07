@@ -70,6 +70,7 @@ var Endpoints = map[string]string{
 	"net.concrnt.world.register":          "/api/v1/register",
 	"net.concrnt.world.timeline.recent":   "/api/v1/timeline/recent{?uris,until,limit}",
 	"net.concrnt.world.subscribe":         "/subscribe/{owner}/{vendor_id}",
+	"net.concrnt.world.repository":        "/repository",
 	"net.concrnt.core.known-servers":      "/known-servers",
 }
 
@@ -102,6 +103,8 @@ func (h *Handler) RegisterRoutes(e *echo.Echo) {
 	api.DELETE("/subscribe/:owner/:vendor_id", h.handleDeleteNotification)
 	api.GET("/known-servers", h.handleKnownServers)
 	api.OPTIONS("/known-servers", h.handleNop)
+	api.GET("/repository", h.handleRepository)
+	api.OPTIONS("/repository", h.handleNop)
 
 	api.GET("/chunkline/itr/:chunk", h.handleChunklineItr)
 	api.OPTIONS("/chunkline/itr/:chunk", h.handleNop)
@@ -810,4 +813,14 @@ func (h *Handler) handleAcknowledgeCounts(c echo.Context) error {
 		return presenter.InternalError(c, err)
 	}
 	return presenter.OK(c, counts)
+}
+
+func (h *Handler) handleRepository(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	dump, err := h.record.GetCommitlog(ctx)
+	if err != nil {
+		return presenter.InternalError(c, err)
+	}
+	return c.String(http.StatusOK, dump)
 }

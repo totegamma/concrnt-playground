@@ -31,6 +31,7 @@ type RecordRepository interface {
 
 	GetSignedDocument(ctx context.Context, uri string) (*concrnt.SignedDocument, error)
 	GetHierarchicalRecordPolicies(ctx context.Context, uri string) ([][]concrnt.Policy, error)
+	GetAllCommitLogs(ctx context.Context, owner string) ([]concrnt.SignedDocument, error)
 
 	GetDistributions(ctx context.Context, uri string) ([]string, error)
 
@@ -661,4 +662,34 @@ func (uc *RecordUsecase) Query(
 	order string,
 ) ([]concrnt.SignedDocument, error) {
 	return uc.repo.Query(ctx, prefix, schema, since, until, limit, order)
+}
+
+func (uc *RecordUsecase) GetCommitlog(ctx context.Context) (string, error) {
+	ctx, span := tracer.Start(ctx, "Usecase.Record.GetCommitlog")
+	defer span.End()
+
+	requester, ok := ctx.Value(interop.RequesterCtxKey).(concrnt.Entity)
+	if !ok {
+		err := errors.New("requester not found in context")
+		span.RecordError(err)
+		return "", err
+	}
+
+	commitLogs, err := uc.repo.GetAllCommitLogs(ctx, requester.CCID)
+	if err != nil {
+		span.RecordError(err)
+		return "", err
+	}
+
+	var result string
+	for _, log := range commitLogs {
+		line, err := json.Marshal(log)
+		if err != nil {
+			span.RecordError(err)
+			return "", err
+		}
+		result += string(line) + "\n"
+	}
+
+	return result, nil
 }

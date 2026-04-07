@@ -1026,3 +1026,35 @@ func (r *RecordRepository) GetAcknowledgeRecordCounts(ctx context.Context, from,
 
 	return counts, nil
 }
+
+func (r *RecordRepository) GetAllCommitLogs(ctx context.Context, owner string) ([]concrnt.SignedDocument, error) {
+	ctx, span := tracer.Start(ctx, "Repository.Record.GetAllCommitLogs")
+	defer span.End()
+
+	var commitLogs []models.CommitLog
+	err := r.db.WithContext(ctx).
+		Joins("JOIN commit_owners co ON co.commit_log_id = commit_logs.id").
+		Where("co.owner = ?", owner).
+		Order("commit_logs.c_date ASC").
+		Find(&commitLogs).Error
+	if err != nil {
+		span.RecordError(err)
+		return nil, err
+	}
+
+	sds := make([]concrnt.SignedDocument, len(commitLogs))
+	for i, cl := range commitLogs {
+		var proof concrnt.Proof
+		err := json.Unmarshal([]byte(cl.Proof), &proof)
+		if err != nil {
+			span.RecordError(err)
+			return nil, err
+		}
+		sds[i] = concrnt.SignedDocument{
+			Document: cl.Document,
+			Proof:    proof,
+		}
+	}
+
+	return sds, nil
+}
