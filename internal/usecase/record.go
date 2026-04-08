@@ -139,7 +139,7 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 		}
 
 		var subKeyDoc concrnt.Document[schemas.Subkey]
-		err := uc.client.GetRecord(ctx, *sd.Proof.Key, &subKeyDoc)
+		err := uc.client.GetRecord(ctx, *sd.Proof.Key, nil, &subKeyDoc)
 		if err != nil {
 			span.RecordError(err)
 			return nil, err

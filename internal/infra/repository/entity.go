@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -168,7 +169,7 @@ func (r *EntityRepository) GetSD(ctx context.Context, ccid string, hint *string)
 
 	//var docString string
 	entity, err := gorm.G[models.Entity](r.db).
-		Select("commit_logs.document", "commit_logs.proof").
+		//Select("commit_logs.document", "commit_logs.proof"). // TODO: specify columns to avoid loading unnecessary data
 		Joins(clause.Has("Document"), nil).
 		Where("entities.id = ?", ccid).
 		Take(ctx)
@@ -189,7 +190,7 @@ func (r *EntityRepository) GetSD(ctx context.Context, ccid string, hint *string)
 	}
 
 	var sd concrnt.SignedDocument
-	err = r.client.GetResource(ctx, "cckv://"+ccid, "application/json", client.Options{}, &sd)
+	err = r.client.GetResource(ctx, "cckv://"+ccid, "application/json", nil, &sd)
 	if err != nil {
 		return nil, err
 	}
@@ -228,7 +229,7 @@ func (r *EntityRepository) GetDocument(ctx context.Context, ccid string, hint *s
 	}
 
 	var sd concrnt.SignedDocument
-	err = r.client.GetResource(ctx, "cckv://"+ccid, "application/json", client.Options{}, &sd)
+	err = r.client.GetResource(ctx, "cckv://"+ccid, "application/json", nil, &sd)
 	if err != nil {
 		return nil, err
 	}

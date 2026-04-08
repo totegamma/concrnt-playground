@@ -63,7 +63,7 @@ func (r *resolver) ResolveTimelines(ctx context.Context, timelines []string) (ma
 
 	for _, tl := range remaining {
 		var manifest chunkline.Manifest
-		err := r.client.GetResource(ctx, tl, "application/chunkline+json", client.Options{}, &manifest)
+		err := r.client.GetResource(ctx, tl, "application/chunkline+json", nil, &manifest)
 		if err != nil {
 			span.RecordError(errors.Join(fmt.Errorf("failed to fetch chunkline manifest for %s", tl), err))
 			continue

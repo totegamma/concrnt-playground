@@ -85,7 +85,12 @@ func (c *Client) resolveResolver(ctx context.Context, resolver string) (string, 
 
 	if concrnt.IsCCID(resolver) {
 		var entity concrnt.Document[schemas.Entity]
-		err := c.GetRecord(ctx, concrnt.ComposeCCURI("cckv", resolver, ""), &entity)
+		err := c.GetRecord(
+			ctx,
+			concrnt.ComposeCCURI("cckv", resolver, ""),
+			&Options{Resolver: c.defaultResolver},
+			&entity,
+		)
 		if err != nil {
 			err := errors.Join(fmt.Errorf("failed to get entity record for ccid %s", resolver), err)
 			span.RecordError(err)
@@ -140,7 +145,13 @@ func (c *Client) GetServer(ctx context.Context, domainOrCSID string, hint *strin
 		if hint != nil {
 			resolver = *hint
 		}
-		err := c.GetResource(ctx, "cckv://"+domainOrCSID, "application/json", Options{Resolver: resolver}, &wkc)
+		err := c.GetResource(
+			ctx,
+			"cckv://"+domainOrCSID,
+			"application/json",
+			&Options{Resolver: resolver},
+			&wkc,
+		)
 		if err != nil {
 			err := errors.Join(fmt.Errorf("failed to get well-known concrnt for csid %s. resolver: %s", domainOrCSID, resolver), err)
 			span.RecordError(err)
@@ -183,9 +194,13 @@ func (c *Client) GetServer(ctx context.Context, domainOrCSID string, hint *strin
 	}
 }
 
-func (c *Client) GetResource(ctx context.Context, uri string, accept string, opts Options, result any) error {
+func (c *Client) GetResource(ctx context.Context, uri string, accept string, opts *Options, result any) error {
 	ctx, span := tracer.Start(ctx, "Client.GetResource")
 	defer span.End()
+
+	if opts == nil {
+		opts = &Options{}
+	}
 
 	// ==== cache check =============
 	cacheKey := "resource:" + uri
@@ -300,12 +315,12 @@ func (c *Client) GetResource(ctx context.Context, uri string, accept string, opt
 	return nil
 }
 
-func (c *Client) GetRecord(ctx context.Context, uri string, result any) error {
+func (c *Client) GetRecord(ctx context.Context, uri string, opts *Options, result any) error {
 	ctx, span := tracer.Start(ctx, "Client.GetRecord")
 	defer span.End()
 
 	var sd concrnt.SignedDocument
-	err := c.GetResource(ctx, uri, "application/json", Options{}, &sd)
+	err := c.GetResource(ctx, uri, "application/json", opts, &sd)
 	if err != nil {
 		err := errors.Join(fmt.Errorf("failed to get signed document for resource %s", uri), err)
 		span.RecordError(err)

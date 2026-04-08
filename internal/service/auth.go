@@ -86,7 +86,7 @@ func (s *AuthService) AuthJwt(ctx context.Context, token string) (*AuthResult, e
 		var subKeyDoc concrnt.Document[schemas.Subkey]
 		// TODO 署名を確認するstrictオプションが必要
 		// TODO キーのキャッシュが必須
-		err := s.client.GetRecord(ctx, keyID, &subKeyDoc)
+		err := s.client.GetRecord(ctx, keyID, nil, &subKeyDoc)
 		if err != nil {
 			span.RecordError(err)
 			return nil, err
