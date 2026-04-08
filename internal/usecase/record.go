@@ -71,6 +71,24 @@ func NewRecordUsecase(
 	}
 }
 
+func GetReferrerFromReferences(sd concrnt.SignedDocument, requesterID string) *string {
+	requesterCCKV := concrnt.ComposeCCURI("cckv", requesterID, "")
+	entityRef, ok := sd.References[requesterCCKV]
+	if ok {
+		jsonBytes, err := json.Marshal(entityRef)
+		if err != nil {
+			return nil
+		}
+		var entity concrnt.Document[schemas.Entity]
+		err = json.Unmarshal(jsonBytes, &entity)
+		if err != nil {
+			return nil
+		}
+		return &entity.Value.Domain
+	}
+	return nil
+}
+
 func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) (*concrnt.SignedDocument, error) {
 	ctx, span := tracer.Start(ctx, "Usecase.Record.Commit")
 	defer span.End()
@@ -145,15 +163,9 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 		return nil, err
 	}
 
-	var referrer *string
-	entityRef, ok := ctx.Value(interop.RequesterCtxKey).(map[string]any)
-	if ok {
-		if ccid, ok := entityRef["ccid"].(string); ok {
-			referrer = &ccid
-		}
-	}
-
 	requesterID := doc.Author
+	referrer := GetReferrerFromReferences(sd, requesterID)
+
 	requester, err := uc.entity.Get(ctx, requesterID, referrer)
 	if err != nil {
 		span.RecordError(err)
@@ -269,6 +281,12 @@ func (uc *RecordUsecase) createRecord(ctx context.Context, requester domain.Enti
 	}
 
 	if parsed.Distributes != nil {
+		requesterSD, err := uc.entity.GetSD(ctx, requester.ID, &requester.Domain)
+		if err != nil {
+			span.RecordError(err)
+			return nil, err
+		}
+
 		for _, destURI := range *parsed.Distributes {
 			dest, err := concrnt.ParseCCURI(destURI)
 			if err != nil {
@@ -304,8 +322,8 @@ func (uc *RecordUsecase) createRecord(ctx context.Context, requester domain.Enti
 					Type: "document-reference",
 					Href: &resultURI,
 				},
-				References: map[string]any{
-					requester.CCKV(): requester.Native(),
+				References: map[string]concrnt.SignedDocument{
+					requester.CCKV(): *requesterSD,
 				},
 			}
 
@@ -346,6 +364,12 @@ func (uc *RecordUsecase) createAssociation(ctx context.Context, requester domain
 	}
 
 	created := false
+
+	requesterSD, err := uc.entity.GetSD(ctx, requester.ID, &requester.Domain)
+	if err != nil {
+		span.RecordError(err)
+		return nil, err
+	}
 
 	if isLocal {
 		err := uc.repo.CreateAssociation(ctx, documentID, parsed, sd)
@@ -391,8 +415,8 @@ func (uc *RecordUsecase) createAssociation(ctx context.Context, requester domain
 					Type: "document-reference",
 					Href: &ccfs,
 				},
-				References: map[string]any{
-					requester.CCKV(): requester.Native(),
+				References: map[string]concrnt.SignedDocument{
+					requester.CCKV(): *requesterSD,
 				},
 			}
 
@@ -415,18 +439,7 @@ func (uc *RecordUsecase) createAssociation(ctx context.Context, requester domain
 			span.RecordError(err)
 			return nil, errors.New("target document not found in references")
 		}
-
-		// HACK: marshal/unmarshalしてany -> SignedDocumentに変換
-		sdBytes, err := json.Marshal(sd)
-		if err != nil {
-			span.RecordError(err)
-			return nil, err
-		}
-		err = json.Unmarshal(sdBytes, &targetSD)
-		if err != nil {
-			span.RecordError(err)
-			return nil, err
-		}
+		targetSD = &sd
 
 		// TODO: 署名検証
 
@@ -475,9 +488,9 @@ func (uc *RecordUsecase) createAssociation(ctx context.Context, requester domain
 			sd := concrnt.SignedDocument{
 				Document: sd.Document,
 				Proof:    sd.Proof,
-				References: map[string]any{
-					requester.CCKV(): requester.Native(),
-					target:           targetSD,
+				References: map[string]concrnt.SignedDocument{
+					requester.CCKV(): *requesterSD,
+					target:           *targetSD,
 				},
 			}
 
@@ -504,14 +517,7 @@ func (uc *RecordUsecase) acknowledge(ctx context.Context, requester domain.Entit
 	copy(hash10[:], hash[:10])
 	documentID := cdid.New(hash10, doc.CreatedAt).String()
 
-	var referrer *string
-	entityRef, ok := ctx.Value(*doc.Associate).(map[string]any)
-	if ok {
-		if ccid, ok := entityRef["ccid"].(string); ok {
-			referrer = &ccid
-		}
-	}
-
+	referrer := GetReferrerFromReferences(sd, requester.CCKV())
 	targetUser, err := uc.entity.Get(ctx, *doc.Associate, referrer)
 	if err != nil {
 		span.RecordError(err)
@@ -527,11 +533,18 @@ func (uc *RecordUsecase) acknowledge(ctx context.Context, requester domain.Entit
 	}
 
 	if !uc.entity.IsLocal(ctx, targetUser) {
+
+		requesterSD, err := uc.entity.GetSD(ctx, requester.ID, &requester.Domain)
+		if err != nil {
+			span.RecordError(err)
+			return nil, err
+		}
+
 		distSD := concrnt.SignedDocument{
 			Document: sd.Document,
 			Proof:    sd.Proof,
-			References: map[string]any{
-				requester.CCKV(): requester.Native(),
+			References: map[string]concrnt.SignedDocument{
+				requester.CCKV(): *requesterSD,
 			},
 		}
 		err = uc.client.Commit(ctx, targetUser.Domain, distSD)
@@ -575,11 +588,17 @@ func (uc *RecordUsecase) unacknowledge(ctx context.Context, requester domain.Ent
 	}
 
 	if !uc.entity.IsLocal(ctx, targetUser) {
+		requesterSD, err := uc.entity.GetSD(ctx, requester.ID, &requester.Domain)
+		if err != nil {
+			span.RecordError(err)
+			return nil, err
+		}
+
 		distSD := concrnt.SignedDocument{
 			Document: sd.Document,
 			Proof:    sd.Proof,
-			References: map[string]any{
-				requester.CCKV(): requester.Native(),
+			References: map[string]concrnt.SignedDocument{
+				requester.CCKV(): *requesterSD,
 			},
 		}
 		err = uc.client.Commit(ctx, targetUser.Domain, distSD)
@@ -613,10 +632,7 @@ func (uc *RecordUsecase) GetSigned(ctx context.Context, uri string) (*concrnt.Si
 		stack = [][]concrnt.Policy{}
 	}
 
-	requester, ok := ctx.Value(interop.RequesterCtxKey).(concrnt.Entity)
-	if !ok {
-		requester = concrnt.Entity{}
-	}
+	requester, _ := ctx.Value(interop.RequesterCtxKey).(domain.Entity)
 
 	err = uc.policy.Eval(
 		ctx,
@@ -669,14 +685,14 @@ func (uc *RecordUsecase) DumpCommitLogs(ctx context.Context) (string, error) {
 	ctx, span := tracer.Start(ctx, "Usecase.Record.GetCommitlog")
 	defer span.End()
 
-	requester, ok := ctx.Value(interop.RequesterCtxKey).(concrnt.Entity)
+	requester, ok := ctx.Value(interop.RequesterCtxKey).(domain.Entity)
 	if !ok {
 		err := errors.New("requester not found in context")
 		span.RecordError(err)
 		return "", err
 	}
 
-	commitLogs, err := uc.repo.GetAllCommitLogs(ctx, requester.CCID)
+	commitLogs, err := uc.repo.GetAllCommitLogs(ctx, requester.ID)
 	if err != nil {
 		span.RecordError(err)
 		return "", err

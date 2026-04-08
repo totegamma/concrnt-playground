@@ -19,6 +19,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/patrickmn/go-cache"
 	"github.com/totegamma/concrnt-playground"
+	"github.com/totegamma/concrnt-playground/schemas"
 )
 
 var tracer = otel.Tracer("client")
@@ -83,14 +84,15 @@ func (c *Client) resolveResolver(ctx context.Context, resolver string) (string, 
 	}
 
 	if concrnt.IsCCID(resolver) {
-		entity, err := c.GetEntity(ctx, resolver, nil)
+		var entity concrnt.Document[schemas.Entity]
+		err := c.GetRecord(ctx, concrnt.ComposeCCURI("cckv", resolver, ""), &entity)
 		if err != nil {
-			err := errors.Join(fmt.Errorf("failed to get entity for ccid %s", resolver), err)
+			err := errors.Join(fmt.Errorf("failed to get entity record for ccid %s", resolver), err)
 			span.RecordError(err)
 			return "", err
 		}
-		span.SetAttributes(attribute.String("entity_domain", entity.Domain))
-		return entity.Domain, nil
+		span.SetAttributes(attribute.String("entity_domain", entity.Value.Domain))
+		return entity.Value.Domain, nil
 	}
 
 	if concrnt.IsCSID(resolver) {
@@ -119,34 +121,6 @@ func (c *Client) ResolveResourceHost(ctx context.Context, uri string) (string, e
 	}
 
 	return c.resolveResolver(ctx, parsed.Owner)
-}
-
-func (c *Client) GetEntity(ctx context.Context, address string, hint *string) (concrnt.Entity, error) {
-	ctx, span := tracer.Start(ctx, "Client.GetEntity")
-	defer span.End()
-
-	cacheKey := "entity:" + address
-	x, found := c.cache.Get(cacheKey)
-	if found {
-		return x.(concrnt.Entity), nil
-	}
-
-	opts := Options{Resolver: c.defaultResolver}
-	if hint != nil {
-		opts.Resolver = *hint
-	}
-
-	var entity concrnt.Entity
-	err := c.GetResource(ctx, "cckv://"+address, "application/json", opts, &entity)
-	if err != nil {
-		err := errors.Join(fmt.Errorf("failed to get entity for address %s", address), err)
-		span.RecordError(err)
-		return concrnt.Entity{}, err
-	}
-
-	c.cache.Set(cacheKey, entity, cache.DefaultExpiration)
-
-	return entity, nil
 }
 
 func (c *Client) GetServer(ctx context.Context, domainOrCSID string, hint *string) (concrnt.WellKnownConcrnt, error) {

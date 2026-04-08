@@ -2,14 +2,18 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
 	"github.com/totegamma/concrnt-playground"
+	"github.com/totegamma/concrnt-playground/cdid"
 	"github.com/totegamma/concrnt-playground/client"
 	"github.com/totegamma/concrnt-playground/internal/domain"
 	"github.com/totegamma/concrnt-playground/internal/infra/database/models"
+	"github.com/totegamma/concrnt-playground/schemas"
 )
 
 type EntityRepository struct {
@@ -22,52 +26,122 @@ func NewEntityRepository(db *gorm.DB, cl *client.Client, config domain.Config) *
 	return &EntityRepository{db: db, client: cl, config: config}
 }
 
-func (r *EntityRepository) Register(ctx context.Context, entity domain.Entity, meta domain.EntityMeta) error {
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		modelEntity := models.Entity{
-			ID:                   entity.ID,
-			Alias:                entity.Alias,
-			Domain:               entity.Domain,
-			Tag:                  entity.TagString,
-			AffiliationDocument:  entity.AffiliationDocument,
-			AffiliationSignature: entity.AffiliationSignature,
-		}
+func (r *EntityRepository) Register(ctx context.Context, sd concrnt.SignedDocument, meta domain.EntityMeta) error {
+	ctx, span := tracer.Start(ctx, "EntityRepository.Register")
+	defer span.End()
 
-		modelMeta := models.EntityMeta{
-			ID:      meta.ID,
-			Inviter: meta.Inviter,
-			Info:    meta.Info,
-		}
+	modelMeta := models.EntityMeta{
+		ID:      meta.ID,
+		Inviter: meta.Inviter,
+		Info:    meta.Info,
+	}
+
+	if err := r.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "id"}},
+		DoUpdates: clause.AssignmentColumns([]string{"inviter", "info"}),
+	}).Create(&modelMeta).Error; err != nil {
+		return err
+	}
+
+	_, err := r.createEntity(ctx, sd, true)
+	if err != nil {
+		span.RecordError(err)
+		return err
+	}
+
+	return nil
+}
+
+func (r *EntityRepository) createEntity(ctx context.Context, sd concrnt.SignedDocument, allowLocal bool) (*concrnt.Document[schemas.Entity], error) {
+	ctx, span := tracer.Start(ctx, "EntityRepository.createEntity")
+	defer span.End()
+
+	var entity concrnt.Document[schemas.Entity]
+	if err := json.Unmarshal([]byte(sd.Document), &entity); err != nil {
+		span.RecordError(err)
+		return nil, err
+	}
+
+	if !allowLocal && entity.Value.Domain == r.config.FQDN {
+		return nil, errors.New("local entity creation is not allowed")
+	}
+
+	proof, err := json.Marshal(sd.Proof)
+	if err != nil {
+		span.RecordError(err)
+		return nil, err
+	}
+
+	hash := concrnt.GetHash([]byte(sd.Document))
+	hash10 := [10]byte{}
+	copy(hash10[:], hash[:10])
+	documentID := cdid.New(hash10, entity.CreatedAt).String()
+
+	commitLog := models.CommitLog{
+		ID:       documentID,
+		Document: sd.Document,
+		Proof:    string(proof),
+	}
+
+	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 
 		if err := tx.Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "id"}},
-			DoUpdates: clause.AssignmentColumns([]string{"alias", "domain", "tag", "affiliation_document", "affiliation_signature"}),
-		}).Create(&modelEntity).Error; err != nil {
+			DoNothing: true,
+		}).Create(&commitLog).Error; err != nil {
+			span.RecordError(err)
 			return err
 		}
 
+		err := tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "commit_log_id"}, {Name: "owner"}},
+			DoNothing: true,
+		}).Create(&models.CommitOwner{
+			CommitLogID: commitLog.ID,
+			Owner:       entity.Author,
+		}).Error
+		if err != nil {
+			span.RecordError(err)
+			return err
+		}
+
+		modelEntity := models.Entity{
+			ID:         entity.Author,
+			Alias:      nil,
+			Domain:     entity.Value.Domain,
+			Tag:        "",
+			DocumentID: documentID,
+		}
+
 		if err := tx.Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "id"}},
-			DoUpdates: clause.AssignmentColumns([]string{"inviter", "info"}),
-		}).Create(&modelMeta).Error; err != nil {
+			DoUpdates: clause.AssignmentColumns([]string{"alias", "domain", "documentID"}),
+		}).Create(&modelEntity).Error; err != nil {
 			return err
 		}
 
 		return nil
 	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &entity, nil
 }
 
 func (r *EntityRepository) Get(ctx context.Context, ccid string, hint *string) (domain.Entity, error) {
+	ctx, span := tracer.Start(ctx, "EntityRepository.Get")
+	defer span.End()
 
-	entity, err := gorm.G[models.Entity](r.db).Where("id = ?", ccid).Take(ctx)
+	entity, err := gorm.G[models.Entity](r.db).
+		Where("entities.id = ?", ccid).
+		Take(ctx)
 	if err == nil {
 		return domain.Entity{
-			ID:                   entity.ID,
-			Alias:                entity.Alias,
-			Domain:               entity.Domain,
-			TagString:            entity.Tag,
-			AffiliationDocument:  entity.AffiliationDocument,
-			AffiliationSignature: entity.AffiliationSignature,
+			ID:        entity.ID,
+			Domain:    entity.Domain,
+			Alias:     entity.Alias,
+			TagString: entity.Tag,
 		}, nil
 	}
 
@@ -75,52 +149,97 @@ func (r *EntityRepository) Get(ctx context.Context, ccid string, hint *string) (
 		return domain.Entity{}, domain.NotFoundError{Resource: ccid}
 	}
 
-	remote, err := r.client.GetEntity(ctx, ccid, hint)
+	doc, err := r.GetDocument(ctx, ccid, hint)
 	if err != nil {
 		return domain.Entity{}, err
 	}
 
-	// TODO: 署名検証
-
-	newEntity := models.Entity{
-		ID:                   remote.CCID,
-		Domain:               remote.Domain,
-		AffiliationDocument:  remote.AffiliationDocument,
-		AffiliationSignature: remote.AffiliationSignature,
-	}
-
-	if err := r.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "id"}},
-		DoUpdates: clause.AssignmentColumns([]string{"alias", "domain", "tag", "affiliation_document", "affiliation_signature"}),
-	}).Create(&newEntity).Error; err != nil {
-		return domain.Entity{}, err
-	}
-
 	return domain.Entity{
-		ID:                   newEntity.ID,
-		Alias:                newEntity.Alias,
-		Domain:               newEntity.Domain,
-		TagString:            newEntity.Tag,
-		AffiliationDocument:  newEntity.AffiliationDocument,
-		AffiliationSignature: newEntity.AffiliationSignature,
+		ID:        ccid,
+		Domain:    doc.Value.Domain,
+		Alias:     doc.Value.Alias,
+		TagString: "",
 	}, nil
 }
 
-func (r *EntityRepository) List(ctx context.Context) ([]concrnt.Entity, error) {
-	var entities []models.Entity
-	if err := r.db.WithContext(ctx).Find(&entities).Error; err != nil {
+func (r *EntityRepository) GetSD(ctx context.Context, ccid string, hint *string) (*concrnt.SignedDocument, error) {
+	ctx, span := tracer.Start(ctx, "EntityRepository.GetSD")
+	defer span.End()
+
+	//var docString string
+	entity, err := gorm.G[models.Entity](r.db).
+		Select("commit_logs.document", "commit_logs.proof").
+		Joins(clause.Has("Document"), nil).
+		Where("entities.id = ?", ccid).
+		Take(ctx)
+	if err == nil {
+		var proof concrnt.Proof
+		err = json.Unmarshal([]byte(entity.Document.Proof), &proof)
+		if err != nil {
+			return nil, err
+		}
+		return &concrnt.SignedDocument{
+			Document: entity.Document.Document,
+			Proof:    proof,
+		}, nil
+	}
+
+	if hint == nil || *hint == r.config.FQDN {
+		return nil, domain.NotFoundError{Resource: ccid}
+	}
+
+	var sd concrnt.SignedDocument
+	err = r.client.GetResource(ctx, "cckv://"+ccid, "application/json", client.Options{}, &sd)
+	if err != nil {
 		return nil, err
 	}
 
-	result := make([]concrnt.Entity, len(entities))
-	for i, e := range entities {
-		result[i] = concrnt.Entity{
-			CCID:                 e.ID,
-			Domain:               e.Domain,
-			AffiliationDocument:  e.AffiliationDocument,
-			AffiliationSignature: e.AffiliationSignature,
-		}
+	// TODO: 署名検証
+
+	_, err = r.createEntity(ctx, sd, false)
+	if err != nil {
+		return nil, err
 	}
 
-	return result, nil
+	return &sd, nil
+
+}
+
+func (r *EntityRepository) GetDocument(ctx context.Context, ccid string, hint *string) (*concrnt.Document[schemas.Entity], error) {
+	ctx, span := tracer.Start(ctx, "EntityRepository.GetDocument")
+	defer span.End()
+
+	//var docString string
+	entity, err := gorm.G[models.Entity](r.db).
+		Select("commit_logs.document").
+		Joins(clause.Has("Document"), nil).
+		Where("entities.id = ?", ccid).
+		Take(ctx)
+	if err == nil {
+		var doc concrnt.Document[schemas.Entity]
+		if err := json.Unmarshal([]byte(entity.Document.Document), &doc); err != nil {
+			return nil, err
+		}
+		return &doc, nil
+	}
+
+	if hint == nil || *hint == r.config.FQDN {
+		return nil, domain.NotFoundError{Resource: ccid}
+	}
+
+	var sd concrnt.SignedDocument
+	err = r.client.GetResource(ctx, "cckv://"+ccid, "application/json", client.Options{}, &sd)
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: 署名検証
+
+	remoteEntity, err := r.createEntity(ctx, sd, false)
+	if err != nil {
+		return nil, err
+	}
+
+	return remoteEntity, nil
+
 }

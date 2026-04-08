@@ -89,19 +89,19 @@ func (s *AuthMiddleware) IdentifyIdentity(next echo.HandlerFunc) echo.HandlerFun
 				goto skipCheckAuthorization
 			}
 
-			ent, err := s.entity.Get(ctx, issParsed.Owner, issParsed.Hint)
+			requester, err := s.entity.Get(ctx, issParsed.Owner, issParsed.Hint)
 			if err != nil {
 				span.RecordError(errors.Wrap(err, "AuthMiddleware.IdentifyIdentity: s.entity.Get failed"))
 				goto skipCheckAuthorization
 			}
-			entityTag := ent.Tag()
+			entityTag := requester.Tag()
 
 			if entityTag.Has("_blocked") {
 				err := fmt.Errorf("entity is blocked")
 				return echo.NewHTTPError(403, err.Error())
 			}
 
-			srv, err := s.server.GetAndCacheByFQDN(ctx, ent.Domain)
+			srv, err := s.server.GetAndCacheByFQDN(ctx, requester.Domain)
 			if err != nil {
 				span.RecordError(errors.Wrap(err, "AuthMiddleware.IdentifyIdentity: s.server.GetAndCacheByFQDN failed"))
 				goto skipCheckAuthorization
@@ -149,13 +149,6 @@ func (s *AuthMiddleware) IdentifyIdentity(next echo.HandlerFunc) echo.HandlerFun
 					span.RecordError(errors.Wrap(err, "jwt signature validation failed"))
 					goto skipCheckAuthorization
 				}
-			}
-
-			requester := concrnt.Entity{
-				CCID:                 ent.ID,
-				Domain:               ent.Domain,
-				AffiliationDocument:  ent.AffiliationDocument,
-				AffiliationSignature: ent.AffiliationSignature,
 			}
 
 			ctx = context.WithValue(ctx, interop.RequesterCtxKey, requester)

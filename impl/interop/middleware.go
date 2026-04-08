@@ -6,8 +6,8 @@ import (
 
 	"github.com/labstack/echo/v4"
 
-	"github.com/totegamma/concrnt-playground"
 	"github.com/totegamma/concrnt-playground/impl/tags"
+	"github.com/totegamma/concrnt-playground/internal/domain"
 )
 
 func ReceiveGatewayAuthPropagation(next echo.HandlerFunc) echo.HandlerFunc {
@@ -19,7 +19,7 @@ func ReceiveGatewayAuthPropagation(next echo.HandlerFunc) echo.HandlerFunc {
 
 		requesterHeader := header.Get(RequesterHeader)
 		if requesterHeader != "" {
-			var requester concrnt.Entity
+			var requester domain.Entity
 			err := json.Unmarshal([]byte(requesterHeader), &requester)
 			if err == nil {
 				ctx = context.WithValue(ctx, RequesterCtxKey, requester)

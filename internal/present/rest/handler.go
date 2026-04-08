@@ -117,20 +117,6 @@ func (h *Handler) RegisterRoutes(e *echo.Echo) {
 	api.GET("/internal/signal/subscriptions", h.handleCurrentSubs)
 	api.OPTIONS("/internal/signal/subscriptions", h.handleNop)
 
-	// Legacy endpoints
-	api.GET("/api/v1/domain", h.handleLegacyDomain)
-	api.OPTIONS("/api/v1/domain", h.handleNop)
-	api.GET("/api/v1/entity/:id", h.handleLegacyEntity)
-	api.OPTIONS("/api/v1/entity/:id", h.handleNop)
-	api.GET("/api/v1/entities", h.handleLegacyEntities)
-	api.OPTIONS("/api/v1/entities", h.handleNop)
-	api.GET("/api/v1/timelines", h.handleLegacyTimelines)
-	api.OPTIONS("/api/v1/timelines", h.handleNop)
-	api.GET("/api/v1/profile/:owner/:semanticid", h.handleLegacyProfile)
-	api.OPTIONS("/api/v1/profile/:owner/:semanticid", h.handleNop)
-	api.GET("/api/v1/profiles", h.handleLegacyProfiles)
-	api.OPTIONS("/api/v1/profiles", h.handleNop)
-
 	api.GET("/tos", func(c echo.Context) (err error) {
 		return c.File("/etc/concrnt/static/tos.txt")
 	})
@@ -217,7 +203,7 @@ func (h *Handler) handleResolve(c echo.Context) error {
 
 	if parsed.Key == "" && parsed.CDID == "" {
 		if concrnt.IsCCID(parsed.Owner) {
-			entity, err := h.entity.GetProper(ctx, parsed.Owner, parsed.Hint)
+			entity, err := h.entity.GetSD(ctx, parsed.Owner, parsed.Hint)
 			if err != nil {
 				if errors.Is(err, domain.ErrPermissionDenied) {
 					return presenter.Forbidden(c, "permission denied") // TODO: should be return NotFound
@@ -520,11 +506,11 @@ func (h *Handler) handleDeleteNotification(c echo.Context) error {
 }
 
 func requireNotificationOwner(ctx context.Context, owner string) error {
-	requester, ok := ctx.Value(interop.RequesterCtxKey).(concrnt.Entity)
+	requester, ok := ctx.Value(interop.RequesterCtxKey).(domain.Entity)
 	if !ok {
 		return domain.PermissionError{Reason: "authentication required"}
 	}
-	if requester.CCID != owner {
+	if requester.ID != owner {
 		return domain.PermissionError{Reason: "owner mismatch"}
 	}
 	return nil
@@ -676,99 +662,6 @@ func (h *Handler) handleRealtime(c echo.Context) error {
 			}
 		}
 	}
-}
-
-func (h *Handler) handleLegacyDomain(c echo.Context) error {
-	domain := echo.Map{
-		"fqdn":      h.config.FQDN,
-		"csid":      h.config.CSID,
-		"dimension": h.config.Dimension,
-		"meta":      h.config.Meta,
-	}
-	return presenter.OK(c, echo.Map{"status": "ok", "content": domain})
-}
-
-func (h *Handler) handleLegacyEntity(c echo.Context) error {
-	id := c.Param("id")
-	ctx := c.Request().Context()
-
-	entity, err := h.entity.GetProper(ctx, id, nil)
-	if err != nil {
-		return presenter.InternalError(c, err)
-	}
-	return presenter.OK(c, echo.Map{"status": "ok", "content": entity})
-
-}
-
-func (h *Handler) handleLegacyEntities(c echo.Context) error {
-	ctx := c.Request().Context()
-
-	entities, err := h.entity.List(ctx)
-	if err != nil {
-		return presenter.InternalError(c, err)
-	}
-	return presenter.OK(c, echo.Map{"status": "ok", "content": entities})
-}
-
-func (h *Handler) handleLegacyTimelines(c echo.Context) error {
-	ctx := c.Request().Context()
-	schemaEscaped := c.QueryParam("schema")
-	schema, err := url.PathUnescape(schemaEscaped)
-	if err != nil {
-		return presenter.BadRequestMessage(c, "invalid schema")
-	}
-
-	results, err := h.record.Query(ctx, "", schema, nil, nil, 0, "desc")
-	if err != nil {
-		return presenter.InternalError(c, err)
-	}
-	return presenter.OK(c, echo.Map{"status": "ok", "content": results})
-}
-
-func (h *Handler) handleLegacyProfile(c echo.Context) error {
-	owner, err := url.PathUnescape(c.Param("owner"))
-	if err != nil {
-		return presenter.BadRequestMessage(c, "invalid owner")
-	}
-	semanticID, err := url.PathUnescape(c.Param("semanticid"))
-	if err != nil {
-		return presenter.BadRequestMessage(c, "invalid semanticid")
-	}
-
-	if semanticID == "world.concrnt.p" {
-		semanticID = "concrnt.world/main/profile"
-	}
-
-	uri := concrnt.ComposeCCURI("cckv", owner, semanticID)
-
-	ctx := c.Request().Context()
-	sd, err := h.record.GetSigned(ctx, uri)
-	if err != nil {
-		return presenter.InternalError(c, err)
-	}
-
-	doc, err := concrnt.ToLegacyDocument(sd)
-	if err != nil {
-		return presenter.InternalError(c, err)
-	}
-
-	return presenter.OK(c, echo.Map{"status": "ok", "content": doc})
-}
-
-func (h *Handler) handleLegacyProfiles(c echo.Context) error {
-	ctx := c.Request().Context()
-
-	schemaEscaped := c.QueryParam("schema")
-	schema, err := url.PathUnescape(schemaEscaped)
-	if err != nil {
-		return presenter.BadRequestMessage(c, "invalid schema")
-	}
-
-	results, err := h.record.Query(ctx, "", schema, nil, nil, 0, "desc")
-	if err != nil {
-		return presenter.InternalError(c, err)
-	}
-	return presenter.OK(c, echo.Map{"status": "ok", "content": results})
 }
 
 func (h *Handler) handleKnownServers(c echo.Context) error {

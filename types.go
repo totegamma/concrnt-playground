@@ -76,25 +76,17 @@ type Proof struct {
 }
 
 type SignedDocument struct {
-	CCKV       *string        `json:"cckv,omitempty"`
-	CCFS       *string        `json:"ccfs,omitempty"`
-	Document   string         `json:"document"`
-	Proof      Proof          `json:"proof"`
-	References map[string]any `json:"references,omitempty"`
-}
-
-type Entity struct {
-	CCID                 string `json:"ccid"`
-	Domain               string `json:"domain"`
-	AffiliationDocument  string `json:"affiliationDocument"`
-	AffiliationSignature string `json:"affiliationSignature"`
+	CCKV       *string                   `json:"cckv,omitempty"`
+	CCFS       *string                   `json:"ccfs,omitempty"`
+	Document   string                    `json:"document"`
+	Proof      Proof                     `json:"proof"`
+	References map[string]SignedDocument `json:"references,omitempty"`
 }
 
 type RegisterRequest[T any] struct {
-	AffiliationDocument  string  `json:"affiliationDocument"`
-	AffiliationSignature string  `json:"affiliationSignature"`
-	Meta                 T       `json:"meta,omitempty"`
-	InviteToken          *string `json:"inviteToken,omitempty"`
+	SignedDocument
+	Meta        T       `json:"meta,omitempty"`
+	InviteToken *string `json:"inviteToken,omitempty"`
 }
 
 type Event struct {

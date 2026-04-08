@@ -2,7 +2,6 @@ package usecase
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/totegamma/concrnt-playground"
 	"github.com/totegamma/concrnt-playground/internal/domain"
@@ -11,9 +10,10 @@ import (
 
 // EntityRepository defines persistence/lookup for entities.
 type EntityRepository interface {
-	Register(ctx context.Context, entity domain.Entity, meta domain.EntityMeta) error
-	Get(ctx context.Context, ccid string, resolver *string) (domain.Entity, error)
-	List(ctx context.Context) ([]concrnt.Entity, error)
+	Register(ctx context.Context, sd concrnt.SignedDocument, meta domain.EntityMeta) error
+	Get(ctx context.Context, ccid string, hint *string) (domain.Entity, error)
+	GetSD(ctx context.Context, ccid string, hint *string) (*concrnt.SignedDocument, error)
+	GetDocument(ctx context.Context, ccid string, hint *string) (*concrnt.Document[schemas.Entity], error)
 }
 
 type EntityUsecase struct {
@@ -32,42 +32,15 @@ func NewEntityUsecase(
 }
 
 func (uc *EntityUsecase) Register(ctx context.Context, req concrnt.RegisterRequest[domain.EntityMeta]) error {
-
-	var doc concrnt.Document[schemas.Affiliation]
-	if err := json.Unmarshal([]byte(req.AffiliationDocument), &doc); err != nil {
-		return err
-	}
-
-	entity := domain.Entity{
-		ID:                   doc.Author,
-		Domain:               doc.Value.Domain,
-		AffiliationDocument:  req.AffiliationDocument,
-		AffiliationSignature: req.AffiliationSignature,
-	}
-
-	return uc.repo.Register(ctx, entity, req.Meta)
-}
-
-func (uc *EntityUsecase) GetProper(ctx context.Context, ccid string, resolver *string) (concrnt.Entity, error) {
-	domainEntity, err := uc.repo.Get(ctx, ccid, resolver)
-	if err != nil {
-		return concrnt.Entity{}, err
-	}
-
-	return concrnt.Entity{
-		CCID:                 domainEntity.ID,
-		Domain:               domainEntity.Domain,
-		AffiliationDocument:  domainEntity.AffiliationDocument,
-		AffiliationSignature: domainEntity.AffiliationSignature,
-	}, nil
+	return uc.repo.Register(ctx, req.SignedDocument, req.Meta)
 }
 
 func (uc *EntityUsecase) Get(ctx context.Context, ccid string, resolver *string) (domain.Entity, error) {
 	return uc.repo.Get(ctx, ccid, resolver)
 }
 
-func (uc *EntityUsecase) List(ctx context.Context) ([]concrnt.Entity, error) {
-	return uc.repo.List(ctx)
+func (uc *EntityUsecase) GetSD(ctx context.Context, ccid string, resolver *string) (*concrnt.SignedDocument, error) {
+	return uc.repo.GetSD(ctx, ccid, resolver)
 }
 
 func (uc *EntityUsecase) IsLocal(ctx context.Context, entity domain.Entity) bool {

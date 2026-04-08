@@ -15,9 +15,9 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 
-	"github.com/totegamma/concrnt-playground"
 	"github.com/totegamma/concrnt-playground/impl/interop"
 	"github.com/totegamma/concrnt-playground/impl/tags"
+	"github.com/totegamma/concrnt-playground/internal/domain"
 )
 
 type Proxy struct {
@@ -65,7 +65,7 @@ func (p *Proxy) RegisterRoutes(e *echo.Echo) {
 			ctx := c.Request().Context()
 			c.Response().Header().Set("cc-service", service.Name)
 
-			requester, ok := ctx.Value(interop.RequesterCtxKey).(concrnt.Entity)
+			requester, ok := ctx.Value(interop.RequesterCtxKey).(domain.Entity)
 			if ok {
 				serialized, err := json.Marshal(requester)
 				if err != nil {
