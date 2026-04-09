@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -115,7 +114,7 @@ func (r *EntityRepository) createEntity(ctx context.Context, sd concrnt.SignedDo
 
 		if err := tx.Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "id"}},
-			DoUpdates: clause.AssignmentColumns([]string{"alias", "domain", "documentID"}),
+			DoUpdates: clause.AssignmentColumns([]string{"alias", "domain", "document_id"}),
 		}).Create(&modelEntity).Error; err != nil {
 			return err
 		}
