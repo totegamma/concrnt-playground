@@ -221,7 +221,12 @@ func (uc *RecordUsecase) deleteRecord(ctx context.Context, requester domain.Enti
 		return nil, err
 	}
 
-	stack, err := uc.repo.GetHierarchicalRecordPolicies(ctx, string(deletedoc.Value))
+	policyRoot := string(deletedoc.Value)
+	if targetDoc.Associate != nil {
+		policyRoot = *targetDoc.Associate
+	}
+
+	stack, err := uc.repo.GetHierarchicalRecordPolicies(ctx, policyRoot)
 	if err != nil {
 		span.RecordError(err)
 		return nil, err
