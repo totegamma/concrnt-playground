@@ -780,7 +780,7 @@ func (r *RecordRepository) GetDistributions(ctx context.Context, uri string) ([]
 func (r *RecordRepository) GetAssociatedRecords(
 	ctx context.Context,
 	targetURI, schema, variant, author string,
-) ([]concrnt.Document[any], error) {
+) ([]concrnt.SignedDocument, error) {
 	ctx, span := tracer.Start(ctx, "Repository.Record.GetAssociatedRecords")
 	defer span.End()
 
@@ -806,18 +806,25 @@ func (r *RecordRepository) GetAssociatedRecords(
 		return nil, err
 	}
 
-	documents := make([]concrnt.Document[any], 0, len(associations))
-	for _, assoc := range associations {
-		var doc concrnt.Document[any]
-		err := json.Unmarshal([]byte(assoc.Document.Document), &doc)
+	sds := make([]concrnt.SignedDocument, len(associations))
+	for i, assoc := range associations {
+		var proof concrnt.Proof
+		err := json.Unmarshal([]byte(assoc.Document.Proof), &proof)
 		if err != nil {
 			span.RecordError(err)
 			return nil, err
 		}
-		documents = append(documents, doc)
+
+		ccfs := concrnt.ComposeCCURI("ccfs", assoc.Owner, assoc.DocumentID)
+
+		sds[i] = concrnt.SignedDocument{
+			CCFS:     &ccfs,
+			Document: assoc.Document.Document,
+			Proof:    proof,
+		}
 	}
 
-	return documents, nil
+	return sds, nil
 }
 
 func (r *RecordRepository) GetAssociatedRecordCountsBySchema(ctx context.Context, targetURI string) (map[string]int64, error) {

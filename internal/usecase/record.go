@@ -38,7 +38,7 @@ type RecordRepository interface {
 
 	GetAcknowledgeRecords(ctx context.Context, from, to, context string) ([]concrnt.Document[schemas.Acknowledge], error)
 	GetAcknowledgeRecordCounts(ctx context.Context, from, to, context string) (map[string]int64, error)
-	GetAssociatedRecords(ctx context.Context, targetURI, schema, variant, author string) ([]concrnt.Document[any], error)
+	GetAssociatedRecords(ctx context.Context, targetURI, schema, variant, author string) ([]concrnt.SignedDocument, error)
 	GetAssociatedRecordCountsBySchema(ctx context.Context, targetURI string) (map[string]int64, error)
 	GetAssociatedRecordCountsByVariant(ctx context.Context, targetURI, schema string) (*utils.OrderedKVMap[int64], error)
 	Query(ctx context.Context, prefix, schema string, since, until *time.Time, limit int, order string) ([]concrnt.SignedDocument, error)
@@ -665,7 +665,7 @@ func (uc *RecordUsecase) GetAcknowledgeRecordCounts(ctx context.Context, from, t
 	return uc.repo.GetAcknowledgeRecordCounts(ctx, from, to, context)
 }
 
-func (uc *RecordUsecase) GetAssociatedRecords(ctx context.Context, targetURI, schema, variant, author string) ([]concrnt.Document[any], error) {
+func (uc *RecordUsecase) GetAssociatedRecords(ctx context.Context, targetURI, schema, variant, author string) ([]concrnt.SignedDocument, error) {
 	return uc.repo.GetAssociatedRecords(ctx, targetURI, schema, variant, author)
 }
 
