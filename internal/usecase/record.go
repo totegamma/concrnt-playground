@@ -175,6 +175,8 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 	// accept
 	switch doc.Schema {
 	// 特殊なスキーマの場合の処理
+	case schemas.EntityURL:
+		return uc.saveEntity(ctx, sd)
 	case schemas.DeleteURL:
 		return uc.deleteRecord(ctx, requester, sd)
 	case schemas.AcknowledgeURL:
@@ -189,6 +191,10 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument) 
 			return uc.createRecord(ctx, requester, doc, sd)
 		}
 	}
+}
+
+func (uc *RecordUsecase) saveEntity(ctx context.Context, sd concrnt.SignedDocument) (*concrnt.SignedDocument, error) {
+	return uc.entity.SaveEntity(ctx, sd)
 }
 
 func (uc *RecordUsecase) deleteRecord(ctx context.Context, requester domain.Entity, sd concrnt.SignedDocument) (*concrnt.SignedDocument, error) {

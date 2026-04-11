@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -43,7 +44,7 @@ func (r *EntityRepository) Register(ctx context.Context, sd concrnt.SignedDocume
 		return err
 	}
 
-	_, err := r.createEntity(ctx, sd, true)
+	_, err := r.SaveEntity(ctx, sd, true)
 	if err != nil {
 		span.RecordError(err)
 		return err
@@ -52,8 +53,8 @@ func (r *EntityRepository) Register(ctx context.Context, sd concrnt.SignedDocume
 	return nil
 }
 
-func (r *EntityRepository) createEntity(ctx context.Context, sd concrnt.SignedDocument, allowLocal bool) (*concrnt.Document[schemas.Entity], error) {
-	ctx, span := tracer.Start(ctx, "EntityRepository.createEntity")
+func (r *EntityRepository) SaveEntity(ctx context.Context, sd concrnt.SignedDocument, allowLocal bool) (*concrnt.Document[schemas.Entity], error) {
+	ctx, span := tracer.Start(ctx, "EntityRepository.SaveEntity")
 	defer span.End()
 
 	var entity concrnt.Document[schemas.Entity]
@@ -104,11 +105,35 @@ func (r *EntityRepository) createEntity(ctx context.Context, sd concrnt.SignedDo
 			return err
 		}
 
+		if entity.Value.Alias != nil {
+			name := "_concrnt." + *entity.Value.Alias
+			txtrecords, err := net.DefaultResolver.LookupTXT(ctx, name)
+			if err != nil {
+				span.RecordError(err)
+				return err
+			}
+
+			verified := false
+			for _, record := range txtrecords {
+				parsed, err := concrnt.ParseCCURI(record)
+				if err != nil {
+					continue
+				}
+				if parsed.Owner == entity.Author {
+					verified = true
+					break
+				}
+			}
+
+			if !verified {
+				return errors.New("alias ownership verification failed")
+			}
+		}
+
 		modelEntity := models.Entity{
 			ID:         entity.Author,
-			Alias:      nil,
+			Alias:      entity.Value.Alias,
 			Domain:     entity.Value.Domain,
-			Tag:        "",
 			DocumentID: documentID,
 		}
 
@@ -196,7 +221,7 @@ func (r *EntityRepository) GetSD(ctx context.Context, ccid string, hint *string)
 
 	// TODO: 署名検証
 
-	_, err = r.createEntity(ctx, sd, false)
+	_, err = r.SaveEntity(ctx, sd, false)
 	if err != nil {
 		return nil, err
 	}
@@ -235,7 +260,7 @@ func (r *EntityRepository) GetDocument(ctx context.Context, ccid string, hint *s
 
 	// TODO: 署名検証
 
-	remoteEntity, err := r.createEntity(ctx, sd, false)
+	remoteEntity, err := r.SaveEntity(ctx, sd, false)
 	if err != nil {
 		return nil, err
 	}

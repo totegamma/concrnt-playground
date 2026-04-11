@@ -11,6 +11,7 @@ import (
 // EntityRepository defines persistence/lookup for entities.
 type EntityRepository interface {
 	Register(ctx context.Context, sd concrnt.SignedDocument, meta domain.EntityMeta) error
+	SaveEntity(ctx context.Context, sd concrnt.SignedDocument, allowLocal bool) (*concrnt.Document[schemas.Entity], error)
 	Get(ctx context.Context, ccid string, hint *string) (domain.Entity, error)
 	GetSD(ctx context.Context, ccid string, hint *string) (*concrnt.SignedDocument, error)
 	GetDocument(ctx context.Context, ccid string, hint *string) (*concrnt.Document[schemas.Entity], error)
@@ -33,6 +34,15 @@ func NewEntityUsecase(
 
 func (uc *EntityUsecase) Register(ctx context.Context, req concrnt.RegisterRequest[domain.EntityMeta]) error {
 	return uc.repo.Register(ctx, req.SignedDocument, req.Meta)
+}
+
+func (uc *EntityUsecase) SaveEntity(ctx context.Context, sd concrnt.SignedDocument) (*concrnt.SignedDocument, error) {
+	_, err := uc.repo.SaveEntity(ctx, sd, false)
+	if err != nil {
+		return nil, err
+	}
+
+	return &sd, nil
 }
 
 func (uc *EntityUsecase) Get(ctx context.Context, ccid string, resolver *string) (domain.Entity, error) {
