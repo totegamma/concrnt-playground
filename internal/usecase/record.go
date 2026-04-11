@@ -36,7 +36,7 @@ type RecordRepository interface {
 
 	GetDistributions(ctx context.Context, uri string) ([]string, error)
 
-	GetAcknowledgeRecords(ctx context.Context, from, to, context string) ([]concrnt.Document[schemas.Acknowledge], error)
+	GetAcknowledgeRecords(ctx context.Context, from, to, context string) ([]concrnt.SignedDocument, error)
 	GetAcknowledgeRecordCounts(ctx context.Context, from, to, context string) (map[string]int64, error)
 	GetAssociatedRecords(ctx context.Context, targetURI, schema, variant, author string) ([]concrnt.SignedDocument, error)
 	GetAssociatedRecordCountsBySchema(ctx context.Context, targetURI string) (map[string]int64, error)
@@ -657,7 +657,7 @@ func (uc *RecordUsecase) GetSigned(ctx context.Context, uri string) (*concrnt.Si
 	return sd, nil
 }
 
-func (uc *RecordUsecase) GetAcknowledgeRecords(ctx context.Context, from, to, context string) ([]concrnt.Document[schemas.Acknowledge], error) {
+func (uc *RecordUsecase) GetAcknowledgeRecords(ctx context.Context, from, to, context string) ([]concrnt.SignedDocument, error) {
 	return uc.repo.GetAcknowledgeRecords(ctx, from, to, context)
 }
 

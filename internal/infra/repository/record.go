@@ -955,7 +955,7 @@ func (r *RecordRepository) Query(
 	return sds, nil
 }
 
-func (r *RecordRepository) GetAcknowledgeRecords(ctx context.Context, from, to, context string) ([]concrnt.Document[schemas.Acknowledge], error) {
+func (r *RecordRepository) GetAcknowledgeRecords(ctx context.Context, from, to, context string) ([]concrnt.SignedDocument, error) {
 	ctx, span := tracer.Start(ctx, "Repository.Record.GetAcknowledgeRecords")
 	defer span.End()
 
@@ -981,15 +981,22 @@ func (r *RecordRepository) GetAcknowledgeRecords(ctx context.Context, from, to, 
 		return nil, err
 	}
 
-	result := make([]concrnt.Document[schemas.Acknowledge], len(commits))
+	result := make([]concrnt.SignedDocument, len(commits))
 	for i, commit := range commits {
-		var doc concrnt.Document[schemas.Acknowledge]
-		err := json.Unmarshal([]byte(commit.Document), &doc)
+		var proof concrnt.Proof
+		err := json.Unmarshal([]byte(commit.Proof), &proof)
 		if err != nil {
 			span.RecordError(err)
 			return nil, err
 		}
-		result[i] = doc
+
+		ccfs := concrnt.ComposeCCURI("ccfs", to, commit.ID)
+
+		result[i] = concrnt.SignedDocument{
+			CCFS:     &ccfs,
+			Document: commit.Document,
+			Proof:    proof,
+		}
 	}
 
 	return result, nil
