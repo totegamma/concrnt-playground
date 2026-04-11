@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"strings"
 
 	"github.com/totegamma/concrnt-playground"
 	"github.com/totegamma/concrnt-playground/internal/domain"
@@ -15,6 +16,7 @@ type EntityRepository interface {
 	Get(ctx context.Context, ccid string, hint *string) (domain.Entity, error)
 	GetSD(ctx context.Context, ccid string, hint *string) (*concrnt.SignedDocument, error)
 	GetDocument(ctx context.Context, ccid string, hint *string) (*concrnt.Document[schemas.Entity], error)
+	GetByAlias(ctx context.Context, alias string) (domain.Entity, error)
 }
 
 type EntityUsecase struct {
@@ -45,8 +47,13 @@ func (uc *EntityUsecase) SaveEntity(ctx context.Context, sd concrnt.SignedDocume
 	return &sd, nil
 }
 
-func (uc *EntityUsecase) Get(ctx context.Context, ccid string, resolver *string) (domain.Entity, error) {
-	return uc.repo.Get(ctx, ccid, resolver)
+func (uc *EntityUsecase) Get(ctx context.Context, id string, resolver *string) (domain.Entity, error) {
+
+	if strings.HasPrefix(id, "@") {
+		return uc.repo.GetByAlias(ctx, id)
+	} else {
+		return uc.repo.Get(ctx, id, resolver)
+	}
 }
 
 func (uc *EntityUsecase) GetSD(ctx context.Context, ccid string, resolver *string) (*concrnt.SignedDocument, error) {

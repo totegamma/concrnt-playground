@@ -38,15 +38,25 @@ func ParseCCURI(escaped string) (*CCURI, error) {
 		return nil, fmt.Errorf("invalid uri")
 	}
 
-	user := uri.User.String()
 	path := uri.Path
 	key := strings.TrimPrefix(path, "/")
 
-	owner := uri.Host
+	var owner string
 	var hint *string = nil
-	if user != "" {
-		owner = user
-		hint = &uri.Host
+	if uri.User != nil {
+		if uri.User.Username() != "" {
+			owner = uri.User.Username()
+			hint = &uri.Host
+		} else {
+			owner = "@" + uri.Host
+		}
+	} else {
+		owner = uri.Host
+	}
+
+	owner, err = url.QueryUnescape(owner)
+	if err != nil {
+		return nil, fmt.Errorf("invalid owner encoding")
 	}
 
 	switch uri.Scheme {

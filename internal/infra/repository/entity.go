@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net"
+	"strings"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -185,6 +186,48 @@ func (r *EntityRepository) Get(ctx context.Context, ccid string, hint *string) (
 		Alias:     doc.Value.Alias,
 		TagString: "",
 	}, nil
+}
+
+func (r *EntityRepository) GetByAlias(ctx context.Context, alias string) (domain.Entity, error) {
+	ctx, span := tracer.Start(ctx, "EntityRepository.GetByAlias")
+	defer span.End()
+
+	alias = strings.TrimPrefix(alias, "@")
+
+	entity, err := gorm.G[models.Entity](r.db).
+		Where("entities.alias = ?", alias).
+		Take(ctx)
+	if err == nil {
+		return domain.Entity{
+			ID:        entity.ID,
+			Domain:    entity.Domain,
+			Alias:     entity.Alias,
+			TagString: entity.Tag,
+		}, nil
+	}
+
+	name := "_concrnt." + alias
+	txtrecords, err := net.DefaultResolver.LookupTXT(ctx, name)
+	if err != nil {
+		span.RecordError(err)
+		return domain.Entity{}, err
+	}
+
+	var owner string
+	var hint *string
+	for _, record := range txtrecords {
+		parsed, err := concrnt.ParseCCURI(record)
+		if err == nil {
+			owner = parsed.Owner
+			hint = parsed.Hint
+			break
+		}
+	}
+	if owner != "" {
+		return domain.Entity{}, errors.New("no valid CCURI found in TXT records")
+	}
+
+	return r.Get(ctx, owner, hint)
 }
 
 func (r *EntityRepository) GetSD(ctx context.Context, ccid string, hint *string) (*concrnt.SignedDocument, error) {
