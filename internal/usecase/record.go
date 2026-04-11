@@ -208,61 +208,247 @@ func (uc *RecordUsecase) deleteRecord(ctx context.Context, requester domain.Enti
 		return nil, err
 	}
 
-	target, err := uc.repo.GetSignedDocument(ctx, string(deletedoc.Value))
+	targetURI := string(deletedoc.Value)
+	targetHost, err := uc.client.ResolveResourceHost(ctx, targetURI)
 	if err != nil {
 		span.RecordError(err)
 		return nil, err
 	}
 
-	targetDoc := concrnt.Document[any]{}
-	err = json.Unmarshal([]byte(target.Document), &targetDoc)
-	if err != nil {
-		span.RecordError(err)
-		return nil, err
-	}
+	if targetHost == uc.config.FQDN {
+		targetSD, err := uc.repo.GetSignedDocument(ctx, targetURI)
+		if err != nil {
+			span.RecordError(err)
+			return nil, err
+		}
 
-	policyRoot := string(deletedoc.Value)
-	if targetDoc.Associate != nil {
-		policyRoot = *targetDoc.Associate
-	}
+		targetDoc := concrnt.Document[any]{}
+		err = json.Unmarshal([]byte(targetSD.Document), &targetDoc)
+		if err != nil {
+			span.RecordError(err)
+			return nil, err
+		}
 
-	stack, err := uc.repo.GetHierarchicalRecordPolicies(ctx, policyRoot)
-	if err != nil {
-		span.RecordError(err)
-		return nil, err
-	}
+		policyRoot := string(deletedoc.Value)
+		if targetDoc.Associate != nil {
+			policyRoot = *targetDoc.Associate
+		}
 
-	err = uc.policy.Eval(
-		ctx,
-		policy.RequestContext{
-			Requester: requester,
-			This:      targetDoc,
-		},
-		stack,
-		"net.concrnt.core.commit.delete",
-	)
-	if err != nil {
-		span.RecordError(err)
-		return nil, err
-	}
+		stack, err := uc.repo.GetHierarchicalRecordPolicies(ctx, policyRoot)
+		if err != nil {
+			span.RecordError(err)
+			return nil, err
+		}
 
-	resultURI, err := uc.repo.Delete(ctx, sd)
-	if err != nil {
-		span.RecordError(err)
-		return nil, err
-	}
-	// signal
-	err = uc.signal.Publish(ctx, resultURI, concrnt.Event{
-		Type: "deleted",
-		URI:  resultURI,
-	})
-	if err != nil {
-		fmt.Printf("Error publishing signal for delete: %v\n", err)
-		span.RecordError(err)
-		return nil, err
-	}
+		err = uc.policy.Eval(
+			ctx,
+			policy.RequestContext{
+				Requester: requester,
+				This:      targetDoc,
+			},
+			stack,
+			"net.concrnt.core.commit.delete",
+		)
+		if err != nil {
+			span.RecordError(err)
+			return nil, err
+		}
 
-	return target, nil
+		_, err = uc.repo.Delete(ctx, sd)
+		if err != nil {
+			span.RecordError(err)
+			return nil, err
+		}
+
+		// signal
+		destinations := []string{targetURI}
+		if targetDoc.Distributes != nil {
+			destinations = append(destinations, *targetDoc.Distributes...)
+		}
+		for _, dest := range destinations {
+			host, err := uc.client.ResolveResourceHost(ctx, dest)
+			if err != nil {
+				fmt.Printf("Error resolving resource host for signal: %v\n", err)
+				span.RecordError(err)
+				continue
+			}
+
+			if host == uc.config.FQDN { // local
+				err = uc.signal.Publish(ctx, dest, concrnt.Event{
+					Type: "deleted",
+					URI:  targetURI,
+				})
+				if err != nil {
+					fmt.Printf("Error publishing signal for delete: %v\n", err)
+					span.RecordError(err)
+					return nil, err
+				}
+			} else { // remote
+				sd := concrnt.SignedDocument{
+					Document: sd.Document,
+					Proof:    sd.Proof,
+					References: map[string]concrnt.SignedDocument{
+						targetURI: *targetSD,
+					},
+				}
+				err = uc.client.Commit(ctx, host, sd)
+				if err != nil {
+					fmt.Printf("Error committing delete document to remote: %v\n", err)
+					span.RecordError(err)
+					return nil, err
+				}
+			}
+		}
+
+		if targetDoc.Associate != nil {
+			associatedURI := *targetDoc.Associate
+			associatedSD, err := uc.repo.GetSignedDocument(ctx, associatedURI)
+			if err != nil {
+				fmt.Printf("Error fetching associated document for signal: %v\n", err)
+				span.RecordError(err)
+				return nil, err
+			}
+
+			var associatedDoc concrnt.Document[any]
+			err = json.Unmarshal([]byte(associatedSD.Document), &associatedDoc)
+			if err != nil {
+				fmt.Printf("Error unmarshaling associated document for signal: %v\n", err)
+				span.RecordError(err)
+				return nil, err
+			}
+
+			destinations := []string{*targetDoc.Associate}
+			if associatedDoc.Distributes != nil {
+				destinations = append(destinations, *associatedDoc.Distributes...)
+			}
+
+			for _, dest := range destinations {
+				host, err := uc.client.ResolveResourceHost(ctx, dest)
+				if err != nil {
+					fmt.Printf("Error resolving resource host for unassociation signal: %v\n", err)
+					span.RecordError(err)
+					continue
+				}
+
+				if host == uc.config.FQDN { // local
+					err = uc.signal.Publish(ctx, dest, concrnt.Event{
+						Type: "unassociated",
+						URI:  *targetDoc.Associate,
+					})
+					if err != nil {
+						fmt.Printf("Error publishing signal for unassociation: %v\n", err)
+						span.RecordError(err)
+						return nil, err
+					}
+				} else { // remote
+					sd := concrnt.SignedDocument{
+						Document: sd.Document,
+						Proof:    sd.Proof,
+						References: map[string]concrnt.SignedDocument{
+							targetURI:     *targetSD,
+							associatedURI: *associatedSD,
+						},
+					}
+					err = uc.client.Commit(ctx, host, sd)
+					if err != nil {
+						fmt.Printf("Error committing unassociation document to remote: %v\n", err)
+						span.RecordError(err)
+						return nil, err
+					}
+				}
+			}
+		}
+		return targetSD, nil
+
+	} else { // remote entity. only emit signals.
+
+		targetSD, ok := sd.References[targetURI]
+		if !ok {
+			err := errors.New("target document not found in references for remote delete")
+			span.RecordError(err)
+			return nil, err
+		}
+
+		document := concrnt.Document[any]{}
+		err = json.Unmarshal([]byte(targetSD.Document), &document)
+		if err != nil {
+			span.RecordError(err)
+			return nil, err
+		}
+
+		destinations := []string{targetURI}
+		if document.Distributes != nil {
+			destinations = append(destinations, *document.Distributes...)
+		}
+
+		for _, dest := range destinations {
+			host, err := uc.client.ResolveResourceHost(ctx, dest)
+			if err != nil {
+				fmt.Printf("Error resolving resource host for signal: %v\n", err)
+				span.RecordError(err)
+				continue
+			}
+
+			if host == uc.config.FQDN { // local
+				err = uc.signal.Publish(ctx, dest, concrnt.Event{
+					Type: "deleted",
+					URI:  targetURI,
+				})
+				if err != nil {
+					fmt.Printf("Error publishing signal for delete: %v\n", err)
+					span.RecordError(err)
+					return nil, err
+				}
+			}
+		}
+
+		if document.Associate != nil {
+			associatedURI := *document.Associate
+			associatedSD, ok := sd.References[associatedURI]
+			if !ok {
+				fmt.Printf("Associated document not found in references for remote delete: %v\n", associatedURI)
+				span.RecordError(errors.New("associated document not found in references for remote delete"))
+				return nil, err
+			}
+
+			var associatedDoc concrnt.Document[any]
+			err = json.Unmarshal([]byte(associatedSD.Document), &associatedDoc)
+			if err != nil {
+				fmt.Printf("Error unmarshaling associated document for signal: %v\n", err)
+				span.RecordError(err)
+				return nil, err
+			}
+
+			destinations := []string{}
+			if associatedDoc.Distributes != nil {
+				destinations = append(destinations, *associatedDoc.Distributes...)
+			}
+			destinations = append(destinations, associatedURI)
+
+			for _, dest := range destinations {
+				host, err := uc.client.ResolveResourceHost(ctx, dest)
+				if err != nil {
+					fmt.Printf("Error resolving resource host for unassociation signal: %v\n", err)
+					span.RecordError(err)
+					continue
+				}
+
+				if host == uc.config.FQDN { // local
+					err = uc.signal.Publish(ctx, dest, concrnt.Event{
+						Type: "unassociated",
+						URI:  associatedURI,
+					})
+					if err != nil {
+						fmt.Printf("Error publishing signal for unassociation: %v\n", err)
+						span.RecordError(err)
+						return nil, err
+					}
+				}
+			}
+		}
+
+		return &targetSD, nil
+	}
 }
 
 func (uc *RecordUsecase) createRecord(ctx context.Context, requester domain.Entity, parsed concrnt.Document[any], sd concrnt.SignedDocument) (*concrnt.SignedDocument, error) {
