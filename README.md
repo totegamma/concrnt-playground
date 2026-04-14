@@ -17,6 +17,7 @@
 - [x] proxy実装
   - [x] webクライアント向け
 - [x] policyの評価
+  - [ ] 他リソースのポリシーを参照できるルールを追加
 - [x] 他サーバーとのrealtime通信
 - [x] 通知周り(テストしてない)
   - webpushはともかくiOSやAndroidのpushはどうする？
