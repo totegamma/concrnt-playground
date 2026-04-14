@@ -68,8 +68,8 @@ var Endpoints = map[string]string{
 	"net.concrnt.core.acknowledges":       "/acknowledges{?from,to,context}",
 	"net.concrnt.core.acknowledge-counts": "/acknowledge-counts{?from,to,context}",
 	"net.concrnt.core.realtime":           "/realtime",
-	"net.concrnt.world.register":          "/api/v1/register",
-	"net.concrnt.world.timeline.recent":   "/api/v1/timeline/recent{?uris,until,limit}",
+	"net.concrnt.world.register":          "/api/v2/register",
+	"net.concrnt.world.timeline.recent":   "/api/v2/timeline/recent{?uris,until,limit}",
 	"net.concrnt.world.subscribe":         "/subscribe/{owner}/{vendor_id}",
 	"net.concrnt.world.repository":        "/repository",
 	"net.concrnt.core.known-servers":      "/known-servers",
@@ -94,10 +94,10 @@ func (h *Handler) RegisterRoutes(e *echo.Echo) {
 	api.OPTIONS("/acknowledge-counts", h.handleNop)
 	api.GET("/realtime", h.handleRealtime)
 	api.OPTIONS("/realtime", h.handleNop)
-	api.POST("/api/v1/register", h.handleRegister)
-	api.OPTIONS("/api/v1/register", h.handleNop)
-	api.GET("/api/v1/timeline/recent", h.handleTimelineRecent)
-	api.OPTIONS("/api/v1/timeline/recent", h.handleNop)
+	api.POST("/api/v2/register", h.handleRegister)
+	api.OPTIONS("/api/v2/register", h.handleNop)
+	api.GET("/api/v2/timeline/recent", h.handleTimelineRecent)
+	api.OPTIONS("/api/v2/timeline/recent", h.handleNop)
 	api.POST("/subscribe/:owner/:vendor_id", h.handleSubscribeNotification)
 	api.OPTIONS("/subscribe/:owner/:vendor_id", h.handleNop)
 	api.GET("/subscribe/:owner/:vendor_id", h.handleGetNotification)
