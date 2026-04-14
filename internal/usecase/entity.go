@@ -13,10 +13,10 @@ import (
 type EntityRepository interface {
 	Register(ctx context.Context, sd concrnt.SignedDocument, meta domain.EntityMeta) error
 	SaveEntity(ctx context.Context, sd concrnt.SignedDocument, allowLocal bool) (*concrnt.Document[schemas.Entity], error)
-	Get(ctx context.Context, ccid string, hint *string) (domain.Entity, error)
+	Get(ctx context.Context, ccid string, hint *string) (*domain.Entity, error)
 	GetSD(ctx context.Context, ccid string, hint *string) (*concrnt.SignedDocument, error)
 	GetDocument(ctx context.Context, ccid string, hint *string) (*concrnt.Document[schemas.Entity], error)
-	GetByAlias(ctx context.Context, alias string) (domain.Entity, error)
+	GetByAlias(ctx context.Context, alias string) (*domain.Entity, error)
 }
 
 type EntityUsecase struct {
@@ -47,7 +47,7 @@ func (uc *EntityUsecase) SaveEntity(ctx context.Context, sd concrnt.SignedDocume
 	return &sd, nil
 }
 
-func (uc *EntityUsecase) Get(ctx context.Context, id string, resolver *string) (domain.Entity, error) {
+func (uc *EntityUsecase) Get(ctx context.Context, id string, resolver *string) (*domain.Entity, error) {
 
 	if strings.HasPrefix(id, "@") {
 		return uc.repo.GetByAlias(ctx, id)
@@ -70,5 +70,5 @@ func (uc *EntityUsecase) IsLocalByCCID(ctx context.Context, ccid string) (bool, 
 		return false, err
 	}
 
-	return uc.IsLocal(ctx, entity), nil
+	return uc.IsLocal(ctx, *entity), nil
 }

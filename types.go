@@ -8,6 +8,7 @@ const (
 	ProofTypeEcrecover         = "concrnt-ecrecover-direct"
 	ProofTypeDocumentReference = "document-reference"
 	ProofTypeSubkey            = "concrnt-ecrecover-subkey"
+	ProofTypeNone              = "none"
 )
 
 type SoftwareInfo struct {

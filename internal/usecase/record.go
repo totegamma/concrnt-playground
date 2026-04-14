@@ -156,6 +156,12 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument, 
 			span.RecordError(err)
 			return nil, err
 		}
+	case concrnt.ProofTypeNone:
+		if !uc.config.Debug {
+			err := errors.New("none proof type is only allowed in debug mode")
+			span.RecordError(err)
+			return nil, err
+		}
 
 	default:
 		err := errors.New("unsupported proof type: " + sd.Proof.Type)
@@ -169,7 +175,7 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument, 
 	requester, err := uc.entity.Get(ctx, requesterID, referrer)
 	if err != nil {
 		span.RecordError(err)
-		return nil, err
+		// return nil, err
 	}
 
 	// accept
@@ -178,17 +184,38 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument, 
 	case schemas.EntityURL:
 		return uc.saveEntity(ctx, sd)
 	case schemas.DeleteURL:
-		return uc.deleteRecord(ctx, requester, sd, mode)
+		if requester == nil {
+			err := errors.New("requester entity not found for delete operation")
+			span.RecordError(err)
+			return nil, err
+		}
+		return uc.deleteRecord(ctx, *requester, sd, mode)
 	case schemas.AcknowledgeURL:
-		return uc.acknowledge(ctx, requester, sd, mode)
+		if requester == nil {
+			err := errors.New("requester entity not found for delete operation")
+			span.RecordError(err)
+			return nil, err
+		}
+		return uc.acknowledge(ctx, *requester, sd, mode)
 	case schemas.UnAcknowledgeURL:
-		return uc.unacknowledge(ctx, requester, sd, mode)
+		if requester == nil {
+			err := errors.New("requester entity not found for delete operation")
+			span.RecordError(err)
+			return nil, err
+		}
+		return uc.unacknowledge(ctx, *requester, sd, mode)
 	default:
+		if requester == nil {
+			err := errors.New("requester entity not found for delete operation")
+			fmt.Printf("Error: %v\n", err)
+			span.RecordError(err)
+			return nil, err
+		}
 		// Associateフィールドがあれば通常Recordではない
 		if doc.Associate != nil {
-			return uc.createAssociation(ctx, requester, doc, sd, mode)
+			return uc.createAssociation(ctx, *requester, doc, sd, mode)
 		} else { // 通常Record
-			return uc.createRecord(ctx, requester, doc, sd, mode)
+			return uc.createRecord(ctx, *requester, doc, sd, mode)
 		}
 	}
 }
@@ -468,71 +495,81 @@ func (uc *RecordUsecase) createRecord(ctx context.Context, requester domain.Enti
 		return nil, err
 	}
 	// signal
-	if mode == domain.CommitModeExecute {
-		err = uc.signal.Publish(ctx, resultURI, concrnt.Event{
-			Type:       "created",
-			URI:        resultURI,
-			References: map[string]concrnt.SignedDocument{resultURI: sd},
-		})
+	err = uc.signal.Publish(ctx, resultURI, concrnt.Event{
+		Type:       "created",
+		URI:        resultURI,
+		References: map[string]concrnt.SignedDocument{resultURI: sd},
+	})
+	if err != nil {
+		fmt.Printf("Error publishing signal: %v\n", err)
+		span.RecordError(err)
+		return nil, err
+	}
+
+	if parsed.Distributes != nil {
+		requesterSD, err := uc.entity.GetSD(ctx, requester.ID, &requester.Domain)
 		if err != nil {
-			fmt.Printf("Error publishing signal: %v\n", err)
 			span.RecordError(err)
 			return nil, err
 		}
 
-		if parsed.Distributes != nil {
-			requesterSD, err := uc.entity.GetSD(ctx, requester.ID, &requester.Domain)
+		for _, destURI := range *parsed.Distributes {
+
+			host, err := uc.client.ResolveResourceHost(ctx, destURI)
+			if err != nil {
+				fmt.Printf("Error resolving resource host for distribution: %v\n", err)
+				span.RecordError(err)
+				continue
+			}
+
+			if host != uc.config.FQDN && mode != domain.CommitModeExecute {
+				continue
+			}
+
+			dest, err := concrnt.ParseCCURI(destURI)
+			if err != nil {
+				fmt.Printf("Error parsing memberOf URI: %v\n", err)
+				span.RecordError(err)
+				continue
+			}
+
+			key, err := url.JoinPath(destURI, documentID)
+			if err != nil {
+				fmt.Printf("Error joining path for distribution: %v\n", err)
+				span.RecordError(err)
+				continue
+			}
+
+			distDoc := concrnt.Document[schemas.Reference]{
+				Key: key,
+				Value: schemas.Reference{
+					Href: resultURI,
+				},
+				Author:    parsed.Author,
+				Schema:    schemas.ReferenceURL,
+				CreatedAt: time.Now(),
+			}
+			docBytes, err := json.Marshal(distDoc)
 			if err != nil {
 				span.RecordError(err)
 				return nil, err
 			}
+			distSD := concrnt.SignedDocument{
+				Document: string(docBytes),
+				Proof: concrnt.Proof{
+					Type: "document-reference",
+					Href: &resultURI,
+				},
+				References: map[string]concrnt.SignedDocument{
+					requester.CCKV(): *requesterSD,
+				},
+			}
 
-			for _, destURI := range *parsed.Distributes {
-				dest, err := concrnt.ParseCCURI(destURI)
-				if err != nil {
-					fmt.Printf("Error parsing memberOf URI: %v\n", err)
-					span.RecordError(err)
-					continue
-				}
-
-				key, err := url.JoinPath(destURI, documentID)
-				if err != nil {
-					fmt.Printf("Error joining path for distribution: %v\n", err)
-					span.RecordError(err)
-					continue
-				}
-
-				distDoc := concrnt.Document[schemas.Reference]{
-					Key: key,
-					Value: schemas.Reference{
-						Href: resultURI,
-					},
-					Author:    parsed.Author,
-					Schema:    schemas.ReferenceURL,
-					CreatedAt: time.Now(),
-				}
-				docBytes, err := json.Marshal(distDoc)
-				if err != nil {
-					span.RecordError(err)
-					return nil, err
-				}
-				distSD := concrnt.SignedDocument{
-					Document: string(docBytes),
-					Proof: concrnt.Proof{
-						Type: "document-reference",
-						Href: &resultURI,
-					},
-					References: map[string]concrnt.SignedDocument{
-						requester.CCKV(): *requesterSD,
-					},
-				}
-
-				err = uc.client.Commit(ctx, dest.Owner, distSD)
-				if err != nil {
-					fmt.Printf("Error committing memberOf item: %v\n", err)
-					span.RecordError(err)
-					continue
-				}
+			err = uc.client.Commit(ctx, dest.Owner, distSD)
+			if err != nil {
+				fmt.Printf("Error committing memberOf item: %v\n", err)
+				span.RecordError(err)
+				continue
 			}
 		}
 	}
@@ -727,7 +764,7 @@ func (uc *RecordUsecase) acknowledge(ctx context.Context, requester domain.Entit
 		return nil, err
 	}
 
-	if uc.entity.IsLocal(ctx, requester) || uc.entity.IsLocal(ctx, targetUser) {
+	if uc.entity.IsLocal(ctx, requester) || uc.entity.IsLocal(ctx, *targetUser) {
 		_, err := uc.repo.Acknowledge(ctx, documentID, sd)
 		if err != nil {
 			span.RecordError(err)
@@ -735,7 +772,7 @@ func (uc *RecordUsecase) acknowledge(ctx context.Context, requester domain.Entit
 		}
 	}
 
-	if !uc.entity.IsLocal(ctx, targetUser) && mode == domain.CommitModeExecute {
+	if !uc.entity.IsLocal(ctx, *targetUser) && mode == domain.CommitModeExecute {
 
 		requesterSD, err := uc.entity.GetSD(ctx, requester.ID, &requester.Domain)
 		if err != nil {
@@ -782,7 +819,7 @@ func (uc *RecordUsecase) unacknowledge(ctx context.Context, requester domain.Ent
 		return nil, err
 	}
 
-	if uc.entity.IsLocal(ctx, requester) || uc.entity.IsLocal(ctx, targetUser) {
+	if uc.entity.IsLocal(ctx, requester) || uc.entity.IsLocal(ctx, *targetUser) {
 		err := uc.repo.UnAcknowledge(ctx, documentID, sd)
 		if err != nil {
 			span.RecordError(err)
@@ -790,7 +827,7 @@ func (uc *RecordUsecase) unacknowledge(ctx context.Context, requester domain.Ent
 		}
 	}
 
-	if !uc.entity.IsLocal(ctx, targetUser) && mode == domain.CommitModeExecute {
+	if !uc.entity.IsLocal(ctx, *targetUser) && mode == domain.CommitModeExecute {
 		requesterSD, err := uc.entity.GetSD(ctx, requester.ID, &requester.Domain)
 		if err != nil {
 			span.RecordError(err)

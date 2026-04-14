@@ -155,7 +155,7 @@ func (r *EntityRepository) SaveEntity(ctx context.Context, sd concrnt.SignedDocu
 	return &entity, nil
 }
 
-func (r *EntityRepository) Get(ctx context.Context, ccid string, hint *string) (domain.Entity, error) {
+func (r *EntityRepository) Get(ctx context.Context, ccid string, hint *string) (*domain.Entity, error) {
 	ctx, span := tracer.Start(ctx, "EntityRepository.Get")
 	defer span.End()
 
@@ -163,7 +163,7 @@ func (r *EntityRepository) Get(ctx context.Context, ccid string, hint *string) (
 		Where("entities.id = ?", ccid).
 		Take(ctx)
 	if err == nil {
-		return domain.Entity{
+		return &domain.Entity{
 			ID:        entity.ID,
 			Domain:    entity.Domain,
 			Alias:     entity.Alias,
@@ -172,15 +172,15 @@ func (r *EntityRepository) Get(ctx context.Context, ccid string, hint *string) (
 	}
 
 	if hint == nil || *hint == r.config.FQDN {
-		return domain.Entity{}, domain.NotFoundError{Resource: ccid}
+		return nil, domain.NotFoundError{Resource: ccid}
 	}
 
 	doc, err := r.GetDocument(ctx, ccid, hint)
 	if err != nil {
-		return domain.Entity{}, err
+		return nil, err
 	}
 
-	return domain.Entity{
+	return &domain.Entity{
 		ID:        ccid,
 		Domain:    doc.Value.Domain,
 		Alias:     doc.Value.Alias,
@@ -188,7 +188,7 @@ func (r *EntityRepository) Get(ctx context.Context, ccid string, hint *string) (
 	}, nil
 }
 
-func (r *EntityRepository) GetByAlias(ctx context.Context, alias string) (domain.Entity, error) {
+func (r *EntityRepository) GetByAlias(ctx context.Context, alias string) (*domain.Entity, error) {
 	ctx, span := tracer.Start(ctx, "EntityRepository.GetByAlias")
 	defer span.End()
 
@@ -198,7 +198,7 @@ func (r *EntityRepository) GetByAlias(ctx context.Context, alias string) (domain
 		Where("entities.alias = ?", alias).
 		Take(ctx)
 	if err == nil {
-		return domain.Entity{
+		return &domain.Entity{
 			ID:        entity.ID,
 			Domain:    entity.Domain,
 			Alias:     entity.Alias,
@@ -210,7 +210,7 @@ func (r *EntityRepository) GetByAlias(ctx context.Context, alias string) (domain
 	txtrecords, err := net.DefaultResolver.LookupTXT(ctx, name)
 	if err != nil {
 		span.RecordError(err)
-		return domain.Entity{}, err
+		return nil, err
 	}
 
 	var owner string
@@ -224,7 +224,7 @@ func (r *EntityRepository) GetByAlias(ctx context.Context, alias string) (domain
 		}
 	}
 	if owner != "" {
-		return domain.Entity{}, errors.New("no valid CCURI found in TXT records")
+		return nil, errors.New("no valid CCURI found in TXT records")
 	}
 
 	return r.Get(ctx, owner, hint)
