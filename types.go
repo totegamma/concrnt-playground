@@ -30,9 +30,10 @@ type WellKnownConcrnt struct {
 }
 
 type Policy struct {
-	URL      string             `json:"url"`
+	URL      *string            `json:"url"`
 	Params   *map[string]any    `json:"params,omitempty"`
 	Defaults *map[string]string `json:"defaults,omitempty"`
+	Ref      *string            `json:"ref,omitempty"`
 }
 
 type Document[T any] struct {

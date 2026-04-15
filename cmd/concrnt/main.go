@@ -130,7 +130,7 @@ func main() {
 
 	cl := client.New(conf.Server.GatewayAddr)
 	signal := service.NewSignalService(redis)
-	policy := service.NewPolicyService(GetGlobalPolicy())
+	policy := service.NewPolicyService(GetGlobalPolicy(), cl)
 
 	serverRepo := repository.NewServerRepository(&globalConfig, db, cl)
 	serverUC := usecase.NewServerUsecase(serverRepo)
