@@ -163,17 +163,16 @@ func main() {
 
 	authMiddleware := middleware.NewAuthMiddleware(globalConfig, cl, serverRepo, entityRepo)
 
-	e.Use(authMiddleware.IdentifyIdentity)
-
 	moduleManager := service.NewModuleManager(rest.Endpoints, conf.Services)
 
 	wellKnownHandler := rest.NewWellKnownHandler(&globalConfig, softwareInfo, moduleManager)
 	wellKnownHandler.RegisterRoutes(e)
 
 	apiHandler := rest.NewHandler(globalConfig, recordUC, chunklineUC, serverUC, entityUC, notificationUC, signal, moduleManager)
-	apiHandler.RegisterRoutes(e)
+	api := e.Group("", authMiddleware.IdentifyIdentity, authMiddleware.IdentifyIdentity)
+	apiHandler.RegisterRoutes(api)
 
-	proxy := rest.NewProxy(conf.Services)
+	proxy := rest.NewProxy(conf.Services, authMiddleware.IdentifyIdentity)
 	proxy.RegisterRoutes(e)
 
 	e.GET("/health", func(c echo.Context) (err error) {

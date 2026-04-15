@@ -21,11 +21,18 @@ import (
 )
 
 type Proxy struct {
-	services []interop.Service
+	services       []interop.Service
+	authMiddleware echo.MiddlewareFunc
 }
 
-func NewProxy(services []interop.Service) *Proxy {
-	return &Proxy{services: services}
+func NewProxy(
+	services []interop.Service,
+	authMiddleware echo.MiddlewareFunc,
+) *Proxy {
+	return &Proxy{
+		services:       services,
+		authMiddleware: authMiddleware,
+	}
 }
 
 func (p *Proxy) RegisterRoutes(e *echo.Echo) {
@@ -59,6 +66,10 @@ func (p *Proxy) RegisterRoutes(e *echo.Echo) {
 		}
 		if service.InjectCors {
 			middlewares = append(middlewares, cors)
+		}
+
+		if !service.NoAuth {
+			middlewares = append(middlewares, p.authMiddleware)
 		}
 
 		handler := func(c echo.Context) error {

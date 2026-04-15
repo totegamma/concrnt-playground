@@ -8,6 +8,7 @@ type Service struct {
 	PreservePath bool   `yaml:"preservePath"`
 	InjectCors   bool   `yaml:"injectCors"`
 	Gone         bool   `yaml:"gone"`
+	NoAuth       bool   `yaml:"noAuth"`
 }
 
 type CCInfo struct {

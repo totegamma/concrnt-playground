@@ -75,7 +75,7 @@ var Endpoints = map[string]string{
 	"net.concrnt.core.known-servers":      "/known-servers",
 }
 
-func (h *Handler) RegisterRoutes(e *echo.Echo) {
+func (h *Handler) RegisterRoutes(e *echo.Group) {
 
 	api := e.Group("", echomiddleware.CORS())
 	api.POST("/commit", h.handleCommit)
