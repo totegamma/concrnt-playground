@@ -522,10 +522,6 @@ func (uc *RecordUsecase) createRecord(ctx context.Context, requester domain.Enti
 				continue
 			}
 
-			if host != uc.config.FQDN && mode != domain.CommitModeExecute {
-				continue
-			}
-
 			dest, err := concrnt.ParseCCURI(destURI)
 			if err != nil {
 				fmt.Printf("Error parsing memberOf URI: %v\n", err)
@@ -565,11 +561,23 @@ func (uc *RecordUsecase) createRecord(ctx context.Context, requester domain.Enti
 				},
 			}
 
-			err = uc.client.Commit(ctx, dest.Owner, distSD)
-			if err != nil {
-				fmt.Printf("Error committing memberOf item: %v\n", err)
-				span.RecordError(err)
-				continue
+			if host == uc.config.FQDN { // local
+				_, err = uc.Commit(ctx, distSD, mode)
+				if err != nil {
+					fmt.Printf("Error committing local memberOf item: %v\n", err)
+					span.RecordError(err)
+					continue
+				}
+			} else { // remote
+				if mode != domain.CommitModeExecute {
+					continue
+				}
+				err = uc.client.Commit(ctx, dest.Owner, distSD)
+				if err != nil {
+					fmt.Printf("Error committing remote memberOf item: %v\n", err)
+					span.RecordError(err)
+					continue
+				}
 			}
 		}
 	}

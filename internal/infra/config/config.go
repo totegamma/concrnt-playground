@@ -24,6 +24,7 @@ type NodeInfo struct {
 	SiteKey      string `yaml:"sitekey"`
 	Layer        string `yaml:"layer"`
 	Dimension    string `yaml:"dimension"` // backward compatibility
+	Debug        bool   `yaml:"debug"`
 }
 
 type Server struct {
@@ -73,5 +74,6 @@ func (c Config) GlobalConfig() domain.Config {
 		Dimension:    c.NodeInfo.Dimension,
 		CSID:         csid,
 		Meta:         c.Profile,
+		Debug:        c.NodeInfo.Debug,
 	}
 }
