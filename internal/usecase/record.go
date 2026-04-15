@@ -192,21 +192,21 @@ func (uc *RecordUsecase) Commit(ctx context.Context, sd concrnt.SignedDocument, 
 		return uc.deleteRecord(ctx, *requester, sd, mode)
 	case schemas.AcknowledgeURL:
 		if requester == nil {
-			err := errors.New("requester entity not found for delete operation")
+			err := errors.New("requester entity not found for ack operation")
 			span.RecordError(err)
 			return nil, err
 		}
 		return uc.acknowledge(ctx, *requester, sd, mode)
 	case schemas.UnAcknowledgeURL:
 		if requester == nil {
-			err := errors.New("requester entity not found for delete operation")
+			err := errors.New("requester entity not found for unack operation")
 			span.RecordError(err)
 			return nil, err
 		}
 		return uc.unacknowledge(ctx, *requester, sd, mode)
 	default:
 		if requester == nil {
-			err := errors.New("requester entity not found for delete operation")
+			err := errors.New("requester entity not found for record or associate operation")
 			fmt.Printf("Error: %v\n", err)
 			span.RecordError(err)
 			return nil, err
