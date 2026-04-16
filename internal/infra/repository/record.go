@@ -297,6 +297,7 @@ func (r *RecordRepository) Acknowledge(ctx context.Context, documentID string, s
 		To:         to,
 		Context:    doc.Value.Context,
 		DocumentID: documentID,
+		Valid:      true,
 	}
 
 	proof, err := json.Marshal(sd.Proof)
@@ -343,7 +344,11 @@ func (r *RecordRepository) Acknowledge(ctx context.Context, documentID string, s
 			return err
 		}
 
-		if err := tx.Create(&ack).Error; err != nil {
+		err = tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "from"}, {Name: "to"}, {Name: "context"}},
+			DoUpdates: clause.Assignments(map[string]any{"valid": true, "document_id": documentID}),
+		}).Create(&ack).Error
+		if err != nil {
 			span.RecordError(err)
 			return err
 		}
@@ -381,6 +386,14 @@ func (r *RecordRepository) UnAcknowledge(ctx context.Context, documentID string,
 
 	to := parsed.Owner
 	from := doc.Author
+
+	ack := models.Ack{
+		From:       from,
+		To:         to,
+		Context:    doc.Value.Context,
+		DocumentID: documentID,
+		Valid:      false,
+	}
 
 	proof, err := json.Marshal(sd.Proof)
 	if err != nil {
@@ -426,11 +439,10 @@ func (r *RecordRepository) UnAcknowledge(ctx context.Context, documentID string,
 			return err
 		}
 
-		err = tx.Model(&models.Ack{}).
-			Where("acks.from = ? AND acks.to = ? AND acks.context = ?", from, to, doc.Value.Context).
-			Update("valid", false).
-			Update("document_id", documentID).
-			Error
+		err = tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "from"}, {Name: "to"}, {Name: "context"}},
+			DoUpdates: clause.Assignments(map[string]any{"valid": false, "document_id": documentID}),
+		}).Create(&ack).Error
 		if err != nil {
 			span.RecordError(err)
 			return err
@@ -974,6 +986,10 @@ func (r *RecordRepository) GetAcknowledgeRecords(ctx context.Context, from, to, 
 		query = query.Where("acks.context = ?", context)
 	}
 
+	if from != "" || to != "" || context != "" {
+		query = query.Where("acks.valid = ?", true)
+	}
+
 	err := query.Order("acks.c_date ASC").Find(&acks).Error
 	if err != nil {
 		span.RecordError(err)
@@ -1014,7 +1030,8 @@ func (r *RecordRepository) GetAcknowledgeRecordCounts(ctx context.Context, from,
 
 	query := r.db.WithContext(ctx).
 		Model(&models.Ack{}).
-		Select("context, COUNT(*) AS count")
+		Select("context, COUNT(*) AS count").
+		Where("valid = ?", true)
 
 	if from != "" {
 		query = query.Where("acks.from = ?", from)
