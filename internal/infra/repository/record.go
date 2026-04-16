@@ -959,11 +959,10 @@ func (r *RecordRepository) GetAcknowledgeRecords(ctx context.Context, from, to, 
 	ctx, span := tracer.Start(ctx, "Repository.Record.GetAcknowledgeRecords")
 	defer span.End()
 
-	var commits []models.CommitLog
+	var acks []models.Ack
 	query := r.db.WithContext(ctx).
 		Model(&models.Ack{}).
-		Select("commit_logs.*").
-		Joins("JOIN commit_logs ON commit_logs.id = acks.document_id")
+		Preload("Document")
 
 	if from != "" {
 		query = query.Where("acks.from = ?", from)
@@ -975,26 +974,26 @@ func (r *RecordRepository) GetAcknowledgeRecords(ctx context.Context, from, to, 
 		query = query.Where("acks.context = ?", context)
 	}
 
-	err := query.Order("acks.c_date ASC").Find(&commits).Error
+	err := query.Order("acks.c_date ASC").Find(&acks).Error
 	if err != nil {
 		span.RecordError(err)
 		return nil, err
 	}
 
-	result := make([]concrnt.SignedDocument, len(commits))
-	for i, commit := range commits {
+	result := make([]concrnt.SignedDocument, len(acks))
+	for i, ack := range acks {
 		var proof concrnt.Proof
-		err := json.Unmarshal([]byte(commit.Proof), &proof)
+		err := json.Unmarshal([]byte(ack.Document.Proof), &proof)
 		if err != nil {
 			span.RecordError(err)
 			return nil, err
 		}
 
-		ccfs := concrnt.ComposeCCURI("ccfs", to, commit.ID)
+		ccfs := concrnt.ComposeCCURI("ccfs", ack.From, ack.DocumentID)
 
 		result[i] = concrnt.SignedDocument{
 			CCFS:     &ccfs,
-			Document: commit.Document,
+			Document: ack.Document.Document,
 			Proof:    proof,
 		}
 	}
@@ -1018,13 +1017,13 @@ func (r *RecordRepository) GetAcknowledgeRecordCounts(ctx context.Context, from,
 		Select("context, COUNT(*) AS count")
 
 	if from != "" {
-		query = query.Where("from = ?", from)
+		query = query.Where("acks.from = ?", from)
 	}
 	if to != "" {
-		query = query.Where("to = ?", to)
+		query = query.Where("acks.to = ?", to)
 	}
 	if context != "" {
-		query = query.Where("context = ?", context)
+		query = query.Where("acks.context = ?", context)
 	}
 
 	err := query.Group("context").Scan(&results).Error
