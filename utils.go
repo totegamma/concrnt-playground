@@ -80,6 +80,11 @@ func ParseCCURI(escaped string) (*CCURI, error) {
 		return &CCURI{
 			Scheme: "http",
 		}, nil
+	case "":
+		return &CCURI{
+			Scheme: "cckv",
+			Owner:  uriString,
+		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported uri scheme: %s", uri.Scheme)
 	}

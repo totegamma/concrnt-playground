@@ -47,7 +47,14 @@ func (uc *EntityUsecase) SaveEntity(ctx context.Context, sd concrnt.SignedDocume
 	return &sd, nil
 }
 
-func (uc *EntityUsecase) Get(ctx context.Context, id string, resolver *string) (*domain.Entity, error) {
+func (uc *EntityUsecase) Get(ctx context.Context, key string, resolver *string) (*domain.Entity, error) {
+
+	parsed, err := concrnt.ParseCCURI(key)
+	if err != nil {
+		return nil, err
+	}
+
+	id := parsed.Owner
 
 	if strings.HasPrefix(id, "@") {
 		return uc.repo.GetByAlias(ctx, id)
