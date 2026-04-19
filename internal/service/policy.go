@@ -13,8 +13,8 @@ import (
 	"github.com/totegamma/concrnt-playground/client"
 	"github.com/totegamma/concrnt-playground/internal/domain"
 	"github.com/totegamma/concrnt-playground/policy"
-	// "go.opentelemetry.io/otel/attribute"
-	// "go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type PolicyService struct {
@@ -78,15 +78,46 @@ func (s *PolicyService) ResolvePolicyURL(ctx context.Context, policyURL string) 
 	return policy20251223, nil
 }
 
-func (s *PolicyService) resolvePolicyStack(ctx context.Context, stack []concrnt.PolicyLayer) (policy.PolicyStack, error) {
+func (s *PolicyService) resolvePolicyStack(ctx context.Context, stack []concrnt.Policy) (policy.PolicyStack, error) {
 	ctx, span := tracer.Start(ctx, "Policy.Service.resolvePolicyStack")
 	defer span.End()
+
+	// insert virtual parent
+	for i, layer := range stack {
+		if layer.VirtualParents == nil {
+			continue
+		}
+
+		for _, parent := range *layer.VirtualParents {
+			var doc concrnt.Document[any]
+			err := s.client.GetRecord(ctx, parent, &client.Options{NoCache: true}, &doc)
+			if err != nil {
+				span.RecordError(err)
+				// TODO: insert a errored policy layer to indicate this error
+				continue
+			}
+
+			if doc.Policy == nil {
+				span.AddEvent("policy reference has no policies", trace.WithAttributes(attribute.String("ref", parent)))
+				continue
+			}
+
+			concrnt.JsonPrint("resolved policy document", doc)
+
+			if i == 0 {
+				// do nothing
+			} else {
+				entries := doc.Policy.Entries
+				stack[i-1].Entries = append(stack[i-1].Entries, entries...)
+			}
+		}
+	}
 
 	result := policy.PolicyStack{}
 
 	for _, layer := range stack {
 		policyLayer := []policy.EvaluationSet{}
-		for _, p := range layer.Policies {
+		for _, p := range layer.Entries {
 
 			if p.URL != nil {
 				pol, err := s.ResolvePolicyURL(ctx, *p.URL)
@@ -117,42 +148,6 @@ func (s *PolicyService) resolvePolicyStack(ctx context.Context, stack []concrnt.
 					Defaults: p.Defaults,
 				})
 			}
-
-			/*
-				if p.Ref != nil {
-					fmt.Println("Resolving policy reference", *p.Ref)
-					var doc concrnt.Document[any]
-					err := s.client.GetRecord(ctx, *p.Ref, &client.Options{NoCache: true}, &doc)
-					if err != nil {
-						span.RecordError(err)
-						continue
-					}
-
-					if doc.Policies == nil {
-						span.AddEvent("policy reference has no policies", trace.WithAttributes(attribute.String("ref", *p.Ref)))
-						continue
-					}
-
-					concrnt.JsonPrint("resolved policy document", doc)
-
-					refRawStack := [][]concrnt.Policy{*doc.Policies}
-					refPolicyStack, err := s.resolvePolicyStack(ctx, refRawStack)
-					if err != nil {
-						span.RecordError(err)
-						continue
-					}
-
-					concrnt.JsonPrint("resolved policy stack from reference", refPolicyStack)
-
-					if len(refPolicyStack) != 1 {
-						fmt.Println("PROGRAM ERROR: invalid policy stack in reference", *p.Ref)
-						span.RecordError(fmt.Errorf("invalid policy stack in reference %s", *p.Ref))
-						continue
-					}
-					policyLayer = append(policyLayer, refPolicyStack[0]...)
-				}
-			*/
-
 		}
 		result = append(result, policyLayer)
 	}
@@ -160,7 +155,7 @@ func (s *PolicyService) resolvePolicyStack(ctx context.Context, stack []concrnt.
 	return result, nil
 }
 
-func (s *PolicyService) Eval(ctx context.Context, req policy.RequestContext, stack []concrnt.PolicyLayer, action string, key string) error {
+func (s *PolicyService) Eval(ctx context.Context, req policy.RequestContext, stack []concrnt.Policy, action string, key string) error {
 	ctx, span := tracer.Start(ctx, "Policy.Service.Eval")
 	defer span.End()
 

@@ -54,13 +54,13 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, documentID string, 
 
 	var policies *string
 
-	if doc.Policies != nil {
-		policiesBytes, err := json.Marshal(doc.Policies)
+	if doc.Policy != nil {
+		policyBytes, err := json.Marshal(doc.Policy)
 		if err != nil {
 			return "", err
 		}
-		policiesStr := string(policiesBytes)
-		policies = &policiesStr
+		policyStr := string(policyBytes)
+		policies = &policyStr
 	}
 
 	distributions := []string{}
@@ -454,7 +454,7 @@ func (r *RecordRepository) UnAcknowledge(ctx context.Context, documentID string,
 	return err
 }
 
-func (r *RecordRepository) GetHierarchicalRecordPolicies(ctx context.Context, uri string) ([]concrnt.PolicyLayer, error) {
+func (r *RecordRepository) GetHierarchicalRecordPolicies(ctx context.Context, uri string) ([]concrnt.Policy, error) {
 	ctx, span := tracer.Start(ctx, "Repository.Record.GetHierarchicalRecordPolicies")
 	defer span.End()
 
@@ -515,24 +515,21 @@ func (r *RecordRepository) GetHierarchicalRecordPolicies(ctx context.Context, ur
 		policyMap[res.Uri] = res.Policy
 	}
 
-	policies := []concrnt.PolicyLayer{}
+	policies := []concrnt.Policy{}
 	for i := len(hierarchy) - 1; i >= 0; i-- {
 		uri := hierarchy[i]
 		if policyStr, ok := policyMap[uri]; ok {
 			if policyStr != nil {
-				var policyDocs []concrnt.Policy
-				err := json.Unmarshal([]byte(*policyStr), &policyDocs)
+				var policyDoc concrnt.Policy
+				err := json.Unmarshal([]byte(*policyStr), &policyDoc)
 				if err != nil {
 					span.RecordError(err)
 					return nil, err
 				}
 
-				layer := concrnt.PolicyLayer{
-					Source:   uri,
-					Policies: policyDocs,
-				}
+				policyDoc.Source = uri
 
-				policies = append(policies, layer)
+				policies = append(policies, policyDoc)
 			}
 		}
 	}

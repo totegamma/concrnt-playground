@@ -29,15 +29,17 @@ type WellKnownConcrnt struct {
 	Meta         map[string]any    `json:"meta,omitempty"`
 }
 
-type Policy struct {
+type PolicyEntry struct {
 	URL      *string            `json:"url"`
 	Params   *map[string]any    `json:"params,omitempty"`
 	Defaults *map[string]string `json:"defaults,omitempty"`
 }
 
-type PolicyLayer struct {
-	Source   string   `json:"source"`
-	Policies []Policy `json:"policies"`
+type Policy struct {
+	Entries        []PolicyEntry `json:"entries"`
+	VirtualParents *[]string     `json:"virtualParents,omitempty"`
+
+	Source string `json:"source,omitempty"` // internal use
 }
 
 type Document[T any] struct {
@@ -59,7 +61,7 @@ type Document[T any] struct {
 	AssociationVariant *string `json:"associationVariant,omitempty"`
 
 	// CIP-8
-	Policies *[]Policy `json:"policies,omitempty"`
+	Policy *Policy `json:"policy,omitempty"`
 }
 
 type LegacyDocument struct {

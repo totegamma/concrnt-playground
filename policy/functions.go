@@ -7,7 +7,6 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/totegamma/concrnt-playground"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -86,8 +85,6 @@ func EvaluateStack(ctx context.Context, req RequestContext, stack PolicyStack, a
 func EvaluatePolicy(ctx context.Context, policy Policy, req RequestContext, action string, key string) (Conclusion, error) {
 	ctx, span := tracer.Start(ctx, "Policy.EvaluatePolicy")
 	defer span.End()
-
-	concrnt.JsonPrint("evaluating policy", policy)
 
 	statements := make([]Statement, 0)
 	for _, stmt := range policy.Statements {

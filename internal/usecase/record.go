@@ -31,7 +31,7 @@ type RecordRepository interface {
 	Delete(ctx context.Context, sd concrnt.SignedDocument) (string, error)
 
 	GetSignedDocument(ctx context.Context, uri string) (*concrnt.SignedDocument, error)
-	GetHierarchicalRecordPolicies(ctx context.Context, uri string) ([]concrnt.PolicyLayer, error)
+	GetHierarchicalRecordPolicies(ctx context.Context, uri string) ([]concrnt.Policy, error)
 	GetAllCommitLogs(ctx context.Context, owner string) ([]concrnt.SignedDocument, error)
 
 	GetDistributions(ctx context.Context, uri string) ([]string, error)
@@ -878,7 +878,7 @@ func (uc *RecordUsecase) GetSigned(ctx context.Context, uri string) (*concrnt.Si
 	stack, err := uc.repo.GetHierarchicalRecordPolicies(ctx, uri)
 	if err != nil {
 		span.RecordError(err)
-		stack = []concrnt.PolicyLayer{}
+		stack = []concrnt.Policy{}
 	}
 
 	requester, _ := ctx.Value(interop.RequesterCtxKey).(domain.Entity)

@@ -82,9 +82,8 @@ type EvaluationSet struct {
 type PolicyStack [][]EvaluationSet
 
 type Policy struct {
-	Statements     []Statement           `json:"statements"`
-	Defaults       map[string]Conclusion `json:"defaults"`
-	VirtualParents *[]string             `json:"virtualParents,omitempty"`
+	Statements []Statement           `json:"statements"`
+	Defaults   map[string]Conclusion `json:"defaults"`
 }
 
 type Statement struct {
