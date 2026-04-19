@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/patrickmn/go-cache"
@@ -37,7 +38,14 @@ func (s *PolicyService) ResolvePolicyURL(ctx context.Context, policyURL string) 
 
 	cached, found := s.cache.Get(policyURL)
 	if found {
-		return cached.(policy.Policy), nil
+		var policy20251223 policy.Policy
+		err := json.Unmarshal(cached.([]byte), &policy20251223)
+		if err != nil {
+			span.RecordError(err)
+			s.cache.Delete(policyURL) // remove corrupted cache
+			return policy.Policy{}, err
+		}
+		return policy20251223, nil
 	}
 
 	resp, err := http.Get(policyURL)
@@ -60,20 +68,20 @@ func (s *PolicyService) ResolvePolicyURL(ctx context.Context, policyURL string) 
 		return policy.Policy{}, fmt.Errorf("unsupported policy version in %s", policyURL)
 	}
 
-	policyString, err := json.Marshal(policyAny)
+	policyBytes, err := json.Marshal(policyAny)
 	if err != nil {
 		span.RecordError(err)
 		return policy.Policy{}, err
 	}
 
 	var policy20251223 policy.Policy
-	err = json.Unmarshal(policyString, &policy20251223)
+	err = json.Unmarshal(policyBytes, &policy20251223)
 	if err != nil {
 		span.RecordError(err)
 		return policy.Policy{}, err
 	}
 
-	s.cache.Set(policyURL, policy20251223, cache.DefaultExpiration)
+	s.cache.Set(policyURL, policyBytes, cache.DefaultExpiration)
 
 	return policy20251223, nil
 }
@@ -81,6 +89,8 @@ func (s *PolicyService) ResolvePolicyURL(ctx context.Context, policyURL string) 
 func (s *PolicyService) resolvePolicyStack(ctx context.Context, stack []concrnt.Policy) (policy.PolicyStack, error) {
 	ctx, span := tracer.Start(ctx, "Policy.Service.resolvePolicyStack")
 	defer span.End()
+
+	var prepend *concrnt.Policy
 
 	// insert virtual parent
 	for i, layer := range stack {
@@ -102,15 +112,33 @@ func (s *PolicyService) resolvePolicyStack(ctx context.Context, stack []concrnt.
 				continue
 			}
 
-			concrnt.JsonPrint("resolved policy document", doc)
-
 			if i == 0 {
-				// do nothing
+				if prepend == nil {
+					// generate parent url
+					split := strings.Split(layer.Source, "/")
+					if len(split) == 0 {
+						span.AddEvent("invalid policy source format", trace.WithAttributes(attribute.String("source", layer.Source)))
+						continue
+					}
+
+					parentURL := strings.Join(split[:len(split)-1], "/")
+
+					prepend = &concrnt.Policy{
+						Source:  parentURL,
+						Entries: doc.Policy.Entries,
+					}
+				} else {
+					prepend.Entries = append(prepend.Entries, doc.Policy.Entries...)
+				}
 			} else {
 				entries := doc.Policy.Entries
 				stack[i-1].Entries = append(stack[i-1].Entries, entries...)
 			}
 		}
+	}
+
+	if prepend != nil {
+		stack = append([]concrnt.Policy{*prepend}, stack...)
 	}
 
 	result := policy.PolicyStack{}
