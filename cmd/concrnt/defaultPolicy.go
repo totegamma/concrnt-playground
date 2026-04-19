@@ -8,74 +8,76 @@ import (
 
 var globalPolicyJson = `
 {
-	"statements": {
-		"net.concrnt.core.commit.delete": [
-			{
-				"emit": "allow",
-				"condition": {
-					"op": "Eq",
-					"args": [
-						{
-							"op": "Load",
-							"const": "requester.ccid"
-						},
-						{
-							"op": "Load",
-							"const": "this.author"
-						}
-					]
-				}
+	"statements": [
+		{
+			"action": "net.concrnt.core.commit.delete",
+			"key": "*",
+			"emit": "allow",
+			"condition": {
+				"op": "Eq",
+				"args": [
+					{
+						"op": "Load",
+						"const": "requester.ccid"
+					},
+					{
+						"op": "Load",
+						"const": "this.author"
+					}
+				]
 			}
-		],
-		"net.concrnt.core.resolve": [
-			{
-				"emit": "ok",
-				"condition": {
-					"op": "Const",
-					"const": true
-				}
-			},
-			{
-				"emit": "allow",
-				"condition": {
-					"op": "Or",
-					"args": [
-						{
-							"op": "Eq",
-							"args": [
-								{
-									"op": "Load",
-									"const": "requester.ccid"
-								},
-								{
-									"op": "Load",
-									"const": "this.author"
-								}
-							]
-						},
-						{
-							"op": "Eq",
-							"args": [
-								{
-									"op": "Load",
-									"const": "requester.ccid"
-								},
-								{
-									"op": "CCUriOwner",
-									"args": [
-										{
-											"op": "Load",
-											"const": "this.key"
-										}
-									]
-								}
-							]
-						}
-					]
-				}
+		},
+		{
+			"action": "net.concrnt.core.resolve",
+			"key": "*",
+			"emit": "ok",
+			"condition": {
+				"op": "Const",
+				"const": true
 			}
-		]
-	}
+		},
+		{
+			"action": "net.concrnt.core.resolve",
+			"key": "*",
+			"emit": "allow",
+			"condition": {
+				"op": "Or",
+				"args": [
+					{
+						"op": "Eq",
+						"args": [
+							{
+								"op": "Load",
+								"const": "requester.ccid"
+							},
+							{
+								"op": "Load",
+								"const": "this.author"
+							}
+						]
+					},
+					{
+						"op": "Eq",
+						"args": [
+							{
+								"op": "Load",
+								"const": "requester.ccid"
+							},
+							{
+								"op": "CCUriOwner",
+								"args": [
+									{
+										"op": "Load",
+										"const": "this.key"
+									}
+								]
+							}
+						]
+					}
+				]
+			}
+		}
+	]
 }`
 
 func GetGlobalPolicy() policy.Policy {

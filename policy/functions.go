@@ -4,7 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
+	"strings"
 
+	"github.com/totegamma/concrnt-playground"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -27,7 +30,7 @@ func SummerizeConclusion(conclusions []Conclusion, defaultAllow bool) bool {
 	return result == ALLOW
 }
 
-func EvaluateStack(ctx context.Context, req RequestContext, stack PolicyStack, action string) (Conclusion, error) {
+func EvaluateStack(ctx context.Context, req RequestContext, stack PolicyStack, action string, key string) (Conclusion, error) {
 	ctx, span := tracer.Start(ctx, "Policy.EvaluateStack")
 	defer span.End()
 
@@ -40,12 +43,24 @@ func EvaluateStack(ctx context.Context, req RequestContext, stack PolicyStack, a
 		layerConclusion := UNSET
 		for _, evalSet := range layer {
 
+			if evalSet.Errored {
+				if evalSet.Defaults == nil {
+					continue
+				}
+				defaults := *evalSet.Defaults
+				result, ok := defaults[action]
+				if ok {
+					layerConclusion = layerConclusion.Or(Conclusion(result))
+				}
+				continue
+			}
+
 			reqCtx := req
 			if evalSet.Params != nil {
 				reqCtx.Params = *evalSet.Params
 			}
 
-			result, err := EvaluatePolicy(ctx, evalSet.Policy, reqCtx, action)
+			result, err := EvaluatePolicy(ctx, evalSet.Policy, reqCtx, action, key)
 			if err != nil {
 				span.RecordError(err)
 				return UNSET, err
@@ -68,14 +83,28 @@ func EvaluateStack(ctx context.Context, req RequestContext, stack PolicyStack, a
 	return conclusion, nil
 }
 
-func EvaluatePolicy(ctx context.Context, policy Policy, req RequestContext, action string) (Conclusion, error) {
+func EvaluatePolicy(ctx context.Context, policy Policy, req RequestContext, action string, key string) (Conclusion, error) {
 	ctx, span := tracer.Start(ctx, "Policy.EvaluatePolicy")
 	defer span.End()
 
-	statements, ok := policy.Statements[action]
-	if !ok {
-		// No statements for this action
-		return UNSET, nil
+	concrnt.JsonPrint("evaluating policy", policy)
+
+	statements := make([]Statement, 0)
+	for _, stmt := range policy.Statements {
+		if stmt.Action == action {
+			//regexKey := strings.ReplaceAll(stmt.Key, "*", ".*")
+			regexKey := "^" + strings.ReplaceAll(regexp.QuoteMeta(stmt.Key), "\\*", ".*") + "$"
+			matched, err := regexp.MatchString(regexKey, key)
+			if err != nil {
+				span.RecordError(err)
+				continue
+			}
+			fmt.Println("matching key", key, "against statement key", stmt.Key, "regex", regexKey, "matched", matched)
+			if !matched {
+				continue
+			}
+			statements = append(statements, stmt)
+		}
 	}
 
 	conclusion := UNSET
@@ -101,10 +130,9 @@ func EvaluatePolicy(ctx context.Context, policy Policy, req RequestContext, acti
 
 	if conclusion == UNSET {
 		def := policy.Defaults[action]
-		if def == "" {
-			conclusion = NG
+		if def != "" {
+			conclusion = def
 		}
-		conclusion = def
 	}
 
 	span.SetAttributes(attribute.String("policy.conclusion", conclusion.String()))

@@ -13,6 +13,8 @@ import (
 	"github.com/totegamma/concrnt-playground/client"
 	"github.com/totegamma/concrnt-playground/internal/domain"
 	"github.com/totegamma/concrnt-playground/policy"
+	// "go.opentelemetry.io/otel/attribute"
+	// "go.opentelemetry.io/otel/trace"
 )
 
 type PolicyService struct {
@@ -76,7 +78,7 @@ func (s *PolicyService) ResolvePolicyURL(ctx context.Context, policyURL string) 
 	return policy20251223, nil
 }
 
-func (s *PolicyService) resolvePolicyStack(ctx context.Context, stack [][]concrnt.Policy) (policy.PolicyStack, error) {
+func (s *PolicyService) resolvePolicyStack(ctx context.Context, stack []concrnt.PolicyLayer) (policy.PolicyStack, error) {
 	ctx, span := tracer.Start(ctx, "Policy.Service.resolvePolicyStack")
 	defer span.End()
 
@@ -84,13 +86,29 @@ func (s *PolicyService) resolvePolicyStack(ctx context.Context, stack [][]concrn
 
 	for _, layer := range stack {
 		policyLayer := []policy.EvaluationSet{}
-		for _, p := range layer {
+		for _, p := range layer.Policies {
 
 			if p.URL != nil {
 				pol, err := s.ResolvePolicyURL(ctx, *p.URL)
 				if err != nil {
 					span.RecordError(err)
+					// mark this layer has errored policy
+					policyLayer = append(policyLayer, policy.EvaluationSet{
+						Errored:  true,
+						Defaults: p.Defaults,
+					})
 					continue
+				}
+
+				for i := range pol.Statements {
+					switch pol.Statements[i].Key {
+					case ".": // this only
+						pol.Statements[i].Key = layer.Source
+					case "", "*": // this and all children
+						pol.Statements[i].Key = layer.Source + "*"
+					case "./*": // all children but not this
+						pol.Statements[i].Key = layer.Source + "/*"
+					}
 				}
 
 				policyLayer = append(policyLayer, policy.EvaluationSet{
@@ -100,32 +118,40 @@ func (s *PolicyService) resolvePolicyStack(ctx context.Context, stack [][]concrn
 				})
 			}
 
-			if p.Ref != nil {
-				var doc concrnt.Document[any]
-				err := s.client.GetRecord(ctx, *p.Ref, nil, &doc)
-				if err != nil {
-					span.RecordError(err)
-					continue
-				}
+			/*
+				if p.Ref != nil {
+					fmt.Println("Resolving policy reference", *p.Ref)
+					var doc concrnt.Document[any]
+					err := s.client.GetRecord(ctx, *p.Ref, &client.Options{NoCache: true}, &doc)
+					if err != nil {
+						span.RecordError(err)
+						continue
+					}
 
-				if doc.Policies == nil {
-					continue
-				}
+					if doc.Policies == nil {
+						span.AddEvent("policy reference has no policies", trace.WithAttributes(attribute.String("ref", *p.Ref)))
+						continue
+					}
 
-				refRawStack := [][]concrnt.Policy{*doc.Policies}
-				refPolicyStack, err := s.resolvePolicyStack(ctx, refRawStack)
-				if err != nil {
-					span.RecordError(err)
-					continue
-				}
+					concrnt.JsonPrint("resolved policy document", doc)
 
-				if len(refPolicyStack) != 1 {
-					fmt.Println("PROGRAM ERROR: invalid policy stack in reference", *p.Ref)
-					span.RecordError(fmt.Errorf("invalid policy stack in reference %s", *p.Ref))
-					continue
+					refRawStack := [][]concrnt.Policy{*doc.Policies}
+					refPolicyStack, err := s.resolvePolicyStack(ctx, refRawStack)
+					if err != nil {
+						span.RecordError(err)
+						continue
+					}
+
+					concrnt.JsonPrint("resolved policy stack from reference", refPolicyStack)
+
+					if len(refPolicyStack) != 1 {
+						fmt.Println("PROGRAM ERROR: invalid policy stack in reference", *p.Ref)
+						span.RecordError(fmt.Errorf("invalid policy stack in reference %s", *p.Ref))
+						continue
+					}
+					policyLayer = append(policyLayer, refPolicyStack[0]...)
 				}
-				policyLayer = append(policyLayer, refPolicyStack[0]...)
-			}
+			*/
 
 		}
 		result = append(result, policyLayer)
@@ -134,7 +160,7 @@ func (s *PolicyService) resolvePolicyStack(ctx context.Context, stack [][]concrn
 	return result, nil
 }
 
-func (s *PolicyService) Eval(ctx context.Context, req policy.RequestContext, stack [][]concrnt.Policy, action string) error {
+func (s *PolicyService) Eval(ctx context.Context, req policy.RequestContext, stack []concrnt.PolicyLayer, action string, key string) error {
 	ctx, span := tracer.Start(ctx, "Policy.Service.Eval")
 	defer span.End()
 
@@ -153,7 +179,7 @@ func (s *PolicyService) Eval(ctx context.Context, req policy.RequestContext, sta
 
 	policyStack = append(policyStack, additionalStack...)
 
-	conclusion, error := policy.EvaluateStack(ctx, req, policyStack, action)
+	conclusion, error := policy.EvaluateStack(ctx, req, policyStack, action, key)
 	if error != nil {
 		return error
 	}

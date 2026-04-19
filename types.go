@@ -33,7 +33,11 @@ type Policy struct {
 	URL      *string            `json:"url"`
 	Params   *map[string]any    `json:"params,omitempty"`
 	Defaults *map[string]string `json:"defaults,omitempty"`
-	Ref      *string            `json:"ref,omitempty"`
+}
+
+type PolicyLayer struct {
+	Source   string   `json:"source"`
+	Policies []Policy `json:"policies"`
 }
 
 type Document[T any] struct {

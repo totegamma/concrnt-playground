@@ -454,7 +454,7 @@ func (r *RecordRepository) UnAcknowledge(ctx context.Context, documentID string,
 	return err
 }
 
-func (r *RecordRepository) GetHierarchicalRecordPolicies(ctx context.Context, uri string) ([][]concrnt.Policy, error) {
+func (r *RecordRepository) GetHierarchicalRecordPolicies(ctx context.Context, uri string) ([]concrnt.PolicyLayer, error) {
 	ctx, span := tracer.Start(ctx, "Repository.Record.GetHierarchicalRecordPolicies")
 	defer span.End()
 
@@ -515,18 +515,24 @@ func (r *RecordRepository) GetHierarchicalRecordPolicies(ctx context.Context, ur
 		policyMap[res.Uri] = res.Policy
 	}
 
-	policies := [][]concrnt.Policy{}
+	policies := []concrnt.PolicyLayer{}
 	for i := len(hierarchy) - 1; i >= 0; i-- {
 		uri := hierarchy[i]
-		if policy, ok := policyMap[uri]; ok {
-			if policy != nil {
+		if policyStr, ok := policyMap[uri]; ok {
+			if policyStr != nil {
 				var policyDocs []concrnt.Policy
-				err := json.Unmarshal([]byte(*policy), &policyDocs)
+				err := json.Unmarshal([]byte(*policyStr), &policyDocs)
 				if err != nil {
 					span.RecordError(err)
 					return nil, err
 				}
-				policies = append(policies, policyDocs)
+
+				layer := concrnt.PolicyLayer{
+					Source:   uri,
+					Policies: policyDocs,
+				}
+
+				policies = append(policies, layer)
 			}
 		}
 	}

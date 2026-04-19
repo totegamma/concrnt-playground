@@ -330,6 +330,7 @@ func (c *Client) GetRecord(ctx context.Context, uri string, opts *Options, resul
 	err = json.Unmarshal([]byte(sd.Document), &result)
 	if err != nil {
 		err := errors.Join(fmt.Errorf("failed to decode document in signed document for resource %s", uri), err)
+		concrnt.JsonPrint("sd", sd)
 		span.RecordError(err)
 		return err
 	}

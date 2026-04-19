@@ -75,16 +75,21 @@ type EvaluationSet struct {
 	Policy   Policy             `json:"policy"`
 	Params   *map[string]any    `json:"params"`
 	Defaults *map[string]string `json:"defaults"`
+
+	Errored bool `json:"errored"`
 }
 
 type PolicyStack [][]EvaluationSet
 
 type Policy struct {
-	Statements map[string][]Statement `json:"statements"`
-	Defaults   map[string]Conclusion  `json:"defaults"`
+	Statements     []Statement           `json:"statements"`
+	Defaults       map[string]Conclusion `json:"defaults"`
+	VirtualParents *[]string             `json:"virtualParents,omitempty"`
 }
 
 type Statement struct {
+	Action    string     `json:"action"`
+	Key       string     `json:"key,omitempty"`
 	Emit      Conclusion `json:"emit"`
 	Condition Expr       `json:"condition"`
 	Reason    *string    `json:"reason,omitempty"`
