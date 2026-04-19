@@ -1,6 +1,6 @@
 package schemas
 
 type Reference struct {
-	Href        string `json:"href"`
-	ContentType string `json:"contentType,omitempty"`
+	Href   string `json:"href"`
+	Schema string `json:"schema,omitempty"`
 }

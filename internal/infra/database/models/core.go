@@ -33,6 +33,7 @@ type Record struct {
 	DocumentID    string         `json:"id" gorm:"primaryKey;type:text"`
 	Document      CommitLog      `json:"documnet" gorm:"foreignKey:DocumentID;references:ID;constraint:OnDelete:CASCADE;"`
 	Owner         string         `json:"owner" gorm:"type:text"`
+	Redirect      *string        `json:"redirect" gorm:"type:text"`
 	Schema        string         `json:"schema" gorm:"type:text"`
 	Policies      *string        `json:"policies" gorm:"type:text"`
 	Distributions pq.StringArray `json:"distributions" gorm:"type:text[]"`

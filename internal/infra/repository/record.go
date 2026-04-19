@@ -77,6 +77,17 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, documentID string, 
 		CDate:         time.Now(),
 	}
 
+	if doc.Schema == schemas.ReferenceURL {
+		var refDoc concrnt.Document[schemas.Reference]
+		err := json.Unmarshal([]byte(sd.Document), &refDoc)
+		if err != nil {
+			span.RecordError(err)
+			return "", err
+		}
+		record.Redirect = &refDoc.Value.Href
+		record.Schema = refDoc.Value.Schema
+	}
+
 	proof, err := json.Marshal(sd.Proof)
 	if err != nil {
 		span.RecordError(err)

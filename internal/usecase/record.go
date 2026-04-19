@@ -540,7 +540,8 @@ func (uc *RecordUsecase) createRecord(ctx context.Context, requester domain.Enti
 			distDoc := concrnt.Document[schemas.Reference]{
 				Key: key,
 				Value: schemas.Reference{
-					Href: resultURI,
+					Href:   resultURI,
+					Schema: parsed.Schema,
 				},
 				Author:    parsed.Author,
 				Schema:    schemas.ReferenceURL,
@@ -645,7 +646,8 @@ func (uc *RecordUsecase) createAssociation(ctx context.Context, requester domain
 			distDoc := concrnt.Document[schemas.Reference]{
 				Key: key,
 				Value: schemas.Reference{
-					Href: ccfs,
+					Href:   ccfs,
+					Schema: parsed.Schema,
 				},
 				Author:    parsed.Author,
 				Schema:    schemas.ReferenceURL,

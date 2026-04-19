@@ -5,13 +5,10 @@ import (
 	"net/url"
 	"time"
 
-	"encoding/json"
 	"gorm.io/gorm"
 
-	"github.com/totegamma/concrnt-playground"
 	"github.com/totegamma/concrnt-playground/chunkline"
 	"github.com/totegamma/concrnt-playground/internal/infra/database/models"
-	"github.com/totegamma/concrnt-playground/schemas"
 )
 
 const (
@@ -148,19 +145,8 @@ func (r *ChunklineRepository) LoadLocalBody(ctx context.Context, uri string, chu
 
 		href := member.URI
 		contentType := "application/concrnt.document+json"
-		if member.Record.Schema == schemas.ReferenceURL {
-			var itemURLValue concrnt.Document[schemas.Reference]
-			err = json.Unmarshal([]byte(member.Record.Document.Document), &itemURLValue)
-			if err == nil {
-				if itemURLValue.Value.Href != "" {
-					href = itemURLValue.Value.Href
-				}
-				if itemURLValue.Value.ContentType != "" {
-					contentType = itemURLValue.Value.ContentType
-				}
-			} else {
-				span.RecordError(err)
-			}
+		if member.Record.Redirect != nil {
+			href = *member.Record.Redirect
 		}
 
 		item := chunkline.BodyItem{
