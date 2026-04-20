@@ -629,6 +629,14 @@ func (uc *RecordUsecase) createAssociation(ctx context.Context, requester domain
 		created = true
 
 		for _, destURI := range *parsed.Distributes {
+
+			host, err := uc.client.ResolveResourceHost(ctx, destURI)
+			if err != nil {
+				fmt.Printf("Error resolving resource host for distribution: %v\n", err)
+				span.RecordError(err)
+				continue
+			}
+
 			dest, err := concrnt.ParseCCURI(destURI)
 			if err != nil {
 				fmt.Printf("Error parsing memberOf URI: %v\n", err)
@@ -669,11 +677,23 @@ func (uc *RecordUsecase) createAssociation(ctx context.Context, requester domain
 				},
 			}
 
-			err = uc.client.Commit(ctx, dest.Owner, distSD)
-			if err != nil {
-				fmt.Printf("Error committing memberOf item: %v\n", err)
-				span.RecordError(err)
-				continue
+			if host == uc.config.FQDN { // local
+				_, err = uc.Commit(ctx, distSD, mode)
+				if err != nil {
+					fmt.Printf("Error committing local memberOf item: %v\n", err)
+					span.RecordError(err)
+					continue
+				}
+			} else {
+				if mode != domain.CommitModeExecute {
+					continue
+				}
+				err = uc.client.Commit(ctx, dest.Owner, distSD)
+				if err != nil {
+					fmt.Printf("Error committing memberOf item: %v\n", err)
+					span.RecordError(err)
+					continue
+				}
 			}
 		}
 	}
