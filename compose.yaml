@@ -26,6 +26,14 @@ services:
     extra_hosts:
       - "host.docker.internal:172.29.253.172"
 
+  web:
+    restart: always
+    image: ghcr.io/concrnt/concrnt-web:main
+    ports:
+      - "80:80"
+    networks:
+      - internal
+
   db:
     restart: always
     image: postgres:18

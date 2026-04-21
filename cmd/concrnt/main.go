@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log"
@@ -75,12 +76,6 @@ func main() {
 	e.HideBanner = true
 	e.HidePort = true
 
-	e.Use(echomiddleware.LoggerWithConfig(echomiddleware.LoggerConfig{
-		Skipper: func(c echo.Context) bool {
-			return c.Path() == "/metrics" || c.Path() == "/health" || c.Path() == "/.well-known/concrnt"
-		},
-	}))
-
 	e.Use(echomiddleware.Recover())
 
 	if conf.Server.EnableTrace {
@@ -105,6 +100,22 @@ func main() {
 			}
 		})
 	}
+
+	e.Use(echomiddleware.LoggerWithConfig(echomiddleware.LoggerConfig{
+		Skipper: func(c echo.Context) bool {
+			return c.Path() == "/metrics" || c.Path() == "/health" || c.Path() == "/.well-known/concrnt"
+		},
+		Format: `{"time":"${time_rfc3339_nano}",${custom},"remote_ip":"${remote_ip}",` +
+			`"host":"${host}","method":"${method}","uri":"${uri}","status":${status},` +
+			`"error":"${error}","latency":${latency},"latency_human":"${latency_human}",` +
+			`"bytes_in":${bytes_in},"bytes_out":${bytes_out}}` + "\n",
+		CustomTagFunc: func(c echo.Context, buf *bytes.Buffer) (int, error) {
+			span := trace.SpanFromContext(c.Request().Context())
+			fmt.Fprintf(buf, "\"%s\":\"%s\"", "traceID", span.SpanContext().TraceID().String())
+			fmt.Fprintf(buf, ",\"%s\":\"%s\"", "spanID", span.SpanContext().SpanID().String())
+			return 0, nil
+		},
+	}))
 
 	softwareInfo := concrnt.SoftwareInfo{
 		Version:      version,
