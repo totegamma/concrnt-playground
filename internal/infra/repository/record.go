@@ -561,11 +561,18 @@ func (r *RecordRepository) GetSignedDocument(ctx context.Context, uri string) (*
 	switch parsed.Scheme {
 	case "cckv":
 		var recordKey models.RecordKey
-		err = r.db.WithContext(ctx).Preload("Record").
+		err = r.db.WithContext(ctx).
+			Preload("Record").
 			Preload("Record.Document").
 			Where("uri = ?", uri).
 			Take(&recordKey).Error
 		if err != nil {
+			span.RecordError(errors.Join(errors.New("failed to query recordkey from cckv"), err))
+			return nil, errors.Join(domain.NotFoundError{Resource: uri}, err)
+		}
+
+		if recordKey.RecordID == nil {
+			err := fmt.Errorf("record key found but record is nil for uri: %s", uri)
 			span.RecordError(err)
 			return nil, errors.Join(domain.NotFoundError{Resource: uri}, err)
 		}
@@ -573,7 +580,7 @@ func (r *RecordRepository) GetSignedDocument(ctx context.Context, uri string) (*
 		var proof concrnt.Proof
 		err = json.Unmarshal([]byte(recordKey.Record.Document.Proof), &proof)
 		if err != nil {
-			span.RecordError(err)
+			span.RecordError(errors.Join(errors.New("failed to unmarshal proof from recordkey"), err))
 			return nil, err
 		}
 
@@ -592,7 +599,7 @@ func (r *RecordRepository) GetSignedDocument(ctx context.Context, uri string) (*
 			Where("id = ?", parsed.CDID).
 			Take(&commitLog).Error
 		if err != nil {
-			span.RecordError(err)
+			span.RecordError(errors.Join(errors.New("failed to query commitlog from ccfs"), err))
 			return nil, errors.Join(domain.NotFoundError{Resource: uri}, err)
 		}
 
@@ -609,7 +616,7 @@ func (r *RecordRepository) GetSignedDocument(ctx context.Context, uri string) (*
 		var proof concrnt.Proof
 		err = json.Unmarshal([]byte(commitLog.Proof), &proof)
 		if err != nil {
-			span.RecordError(err)
+			span.RecordError(errors.Join(errors.New("failed to unmarshal proof from commitlog"), err))
 			return nil, err
 		}
 
