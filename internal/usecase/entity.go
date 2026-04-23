@@ -39,7 +39,7 @@ func (uc *EntityUsecase) Register(ctx context.Context, req concrnt.RegisterReque
 }
 
 func (uc *EntityUsecase) SaveEntity(ctx context.Context, sd concrnt.SignedDocument) (*concrnt.SignedDocument, error) {
-	_, err := uc.repo.SaveEntity(ctx, sd, true)
+	_, err := uc.repo.SaveEntity(ctx, sd, false)
 	if err != nil {
 		return nil, err
 	}

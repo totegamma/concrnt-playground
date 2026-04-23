@@ -41,7 +41,9 @@ type RecordRepository interface {
 	GetAssociatedRecords(ctx context.Context, targetURI, schema, variant, author string) ([]concrnt.SignedDocument, error)
 	GetAssociatedRecordCountsBySchema(ctx context.Context, targetURI string) (map[string]int64, error)
 	GetAssociatedRecordCountsByVariant(ctx context.Context, targetURI, schema string) (*utils.OrderedKVMap[int64], error)
-	Query(ctx context.Context, prefix, schema string, since, until *time.Time, limit int, order string) ([]concrnt.SignedDocument, error)
+
+	QueryByPrefix(ctx context.Context, prefix, schema string, since, until *time.Time, limit int, order string) ([]concrnt.SignedDocument, error)
+	QueryByParent(ctx context.Context, parent, schema string, since, until *time.Time, limit int, order string) ([]concrnt.SignedDocument, error)
 }
 
 type RecordUsecase struct {
@@ -945,12 +947,25 @@ func (uc *RecordUsecase) GetAssociatedRecordCountsByVariant(ctx context.Context,
 
 func (uc *RecordUsecase) Query(
 	ctx context.Context,
-	prefix, schema string,
+	prefix, parent, schema string,
 	since, until *time.Time,
 	limit int,
 	order string,
 ) ([]concrnt.SignedDocument, error) {
-	return uc.repo.Query(ctx, prefix, schema, since, until, limit, order)
+
+	if prefix != "" && parent != "" {
+		return nil, errors.New("prefix and parent cannot be specified at the same time")
+	}
+
+	if prefix != "" {
+		return uc.repo.QueryByPrefix(ctx, prefix, schema, since, until, limit, order)
+	}
+
+	if parent != "" {
+		return uc.repo.QueryByParent(ctx, parent, schema, since, until, limit, order)
+	}
+
+	return nil, errors.New("either prefix or parent must be specified")
 }
 
 func (uc *RecordUsecase) DumpCommitLogs(ctx context.Context) (string, error) {

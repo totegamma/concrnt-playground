@@ -62,7 +62,7 @@ func NewHandler(
 var Endpoints = map[string]string{
 	"net.concrnt.core.commit":             "/commit",
 	"net.concrnt.core.resolve":            "/resolve?uri={uri}",
-	"net.concrnt.core.query":              "/query{?prefix,schema,since,until,limit,order}",
+	"net.concrnt.core.query":              "/query{?prefix,schema,since,until,limit,order,parent}",
 	"net.concrnt.core.associations":       "/associations{?uri,schema,variant,author}",
 	"net.concrnt.core.association-counts": "/association-counts{?uri,schema}",
 	"net.concrnt.core.acknowledges":       "/acknowledges{?from,to,context}",
@@ -277,9 +277,7 @@ func (h *Handler) handleQuery(c echo.Context) error {
 	ctx := c.Request().Context()
 
 	prefix := c.QueryParam("prefix")
-	if prefix == "" {
-		return presenter.BadRequestMessage(c, "prefix parameter is required")
-	}
+	parent := c.QueryParam("parent")
 
 	schema := c.QueryParam("schema")
 
@@ -323,7 +321,7 @@ func (h *Handler) handleQuery(c echo.Context) error {
 		return presenter.BadRequestMessage(c, "invalid order parameter")
 	}
 
-	results, err := h.record.Query(ctx, prefix, schema, since, until, limit, order)
+	results, err := h.record.Query(ctx, prefix, parent, schema, since, until, limit, order)
 	if err != nil {
 		return presenter.InternalError(c, err)
 	}

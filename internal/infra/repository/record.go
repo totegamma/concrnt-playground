@@ -924,7 +924,7 @@ func (r *RecordRepository) GetAssociatedRecordCountsByVariant(ctx context.Contex
 	return &result, nil
 }
 
-func (r *RecordRepository) Query(
+func (r *RecordRepository) QueryByPrefix(
 	ctx context.Context,
 	prefix, schema string,
 	since, until *time.Time,
@@ -940,6 +940,70 @@ func (r *RecordRepository) Query(
 		Model(&models.RecordKey{}).
 		Joins("JOIN records r ON r.document_id = record_keys.record_id").
 		Where("uri LIKE ?", prefix+"%")
+
+	if schema != "" {
+		query = query.Where("r.schema = ?", schema)
+	}
+	if since != nil {
+		query = query.Where("r.c_date >= ?", *since)
+	}
+	if until != nil {
+		query = query.Where("r.c_date <= ?", *until)
+	}
+
+	if order == "desc" {
+		query = query.Order("r.c_date DESC")
+	} else {
+		query = query.Order("r.c_date ASC")
+	}
+
+	if limit > 0 {
+		query = query.Limit(limit)
+	}
+
+	if err := query.Preload("Record.Document").Find(&rks).Error; err != nil {
+		span.RecordError(err)
+		return nil, err
+	}
+
+	sds := make([]concrnt.SignedDocument, 0, len(rks))
+	for _, rk := range rks {
+		var proof concrnt.Proof
+		err := json.Unmarshal([]byte(rk.Record.Document.Proof), &proof)
+		if err != nil {
+			span.RecordError(err)
+			return nil, err
+		}
+
+		ccfs := concrnt.ComposeCCURI("ccfs", rk.Record.Owner, rk.Record.DocumentID)
+
+		sds = append(sds, concrnt.SignedDocument{
+			CCKV:     &rk.URI,
+			CCFS:     &ccfs,
+			Document: rk.Record.Document.Document,
+			Proof:    proof,
+		})
+	}
+
+	return sds, nil
+}
+
+func (r *RecordRepository) QueryByParent(
+	ctx context.Context,
+	parent, schema string,
+	since, until *time.Time,
+	limit int,
+	order string,
+) ([]concrnt.SignedDocument, error) {
+	ctx, span := tracer.Start(ctx, "Repository.Record.QueryByParent")
+	defer span.End()
+
+	var rks []models.RecordKey
+
+	query := r.db.WithContext(ctx).
+		Model(&models.RecordKey{}).
+		Joins("JOIN records r ON r.document_id = record_keys.record_id").
+		Where("parent_id = (SELECT id FROM record_keys WHERE uri = ?)", parent)
 
 	if schema != "" {
 		query = query.Where("r.schema = ?", schema)
