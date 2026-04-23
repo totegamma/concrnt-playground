@@ -151,7 +151,7 @@ func (s *AuthMiddleware) IdentifyIdentity(next echo.HandlerFunc) echo.HandlerFun
 				}
 			}
 
-			ctx = context.WithValue(ctx, interop.RequesterCtxKey, requester)
+			ctx = context.WithValue(ctx, interop.RequesterCtxKey, *requester)
 			span.SetAttributes(attribute.String("RequesterId", ccid))
 
 			ctx = context.WithValue(ctx, interop.RequesterTagCtxKey, entityTag)
