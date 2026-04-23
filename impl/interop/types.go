@@ -16,3 +16,10 @@ type CCInfo struct {
 	Version   string            `json:"version"`
 	Endpoints map[string]string `json:"endpoints"`
 }
+
+type Entity struct {
+	ID        string  `json:"ccid"`
+	Alias     *string `json:"alias,omitempty"`
+	Domain    string  `json:"domain"`
+	TagString string  `json:"tag,omitempty"`
+}
