@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
+	"github.com/patrickmn/go-cache"
 	"github.com/pkg/errors"
 
 	"github.com/totegamma/concrnt-playground"
@@ -53,6 +55,7 @@ type RecordUsecase struct {
 	entity *EntityUsecase
 	signal *service.SignalService
 	policy *service.PolicyService
+	cache  *cache.Cache
 }
 
 func NewRecordUsecase(
@@ -70,6 +73,7 @@ func NewRecordUsecase(
 		entity: entity,
 		signal: signal,
 		policy: policy,
+		cache:  cache.New(10*time.Minute, 15*time.Minute),
 	}
 }
 
@@ -178,6 +182,38 @@ func (uc *RecordUsecase) Commit(ctx context.Context, ip string, sd concrnt.Signe
 	if err != nil {
 		span.RecordError(err)
 		// return nil, err
+	}
+
+	targetUserID := ""
+	if doc.Key != "" {
+		parsed, err := concrnt.ParseCCURI(doc.Key)
+		if err != nil {
+			span.RecordError(err)
+			return nil, err
+		}
+		targetUserID = parsed.Owner
+	}
+	if doc.Associate != nil {
+		parsed, err := concrnt.ParseCCURI(*doc.Associate)
+		if err != nil {
+			span.RecordError(err)
+			return nil, err
+		}
+		targetUserID = parsed.Owner
+	}
+	if targetUserID != "" && targetUserID != requesterID {
+
+		blockingUsers, err := uc.getBlockingUsers(ctx, requesterID)
+		if err != nil {
+			span.RecordError(err)
+			return nil, err
+		}
+
+		if slices.Contains(blockingUsers, targetUserID) {
+			err := errors.New("operation blocked due to user block relationship")
+			span.RecordError(err)
+			return nil, err
+		}
 	}
 
 	// accept
@@ -1039,4 +1075,35 @@ func (uc *RecordUsecase) ImportCommitLogs(ctx context.Context, ip string, jsonl 
 	}
 
 	return results
+}
+
+func (uc *RecordUsecase) getBlockingUsers(ctx context.Context, userID string) ([]string, error) {
+	ctx, span := tracer.Start(ctx, "Usecase.Record.GetBlockingUsers")
+	defer span.End()
+
+	if cached, found := uc.cache.Get("blockingUsers:" + userID); found {
+		if ids, ok := cached.([]string); ok {
+			return ids, nil
+		}
+	}
+
+	blockingKey := concrnt.ComposeCCURI("cckv", userID, ".concrnt/blocking")
+
+	blockingUsers, err := uc.repo.QueryByParent(ctx, blockingKey, "", nil, nil, 0, "")
+	if err != nil {
+		span.RecordError(err)
+		return nil, err
+	}
+
+	prefix := blockingKey + "/"
+
+	ids := make([]string, len(blockingUsers))
+	for i, sd := range blockingUsers {
+		id := strings.TrimPrefix(*sd.CCKV, prefix)
+		ids[i] = id
+	}
+
+	uc.cache.Set("blockingUsers:"+userID, ids, cache.DefaultExpiration)
+
+	return ids, nil
 }
