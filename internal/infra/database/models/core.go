@@ -15,6 +15,7 @@ type CommitOwner struct {
 
 type CommitLog struct {
 	ID          string    `json:"id" gorm:"primaryKey;type:text"`
+	IP          string    `json:"ip" gorm:"type:text"`
 	Document    string    `json:"document" gorm:"type:text"`
 	Proof       string    `json:"proof" gorm:"type:text"`
 	GcCandidate bool      `json:"gcCandidate" gorm:"type:boolean;not null;default:false;index"`
@@ -98,4 +99,12 @@ type EntityMeta struct {
 	ID      string  `json:"ccid" gorm:"type:text"`
 	Inviter *string `json:"inviter" gorm:"type:text"`
 	Info    string  `json:"info" gorm:"type:jsonb;default:'null'"`
+}
+
+type AbuseReport struct {
+	ID        int64  `json:"id" gorm:"primaryKey;autoIncrement"`
+	IP        string `json:"ip" gorm:"type:text"`
+	Reporter  string `json:"reporter" gorm:"type:text"`
+	TargetURI string `json:"target" gorm:"type:text"`
+	Body      string `json:"body" gorm:"type:text"`
 }

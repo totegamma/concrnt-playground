@@ -108,3 +108,8 @@ type RealtimeRequest struct {
 	Type     string   `json:"type"`
 	Prefixes []string `json:"prefixes"`
 }
+
+type AbuseReport struct {
+	TargetURI string `json:"target" gorm:"type:text"`
+	Body      string `json:"body" gorm:"type:text"`
+}

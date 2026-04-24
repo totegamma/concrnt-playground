@@ -162,6 +162,9 @@ func main() {
 	subscriber := worker.NewSubscriber(&globalConfig, cl, signal)
 	subscriber.Start(context.Background())
 
+	abuseRepo := repository.NewAbuseRepository(db)
+	abuseService := service.NewAbuseService(abuseRepo)
+
 	if conf.Server.VapidPublicKey != "" && conf.Server.VapidPrivateKey != "" {
 		notificationReactor := worker.NewNotificationReactor(notificationUC, signal, webpush.Options{
 			Subscriber:      "mailto:admin@" + globalConfig.FQDN,
@@ -179,7 +182,17 @@ func main() {
 	wellKnownHandler := rest.NewWellKnownHandler(&globalConfig, softwareInfo, moduleManager)
 	wellKnownHandler.RegisterRoutes(e)
 
-	apiHandler := rest.NewHandler(globalConfig, recordUC, chunklineUC, serverUC, entityUC, notificationUC, signal, moduleManager)
+	apiHandler := rest.NewHandler(
+		globalConfig,
+		recordUC,
+		chunklineUC,
+		serverUC,
+		entityUC,
+		notificationUC,
+		abuseService,
+		signal,
+		moduleManager,
+	)
 	api := e.Group("", authMiddleware.IdentifyIdentity, authMiddleware.IdentifyIdentity)
 	apiHandler.RegisterRoutes(api)
 

@@ -33,6 +33,7 @@ type Handler struct {
 	server    *usecase.ServerUsecase
 	entity    *usecase.EntityUsecase
 	notify    *usecase.NotificationUsecase
+	abuse     *service.AbuseService
 	signal    *service.SignalService
 	mm        *service.ModuleManager
 }
@@ -44,6 +45,7 @@ func NewHandler(
 	server *usecase.ServerUsecase,
 	entity *usecase.EntityUsecase,
 	notify *usecase.NotificationUsecase,
+	abuse *service.AbuseService,
 	signal *service.SignalService,
 	mm *service.ModuleManager,
 ) *Handler {
@@ -54,6 +56,7 @@ func NewHandler(
 		server:    server,
 		entity:    entity,
 		notify:    notify,
+		abuse:     abuse,
 		signal:    signal,
 		mm:        mm,
 	}
@@ -68,6 +71,7 @@ var Endpoints = map[string]string{
 	"net.concrnt.core.acknowledges":       "/acknowledges{?from,to,context}",
 	"net.concrnt.core.acknowledge-counts": "/acknowledge-counts{?from,to,context}",
 	"net.concrnt.core.realtime":           "/realtime",
+	"net.concrnt.core.abuse":              "/abuse",
 	"net.concrnt.world.register":          "/api/v2/register",
 	"net.concrnt.world.timeline.recent":   "/api/v2/timeline/recent{?uris,until,limit}",
 	"net.concrnt.world.subscribe":         "/subscribe/{owner}/{vendor_id}",
@@ -107,6 +111,7 @@ func (h *Handler) RegisterRoutes(e *echo.Group) {
 	api.GET("/repository", h.handleDumpRepository)
 	api.POST("/repository", h.handleImportRepository)
 	api.OPTIONS("/repository", h.handleNop)
+	api.POST("/abuse", h.handleAbuse)
 
 	api.GET("/chunkline/itr/:chunk", h.handleChunklineItr)
 	api.OPTIONS("/chunkline/itr/:chunk", h.handleNop)
@@ -730,4 +735,30 @@ func (h *Handler) handleImportRepository(c echo.Context) error {
 
 	results := h.record.ImportCommitLogs(ctx, dump)
 	return presenter.OK(c, results)
+}
+
+func (h *Handler) handleAbuse(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	var req concrnt.AbuseReport
+	err := c.Bind(&req)
+	if err != nil {
+		return presenter.BadRequest(c, err)
+	}
+
+	requester, ok := ctx.Value(interop.RequesterCtxKey).(domain.Entity)
+	if !ok {
+		return presenter.Forbidden(c, "authentication required")
+	}
+
+	reporter := requester.ID
+
+	ip := c.RealIP()
+
+	err = h.abuse.ReportAbuse(ctx, &req, reporter, ip)
+	if err != nil {
+		return presenter.InternalError(c, err)
+	}
+
+	return presenter.OK(c, echo.Map{"status": "ok"})
 }
