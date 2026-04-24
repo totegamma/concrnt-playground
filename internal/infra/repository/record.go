@@ -27,7 +27,7 @@ func NewRecordRepository(db *gorm.DB) *RecordRepository {
 	return &RecordRepository{db: db}
 }
 
-func (r *RecordRepository) CreateRecord(ctx context.Context, documentID string, sd concrnt.SignedDocument) (string, error) {
+func (r *RecordRepository) CreateRecord(ctx context.Context, ip string, documentID string, sd concrnt.SignedDocument) (string, error) {
 	ctx, span := tracer.Start(ctx, "Repository.Record.CreateRecord")
 	defer span.End()
 
@@ -96,6 +96,7 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, documentID string, 
 
 	commitLog := models.CommitLog{
 		ID:       documentID,
+		IP:       ip,
 		Document: sd.Document,
 		Proof:    string(proof),
 	}
@@ -191,7 +192,7 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, documentID string, 
 
 }
 
-func (r *RecordRepository) CreateAssociation(ctx context.Context, documentID string, parsed concrnt.Document[any], sd concrnt.SignedDocument) error {
+func (r *RecordRepository) CreateAssociation(ctx context.Context, ip string, documentID string, parsed concrnt.Document[any], sd concrnt.SignedDocument) error {
 	ctx, span := tracer.Start(ctx, "Repository.Record.CreateAssociation")
 	defer span.End()
 
@@ -241,6 +242,7 @@ func (r *RecordRepository) CreateAssociation(ctx context.Context, documentID str
 
 	commitLog := models.CommitLog{
 		ID:       documentID,
+		IP:       ip,
 		Document: sd.Document,
 		Proof:    string(proof),
 	}
@@ -277,7 +279,7 @@ func (r *RecordRepository) CreateAssociation(ctx context.Context, documentID str
 	return err
 }
 
-func (r *RecordRepository) Acknowledge(ctx context.Context, documentID string, sd concrnt.SignedDocument) (string, error) {
+func (r *RecordRepository) Acknowledge(ctx context.Context, ip string, documentID string, sd concrnt.SignedDocument) (string, error) {
 	ctx, span := tracer.Start(ctx, "Repository.Record.Acknowledge")
 	defer span.End()
 
@@ -319,6 +321,7 @@ func (r *RecordRepository) Acknowledge(ctx context.Context, documentID string, s
 
 	commitLog := models.CommitLog{
 		ID:       documentID,
+		IP:       ip,
 		Document: sd.Document,
 		Proof:    string(proof),
 	}
@@ -372,7 +375,7 @@ func (r *RecordRepository) Acknowledge(ctx context.Context, documentID string, s
 	return ccfs, err
 }
 
-func (r *RecordRepository) UnAcknowledge(ctx context.Context, documentID string, sd concrnt.SignedDocument) error {
+func (r *RecordRepository) UnAcknowledge(ctx context.Context, ip string, documentID string, sd concrnt.SignedDocument) error {
 	ctx, span := tracer.Start(ctx, "Repository.Record.Unacknowledge")
 	defer span.End()
 
@@ -414,6 +417,7 @@ func (r *RecordRepository) UnAcknowledge(ctx context.Context, documentID string,
 
 	commitLog := models.CommitLog{
 		ID:       documentID,
+		IP:       ip,
 		Document: sd.Document,
 		Proof:    string(proof),
 	}

@@ -152,7 +152,9 @@ func (h *Handler) handleCommit(c echo.Context) error {
 		return presenter.BadRequest(c, err)
 	}
 
-	result, err := h.record.Commit(ctx, sd, domain.CommitModeExecute)
+	ip := c.RealIP()
+
+	result, err := h.record.Commit(ctx, ip, sd, domain.CommitModeExecute)
 	if err != nil {
 		if errors.Is(err, domain.ErrPermissionDenied) {
 			return presenter.Forbidden(c, "permission denied")
@@ -733,7 +735,9 @@ func (h *Handler) handleImportRepository(c echo.Context) error {
 	}
 	dump = string(dumpBytes)
 
-	results := h.record.ImportCommitLogs(ctx, dump)
+	ip := c.RealIP()
+
+	results := h.record.ImportCommitLogs(ctx, ip, dump)
 	return presenter.OK(c, results)
 }
 
