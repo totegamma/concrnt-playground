@@ -34,6 +34,7 @@ type Client struct {
 	cache           *cache.Cache
 	userAgent       string
 	defaultResolver string
+	remappings      map[string]*url.URL
 }
 
 func New(defaultResolver string) *Client {
@@ -45,9 +46,23 @@ func New(defaultResolver string) *Client {
 		client:          &httpClient,
 		cache:           cache.New(10*time.Minute, 15*time.Minute),
 		defaultResolver: defaultResolver,
+		remappings:      make(map[string]*url.URL),
 	}
 	httpClient.Transport = c
 	return c
+}
+
+func (c *Client) SetUserAgent(software, version string) {
+	c.userAgent = fmt.Sprintf("%s/%s (Concrnt)", software, version)
+}
+
+func (c *Client) AddHostRemapping(host string, target string) {
+	parsed, err := url.Parse(target)
+	if err != nil {
+		slog.Warn("Failed to parse remapping target "+target, "error", err)
+		return
+	}
+	c.remappings[host] = parsed
 }
 
 type Options struct {
@@ -60,10 +75,16 @@ func (c *Client) GetClient() *http.Client {
 }
 
 func (c *Client) RoundTrip(req *http.Request) (*http.Response, error) {
-	req.Header.Set("User-Agent", c.userAgent)
-
 	ctx, span := tracer.Start(req.Context(), "HTTP "+req.Method)
 	defer span.End()
+
+	if remap, ok := c.remappings[req.Host]; ok {
+		req.Host = remap.Host
+		req.URL.Host = remap.Host
+		req.URL.Scheme = remap.Scheme
+	}
+
+	req.Header.Set("User-Agent", c.userAgent)
 
 	span.SetAttributes(attribute.String("http.method", req.Method))
 	span.SetAttributes(attribute.String("http.url", req.URL.String()))

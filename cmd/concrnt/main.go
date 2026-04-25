@@ -139,7 +139,10 @@ func main() {
 
 	redis := database.NewRedis(conf.Server.RedisAddr, "", conf.Server.RedisDB)
 
-	cl := client.New(conf.Server.GatewayAddr)
+	cl := client.New(conf.NodeInfo.FQDN)
+	cl.AddHostRemapping(conf.NodeInfo.FQDN, conf.Server.GatewayAddr)
+	cl.SetUserAgent("concrnt", version)
+
 	signal := service.NewSignalService(redis)
 	policy := service.NewPolicyService(GetGlobalPolicy(), cl)
 
