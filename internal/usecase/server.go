@@ -14,27 +14,31 @@ type ServerRepository interface {
 }
 
 type ServerUsecase struct {
-	repo ServerRepository
+	repo   ServerRepository
+	config *domain.Config
 }
 
-func NewServerUsecase(repo ServerRepository) *ServerUsecase {
-	return &ServerUsecase{repo: repo}
+func NewServerUsecase(
+	repo ServerRepository,
+	config *domain.Config,
+) *ServerUsecase {
+	return &ServerUsecase{
+		repo:   repo,
+		config: config,
+	}
 }
 
-func (uc *ServerUsecase) Resolve(ctx context.Context, identifier string, hint *string) (*concrnt.WellKnownConcrnt, error) {
+func (uc *ServerUsecase) Resolve(ctx context.Context, identifier string, hint *string) (*domain.Server, error) {
+
+	if (identifier == uc.config.FQDN) || (identifier == uc.config.CSID) {
+		return nil, domain.RedirectError{Location: "https://" + uc.config.FQDN + "/.well-known/concrnt"}
+	}
+
 	sv, err := uc.repo.Resolve(ctx, identifier, hint)
 	if err != nil {
 		return nil, err
 	}
-	return &sv.WellKnown, nil
-}
-
-func (uc *ServerUsecase) ResolveWithHint(ctx context.Context, identifier string, hint string) (*concrnt.WellKnownConcrnt, error) {
-	sv, err := uc.repo.Resolve(ctx, identifier, &hint)
-	if err != nil {
-		return nil, err
-	}
-	return &sv.WellKnown, nil
+	return sv, nil
 }
 
 func (uc *ServerUsecase) List(ctx context.Context) ([]*concrnt.WellKnownConcrnt, error) {

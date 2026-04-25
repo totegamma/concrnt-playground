@@ -40,3 +40,8 @@ func Forbidden(c echo.Context, msg string) error {
 	fmt.Println("Forbidden:", msg)
 	return c.JSON(http.StatusForbidden, errorResponse{Error: msg})
 }
+
+func Redirect(c echo.Context, location string) error {
+	fmt.Println("Redirecting to:", location)
+	return c.Redirect(http.StatusFound, location)
+}

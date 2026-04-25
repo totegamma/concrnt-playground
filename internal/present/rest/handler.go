@@ -223,12 +223,12 @@ func (h *Handler) handleResolve(c echo.Context) error {
 			return presenter.OK(c, entity)
 		}
 
-		if parsed.Owner == h.config.CSID {
-			return c.Redirect(http.StatusFound, "https://"+h.config.FQDN+"/.well-known/concrnt")
-		}
-
 		wkc, err := h.server.Resolve(ctx, parsed.Owner, parsed.Hint)
 		if err != nil {
+			if errors.Is(err, domain.ErrRedirect) {
+				redirectErr := err.(domain.RedirectError)
+				return presenter.Redirect(c, redirectErr.Location)
+			}
 			if errors.Is(err, domain.ErrPermissionDenied) {
 				return presenter.Forbidden(c, "permission denied") // TODO: should be return NotFound
 			}

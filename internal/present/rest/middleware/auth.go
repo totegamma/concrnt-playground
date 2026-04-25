@@ -15,6 +15,7 @@ import (
 	"github.com/totegamma/concrnt-playground/impl/interop"
 	"github.com/totegamma/concrnt-playground/internal/domain"
 	"github.com/totegamma/concrnt-playground/internal/infra/repository"
+	"github.com/totegamma/concrnt-playground/internal/usecase"
 	"github.com/totegamma/concrnt-playground/jwt"
 	"github.com/totegamma/concrnt-playground/schemas"
 )
@@ -24,14 +25,14 @@ var tracer = otel.Tracer("auth")
 type AuthMiddleware struct {
 	config domain.Config
 	client *client.Client
-	server *repository.ServerRepository
+	server *usecase.ServerUsecase
 	entity *repository.EntityRepository
 }
 
 func NewAuthMiddleware(
 	config domain.Config,
 	client *client.Client,
-	server *repository.ServerRepository,
+	server *usecase.ServerUsecase,
 	entity *repository.EntityRepository,
 ) *AuthMiddleware {
 	return &AuthMiddleware{
@@ -101,7 +102,7 @@ func (s *AuthMiddleware) IdentifyIdentity(next echo.HandlerFunc) echo.HandlerFun
 				return echo.NewHTTPError(403, err.Error())
 			}
 
-			srv, err := s.server.GetAndCacheByFQDN(ctx, requester.Domain)
+			srv, err := s.server.Resolve(ctx, requester.Domain, nil)
 			if err != nil {
 				span.RecordError(errors.Wrap(err, "AuthMiddleware.IdentifyIdentity: s.server.GetAndCacheByFQDN failed"))
 				goto skipCheckAuthorization

@@ -147,7 +147,7 @@ func main() {
 	policy := service.NewPolicyService(GetGlobalPolicy(), cl)
 
 	serverRepo := repository.NewServerRepository(&globalConfig, db, cl)
-	serverUC := usecase.NewServerUsecase(serverRepo)
+	serverUC := usecase.NewServerUsecase(serverRepo, &globalConfig)
 
 	entityRepo := repository.NewEntityRepository(db, cl, globalConfig)
 	entityUC := usecase.NewEntityUsecase(entityRepo, &globalConfig)
@@ -178,7 +178,7 @@ func main() {
 		notificationReactor.Start(context.Background())
 	}
 
-	authMiddleware := middleware.NewAuthMiddleware(globalConfig, cl, serverRepo, entityRepo)
+	authMiddleware := middleware.NewAuthMiddleware(globalConfig, cl, serverUC, entityRepo)
 
 	moduleManager := service.NewModuleManager(rest.Endpoints, conf.Services)
 

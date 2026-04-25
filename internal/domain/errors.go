@@ -49,3 +49,22 @@ func (e PermissionError) Is(target error) bool {
 	_, ok = target.(*PermissionError)
 	return ok
 }
+
+type RedirectError struct {
+	Location string
+}
+
+func (e RedirectError) Error() string {
+	return fmt.Sprintf("redirect to %s", e.Location)
+}
+
+func (e RedirectError) Is(target error) bool {
+	_, ok := target.(RedirectError)
+	if ok {
+		return true
+	}
+	_, ok = target.(*RedirectError)
+	return ok
+}
+
+var ErrRedirect = RedirectError{}
