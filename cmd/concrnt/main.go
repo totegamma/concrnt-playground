@@ -143,11 +143,13 @@ func main() {
 	cl.AddHostRemapping(conf.NodeInfo.FQDN, conf.Server.GatewayAddr)
 	cl.SetUserAgent("concrnt", version)
 
+	moduleManager := service.NewModuleManager(rest.Endpoints, conf.Services)
+
 	signal := service.NewSignalService(redis)
 	policy := service.NewPolicyService(GetGlobalPolicy(), cl)
 
 	serverRepo := repository.NewServerRepository(&globalConfig, db, cl)
-	serverUC := usecase.NewServerUsecase(serverRepo, &globalConfig)
+	serverUC := usecase.NewServerUsecase(serverRepo, &globalConfig, softwareInfo, moduleManager)
 
 	entityRepo := repository.NewEntityRepository(db, cl, globalConfig)
 	entityUC := usecase.NewEntityUsecase(entityRepo, &globalConfig)
@@ -180,9 +182,7 @@ func main() {
 
 	authMiddleware := middleware.NewAuthMiddleware(globalConfig, cl, serverUC, entityRepo)
 
-	moduleManager := service.NewModuleManager(rest.Endpoints, conf.Services)
-
-	wellKnownHandler := rest.NewWellKnownHandler(&globalConfig, softwareInfo, moduleManager)
+	wellKnownHandler := rest.NewWellKnownHandler(serverUC)
 	wellKnownHandler.RegisterRoutes(e)
 
 	apiHandler := rest.NewHandler(

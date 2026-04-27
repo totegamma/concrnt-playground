@@ -112,6 +112,7 @@ func (h *Handler) RegisterRoutes(e *echo.Group) {
 	api.POST("/repository", h.handleImportRepository)
 	api.OPTIONS("/repository", h.handleNop)
 	api.POST("/abuse", h.handleAbuse)
+	api.OPTIONS("/abuse", h.handleNop)
 
 	api.GET("/chunkline/itr/:chunk", h.handleChunklineItr)
 	api.OPTIONS("/chunkline/itr/:chunk", h.handleNop)

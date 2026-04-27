@@ -4,28 +4,19 @@ import (
 	"github.com/labstack/echo/v4"
 	echomiddleware "github.com/labstack/echo/v4/middleware"
 
-	"github.com/totegamma/concrnt-playground"
-	"github.com/totegamma/concrnt-playground/internal/domain"
 	"github.com/totegamma/concrnt-playground/internal/present/rest/presenter"
-	"github.com/totegamma/concrnt-playground/internal/service"
+	"github.com/totegamma/concrnt-playground/internal/usecase"
 )
 
 type WellKnownHandler struct {
-	config *domain.Config
-	info   concrnt.SoftwareInfo
-	mm     *service.ModuleManager
+	server *usecase.ServerUsecase
 }
 
 func NewWellKnownHandler(
-	config *domain.Config,
-	info concrnt.SoftwareInfo,
-	mm *service.ModuleManager,
+	server *usecase.ServerUsecase,
 ) *WellKnownHandler {
-
 	return &WellKnownHandler{
-		config: config,
-		info:   info,
-		mm:     mm,
+		server: server,
 	}
 }
 
@@ -35,15 +26,10 @@ func (p *WellKnownHandler) RegisterRoutes(e *echo.Echo) {
 }
 
 func (p *WellKnownHandler) handleWellKnown(c echo.Context) error {
-	wellknown := concrnt.WellKnownConcrnt{
-		Version:      "2.0",
-		Domain:       p.config.FQDN,
-		CSID:         p.config.CSID,
-		Layer:        p.config.Layer,
-		Dimension:    p.config.Dimension,
-		Endpoints:    p.mm.GetEndpoints(),
-		SoftwareInfo: p.info,
-		Meta:         p.config.Meta,
+	server, err := p.server.GetThisServer()
+	if err != nil {
+		return presenter.InternalError(c, err)
 	}
-	return presenter.OK(c, wellknown)
+
+	return presenter.OK(c, server.WellKnown)
 }
