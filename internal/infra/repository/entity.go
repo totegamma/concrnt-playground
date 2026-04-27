@@ -28,7 +28,7 @@ func NewEntityRepository(db *gorm.DB, cl *client.Client, config domain.Config) *
 	return &EntityRepository{db: db, client: cl, config: config}
 }
 
-func (r *EntityRepository) Register(ctx context.Context, sd concrnt.SignedDocument, meta domain.EntityMeta) error {
+func (r *EntityRepository) SaveMeta(ctx context.Context, meta domain.EntityMeta) error {
 	ctx, span := tracer.Start(ctx, "EntityRepository.Register")
 	defer span.End()
 
@@ -45,16 +45,10 @@ func (r *EntityRepository) Register(ctx context.Context, sd concrnt.SignedDocume
 		return err
 	}
 
-	_, err := r.SaveEntity(ctx, sd, true)
-	if err != nil {
-		span.RecordError(err)
-		return err
-	}
-
 	return nil
 }
 
-func (r *EntityRepository) SaveEntity(ctx context.Context, sd concrnt.SignedDocument, allowLocal bool) (*concrnt.Document[schemas.Entity], error) {
+func (r *EntityRepository) SaveEntity(ctx context.Context, sd concrnt.SignedDocument) (*concrnt.Document[schemas.Entity], error) {
 	ctx, span := tracer.Start(ctx, "EntityRepository.SaveEntity")
 	defer span.End()
 
@@ -64,8 +58,14 @@ func (r *EntityRepository) SaveEntity(ctx context.Context, sd concrnt.SignedDocu
 		return nil, err
 	}
 
-	if !allowLocal && entity.Value.Domain == r.config.FQDN {
-		return nil, errors.New("local entity creation is not allowed")
+	if entity.Value.Domain == r.config.FQDN {
+		// if local, check if author is registered
+		var meta models.EntityMeta
+		err := r.db.Where("id = ?", entity.Author).Take(&meta).Error
+		if err != nil {
+			span.RecordError(err)
+			return nil, errors.New("user is not registered for this domain")
+		}
 	}
 
 	proof, err := json.Marshal(sd.Proof)
@@ -264,7 +264,7 @@ func (r *EntityRepository) GetSD(ctx context.Context, ccid string, hint *string)
 
 	// TODO: 署名検証
 
-	_, err = r.SaveEntity(ctx, sd, false)
+	_, err = r.SaveEntity(ctx, sd)
 	if err != nil {
 		return nil, err
 	}
@@ -279,7 +279,7 @@ func (r *EntityRepository) GetDocument(ctx context.Context, ccid string, hint *s
 
 	//var docString string
 	entity, err := gorm.G[models.Entity](r.db).
-		Select("commit_logs.document").
+		// Select("commit_logs.document").
 		Joins(clause.Has("Document"), nil).
 		Where("entities.id = ?", ccid).
 		Take(ctx)
@@ -303,7 +303,7 @@ func (r *EntityRepository) GetDocument(ctx context.Context, ccid string, hint *s
 
 	// TODO: 署名検証
 
-	remoteEntity, err := r.SaveEntity(ctx, sd, false)
+	remoteEntity, err := r.SaveEntity(ctx, sd)
 	if err != nil {
 		return nil, err
 	}

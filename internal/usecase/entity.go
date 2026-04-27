@@ -2,7 +2,10 @@ package usecase
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"strings"
+	"time"
 
 	"github.com/totegamma/concrnt-playground"
 	"github.com/totegamma/concrnt-playground/internal/domain"
@@ -11,8 +14,8 @@ import (
 
 // EntityRepository defines persistence/lookup for entities.
 type EntityRepository interface {
-	Register(ctx context.Context, sd concrnt.SignedDocument, meta domain.EntityMeta) error
-	SaveEntity(ctx context.Context, sd concrnt.SignedDocument, allowLocal bool) (*concrnt.Document[schemas.Entity], error)
+	SaveMeta(ctx context.Context, meta domain.EntityMeta) error
+	SaveEntity(ctx context.Context, sd concrnt.SignedDocument) (*concrnt.Document[schemas.Entity], error)
 	Get(ctx context.Context, ccid string, hint *string) (*domain.Entity, error)
 	GetSD(ctx context.Context, ccid string, hint *string) (*concrnt.SignedDocument, error)
 	GetDocument(ctx context.Context, ccid string, hint *string) (*concrnt.Document[schemas.Entity], error)
@@ -35,11 +38,52 @@ func NewEntityUsecase(
 }
 
 func (uc *EntityUsecase) Register(ctx context.Context, req concrnt.RegisterRequest[domain.EntityMeta]) error {
-	return uc.repo.Register(ctx, req.SignedDocument, req.Meta)
+	ctx, span := tracer.Start(ctx, "EntityUsecase.Register")
+	defer span.End()
+
+	var entity concrnt.Document[schemas.Entity]
+	if err := json.Unmarshal([]byte(req.SignedDocument.Document), &entity); err != nil {
+		span.RecordError(err)
+		return err
+	}
+
+	ccid := entity.Author
+	if entity.Value.Domain != uc.config.FQDN {
+		err := errors.New("entity domain does not match server domain")
+		span.RecordError(err)
+		return err
+	}
+
+	var latest time.Time
+	existing, err := uc.repo.GetDocument(ctx, ccid, nil)
+	if err == nil {
+		latest = existing.CreatedAt
+	}
+
+	if entity.CreatedAt.Before(latest) {
+		err := errors.New("incoming document is older than existing document")
+		span.RecordError(err)
+		return err
+	}
+
+	req.Meta.ID = ccid
+	err = uc.repo.SaveMeta(ctx, req.Meta)
+	if err != nil {
+		span.RecordError(err)
+		return err
+	}
+
+	_, err = uc.repo.SaveEntity(ctx, req.SignedDocument)
+	if err != nil {
+		span.RecordError(err)
+		return err
+	}
+
+	return nil
 }
 
 func (uc *EntityUsecase) SaveEntity(ctx context.Context, sd concrnt.SignedDocument) (*concrnt.SignedDocument, error) {
-	_, err := uc.repo.SaveEntity(ctx, sd, false)
+	_, err := uc.repo.SaveEntity(ctx, sd)
 	if err != nil {
 		return nil, err
 	}
