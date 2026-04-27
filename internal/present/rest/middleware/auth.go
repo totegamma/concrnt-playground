@@ -7,6 +7,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/pkg/errors"
+	"github.com/xinguang/go-recaptcha"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 
@@ -162,5 +163,32 @@ func (s *AuthMiddleware) IdentifyIdentity(next echo.HandlerFunc) echo.HandlerFun
 	skipCheckAuthorization:
 		c.SetRequest(c.Request().WithContext(ctx))
 		return next(c)
+	}
+}
+
+// Recaptcha is a middleware factory that returns a middleware to verify reCAPTCHA challenges.
+// It expects the challenge response in the "captcha" header and uses the provided validator.
+// If verification is successful, it sets a flag in the context.
+func Recaptcha(validator *recaptcha.ReCAPTCHA) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			ctx, span := tracer.Start(c.Request().Context(), "Auth.Service.Recaptcha")
+			defer span.End()
+
+			challenge := c.Request().Header.Get("captcha")
+			if challenge != "" {
+				err := validator.Verify(challenge)
+				if err == nil {
+					ctx = context.WithValue(ctx, interop.CaptchaVerifiedCtxKey, true)
+				} else {
+					ctx = context.WithValue(ctx, interop.CaptchaVerifiedCtxKey, false)
+				}
+			} else {
+				ctx = context.WithValue(ctx, interop.CaptchaVerifiedCtxKey, false)
+			}
+
+			c.SetRequest(c.Request().WithContext(ctx))
+			return next(c)
+		}
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/totegamma/concrnt-playground"
+	"github.com/totegamma/concrnt-playground/impl/interop"
 	"github.com/totegamma/concrnt-playground/internal/domain"
 	"github.com/totegamma/concrnt-playground/schemas"
 )
@@ -40,6 +41,16 @@ func NewEntityUsecase(
 func (uc *EntityUsecase) Register(ctx context.Context, req concrnt.RegisterRequest[domain.EntityMeta]) error {
 	ctx, span := tracer.Start(ctx, "EntityUsecase.Register")
 	defer span.End()
+
+	v := ctx.Value(interop.CaptchaVerifiedCtxKey)
+	if v != nil {
+		captchaVerified, ok := v.(bool)
+		if !ok || !captchaVerified {
+			err := errors.New("captcha verification failed")
+			span.RecordError(err)
+			return err
+		}
+	}
 
 	var entity concrnt.Document[schemas.Entity]
 	if err := json.Unmarshal([]byte(req.SignedDocument.Document), &entity); err != nil {

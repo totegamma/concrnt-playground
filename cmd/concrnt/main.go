@@ -11,6 +11,7 @@ import (
 	"github.com/SherClockHolmes/webpush-go"
 	"github.com/labstack/echo/v4"
 	echomiddleware "github.com/labstack/echo/v4/middleware"
+	"github.com/xinguang/go-recaptcha"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 	"go.opentelemetry.io/otel/trace"
 
@@ -197,6 +198,16 @@ func main() {
 		moduleManager,
 	)
 	api := e.Group("", authMiddleware.IdentifyIdentity, authMiddleware.IdentifyIdentity)
+
+	if conf.Server.CaptchaSecret != "" {
+		validator, err := recaptcha.NewWithSecert(conf.Server.CaptchaSecret)
+		if err != nil {
+			panic("failed to initialize recaptcha: " + err.Error())
+		}
+		captchaMiddleware := middleware.Recaptcha(validator)
+		api.Use(captchaMiddleware)
+	}
+
 	apiHandler.RegisterRoutes(api)
 
 	proxy := rest.NewProxy(conf.Services, authMiddleware.IdentifyIdentity)
