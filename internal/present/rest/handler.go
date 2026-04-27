@@ -398,7 +398,7 @@ func (h *Handler) handleTimelineRecent(c echo.Context) error {
 		if err != nil {
 			return presenter.BadRequestMessage(c, "invalid until parameter")
 		}
-		until = time.Unix(untilInt, 0).UTC()
+		until = time.UnixMilli(untilInt).UTC()
 	}
 	limit := 16
 	limitStr := c.QueryParam("limit")
