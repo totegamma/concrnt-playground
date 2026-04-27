@@ -74,7 +74,7 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, ip string, document
 		Schema:        doc.Schema,
 		Policies:      policies,
 		Distributions: distributions,
-		CDate:         time.Now(),
+		CreatedAt:     doc.CreatedAt,
 	}
 
 	if doc.Schema == schemas.ReferenceURL {
@@ -85,7 +85,22 @@ func (r *RecordRepository) CreateRecord(ctx context.Context, ip string, document
 			return "", err
 		}
 		record.Redirect = &refDoc.Value.Href
-		record.Schema = refDoc.Value.Schema
+
+		refSD, ok := sd.References[refDoc.Value.Href]
+		if !ok {
+			err := fmt.Errorf("reference document not found for href: %s", refDoc.Value.Href)
+			span.RecordError(err)
+			return "", err
+		}
+
+		var targetDoc concrnt.Document[any]
+		err = json.Unmarshal([]byte(refSD.Document), &targetDoc)
+		if err != nil {
+			span.RecordError(err)
+			return "", err
+		}
+		record.Schema = targetDoc.Schema
+		record.CreatedAt = targetDoc.CreatedAt
 	}
 
 	proof, err := json.Marshal(sd.Proof)
@@ -227,11 +242,11 @@ func (r *RecordRepository) CreateAssociation(ctx context.Context, ip string, doc
 		DocumentID: documentID,
 		Unique:     fmt.Sprintf("%x", uniqueHash),
 
-		Owner:   owner,
-		Author:  parsed.Author,
-		Variant: parsed.AssociationVariant,
-		Schema:  parsed.Schema,
-		CDate:   time.Now(),
+		Owner:     owner,
+		Author:    parsed.Author,
+		Variant:   parsed.AssociationVariant,
+		Schema:    parsed.Schema,
+		CreatedAt: parsed.CreatedAt,
 	}
 
 	proof, err := json.Marshal(sd.Proof)
@@ -311,6 +326,7 @@ func (r *RecordRepository) Acknowledge(ctx context.Context, ip string, documentI
 		Context:    doc.Value.Context,
 		DocumentID: documentID,
 		Valid:      true,
+		CreatedAt:  doc.CreatedAt,
 	}
 
 	proof, err := json.Marshal(sd.Proof)
@@ -407,6 +423,7 @@ func (r *RecordRepository) UnAcknowledge(ctx context.Context, ip string, documen
 		Context:    doc.Value.Context,
 		DocumentID: documentID,
 		Valid:      false,
+		CreatedAt:  doc.CreatedAt,
 	}
 
 	proof, err := json.Marshal(sd.Proof)
@@ -906,11 +923,11 @@ func (r *RecordRepository) GetAssociatedRecordCountsByVariant(ctx context.Contex
 
 	err := r.db.WithContext(ctx).
 		Model(&models.Association{}).
-		Select("variant, COUNT(*) AS count, MIN(c_date) AS min_c_date").
+		Select("variant, COUNT(*) AS count, MIN(created_at) AS min_created_at").
 		Joins("JOIN record_keys rk ON rk.id = associations.target_id").
 		Where("rk.uri = ?", targetURI).
 		Group("variant").
-		Order("min_c_date ASC").
+		Order("min_created_at ASC").
 		Scan(&counts).Error
 	if err != nil {
 		span.RecordError(err)
@@ -949,16 +966,16 @@ func (r *RecordRepository) QueryByPrefix(
 		query = query.Where("r.schema = ?", schema)
 	}
 	if since != nil {
-		query = query.Where("r.c_date >= ?", *since)
+		query = query.Where("r.created_at >= ?", *since)
 	}
 	if until != nil {
-		query = query.Where("r.c_date <= ?", *until)
+		query = query.Where("r.created_at <= ?", *until)
 	}
 
 	if order == "desc" {
-		query = query.Order("r.c_date DESC")
+		query = query.Order("r.created_at DESC")
 	} else {
-		query = query.Order("r.c_date ASC")
+		query = query.Order("r.created_at ASC")
 	}
 
 	if limit > 0 {
@@ -1013,16 +1030,16 @@ func (r *RecordRepository) QueryByParent(
 		query = query.Where("r.schema = ?", schema)
 	}
 	if since != nil {
-		query = query.Where("r.c_date >= ?", *since)
+		query = query.Where("r.created_at >= ?", *since)
 	}
 	if until != nil {
-		query = query.Where("r.c_date <= ?", *until)
+		query = query.Where("r.created_at <= ?", *until)
 	}
 
 	if order == "desc" {
-		query = query.Order("r.c_date DESC")
+		query = query.Order("r.created_at DESC")
 	} else {
-		query = query.Order("r.c_date ASC")
+		query = query.Order("r.created_at ASC")
 	}
 
 	if limit > 0 {
@@ -1079,7 +1096,7 @@ func (r *RecordRepository) GetAcknowledgeRecords(ctx context.Context, from, to, 
 		query = query.Where("acks.valid = ?", true)
 	}
 
-	err := query.Order("acks.c_date ASC").Find(&acks).Error
+	err := query.Order("acks.created_at ASC").Find(&acks).Error
 	if err != nil {
 		span.RecordError(err)
 		return nil, err
@@ -1154,7 +1171,7 @@ func (r *RecordRepository) GetAllCommitLogs(ctx context.Context, owner string) (
 	err := r.db.WithContext(ctx).
 		Joins("JOIN commit_owners co ON co.commit_log_id = commit_logs.id").
 		Where("co.owner = ?", owner).
-		Order("commit_logs.c_date ASC").
+		Order("commit_logs.created_at ASC").
 		Find(&commitLogs).Error
 	if err != nil {
 		span.RecordError(err)

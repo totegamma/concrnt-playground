@@ -10,7 +10,6 @@ type CommitOwner struct {
 	CommitLogID string    `json:"commit_log_id" gorm:"type:text;primaryKey"`
 	CommitLog   CommitLog `json:"-" gorm:"constraint:OnDelete:CASCADE;"`
 	Owner       string    `json:"owner" gorm:"type:text;primaryKey"`
-	CDate       time.Time `json:"cdate" gorm:"->;<-:create;type:timestamp with time zone;not null;default:clock_timestamp()"`
 }
 
 type CommitLog struct {
@@ -38,7 +37,8 @@ type Record struct {
 	Schema        string         `json:"schema" gorm:"type:text"`
 	Policies      *string        `json:"policies" gorm:"type:text"`
 	Distributions pq.StringArray `json:"distributions" gorm:"type:text[]"`
-	CDate         time.Time      `json:"cdate" gorm:"->;<-:create;type:timestamp with time zone;not null;default:clock_timestamp()"`
+	CreatedAt     time.Time      `json:"createdAt" gorm:"type:timestamp with time zone;not null"`                                    // user-provided creation time
+	CDate         time.Time      `json:"cdate" gorm:"->;<-:create;type:timestamp with time zone;not null;default:clock_timestamp()"` // record creation time in the system
 }
 
 type Ack struct {
@@ -51,7 +51,8 @@ type Ack struct {
 
 	Valid bool `json:"valid" gorm:"type:boolean;not null;default:true"`
 
-	CDate time.Time `json:"cdate" gorm:"->;<-:create;type:timestamp with time zone;not null;default:clock_timestamp()"`
+	CreatedAt time.Time `json:"createdAt" gorm:"type:timestamp with time zone;not null"` // user-provided creation time
+	CDate     time.Time `json:"cdate" gorm:"->;<-:create;type:timestamp with time zone;not null;default:clock_timestamp()"`
 }
 
 type Association struct {
@@ -68,7 +69,8 @@ type Association struct {
 	Variant *string `json:"variant" gorm:"type:text"`
 	Unique  string  `json:"unique" gorm:"type:text;unique"`
 
-	CDate time.Time `json:"cdate" gorm:"->;<-:create;type:timestamp with time zone;not null;default:clock_timestamp()"`
+	CreatedAt time.Time `json:"createdAt" gorm:"type:timestamp with time zone;not null"` // user-provided creation time
+	CDate     time.Time `json:"cdate" gorm:"->;<-:create;type:timestamp with time zone;not null;default:clock_timestamp()"`
 }
 
 type Server struct {
@@ -96,15 +98,18 @@ type Entity struct {
 }
 
 type EntityMeta struct {
-	ID      string  `json:"ccid" gorm:"type:text"`
-	Inviter *string `json:"inviter" gorm:"type:text"`
-	Info    string  `json:"info" gorm:"type:jsonb;default:'null'"`
+	ID      string    `json:"ccid" gorm:"type:text"`
+	Inviter *string   `json:"inviter" gorm:"type:text"`
+	Info    string    `json:"info" gorm:"type:jsonb;default:'null'"`
+	CDate   time.Time `json:"cdate" gorm:"->;<-:create;type:timestamp with time zone;not null;default:clock_timestamp()"`
+	MDate   time.Time `json:"mdate" gorm:"autoUpdateTime"`
 }
 
 type AbuseReport struct {
-	ID        int64  `json:"id" gorm:"primaryKey;autoIncrement"`
-	IP        string `json:"ip" gorm:"type:text"`
-	Reporter  string `json:"reporter" gorm:"type:text"`
-	TargetURI string `json:"target" gorm:"type:text"`
-	Body      string `json:"body" gorm:"type:text"`
+	ID        int64     `json:"id" gorm:"primaryKey;autoIncrement"`
+	IP        string    `json:"ip" gorm:"type:text"`
+	Reporter  string    `json:"reporter" gorm:"type:text"`
+	TargetURI string    `json:"target" gorm:"type:text"`
+	Body      string    `json:"body" gorm:"type:text"`
+	CDate     time.Time `json:"cdate" gorm:"->;<-:create;type:timestamp with time zone;not null;default:clock_timestamp()"`
 }

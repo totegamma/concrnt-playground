@@ -578,8 +578,7 @@ func (uc *RecordUsecase) createRecord(ctx context.Context, ip string, requester 
 			distDoc := concrnt.Document[schemas.Reference]{
 				Key: key,
 				Value: schemas.Reference{
-					Href:   resultURI,
-					Schema: parsed.Schema,
+					Href: resultURI,
 				},
 				Author:    parsed.Author,
 				Schema:    schemas.ReferenceURL,
@@ -598,6 +597,7 @@ func (uc *RecordUsecase) createRecord(ctx context.Context, ip string, requester 
 				},
 				References: map[string]concrnt.SignedDocument{
 					requester.CCKV(): *requesterSD,
+					resultURI:        sd,
 				},
 			}
 
@@ -692,8 +692,7 @@ func (uc *RecordUsecase) createAssociation(ctx context.Context, ip string, reque
 			distDoc := concrnt.Document[schemas.Reference]{
 				Key: key,
 				Value: schemas.Reference{
-					Href:   ccfs,
-					Schema: parsed.Schema,
+					Href: ccfs,
 				},
 				Author:    parsed.Author,
 				Schema:    schemas.ReferenceURL,
@@ -712,6 +711,7 @@ func (uc *RecordUsecase) createAssociation(ctx context.Context, ip string, reque
 				},
 				References: map[string]concrnt.SignedDocument{
 					requester.CCKV(): *requesterSD,
+					ccfs:             sd,
 				},
 			}
 
